@@ -1,0 +1,33 @@
+........................................................................ [ 28%]
+......................................ss.ss............................. [ 57%]
+........................................................................ [ 86%]
+...................................                                      [100%]
+============================== warnings summary ===============================
+tests/unit/test_precision.py::TestPrecisionEdgeCases::test_precision_limits
+  C:\Users\domez\Documents\ZeroProof\tests\unit\test_precision.py:213: RuntimeWarning: overflow encountered in cast
+    assert 1e38 < PrecisionConfig.get_max() < 1e39
+
+tests/unit/test_precision.py::TestPrecisionEdgeCases::test_precision_limits
+  C:\Users\domez\Documents\ZeroProof\tests\unit\test_precision.py:218: RuntimeWarning: overflow encountered in cast
+    assert 60000 < PrecisionConfig.get_max() < 70000
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+------------------------------------------------------------------------------------------------------- benchmark: 4 tests ------------------------------------------------------------------------------------------------------
+Name (time in us)                       Min                     Max                    Mean                 StdDev                  Median                    IQR            Outliers           OPS            Rounds  Iterations
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_cache_speedup                   2.8000 (1.0)          372.2000 (1.0)            3.8701 (1.0)           2.8835 (1.0)            3.1001 (1.0)           0.8000 (1.0)     2298;8614  258,388.9268 (1.0)       41841           1
+test_optimization_overhead         472.9000 (168.89)     4,345.2000 (11.67)        674.4167 (174.26)      273.2603 (94.77)        569.3000 (183.64)      434.6250 (543.28)      132;6    1,482.7629 (0.01)        949           1
+test_profiling_overhead          1,064.9001 (380.32)     4,040.6000 (10.86)      1,641.5501 (424.16)    1,136.1756 (394.02)     1,078.3499 (347.84)      213.3001 (266.62)        2;2      609.1803 (0.00)         10           1
+test_parallel_speedup          325,998.9000 (>1000.0)  433,143.7000 (>1000.0)  391,888.7000 (>1000.0)  47,597.9672 (>1000.0)  410,965.2999 (>1000.0)  81,278.3500 (>1000.0)       1;0        2.5517 (0.00)          5           1
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_bridge_extended.py:169: PyTorch not installed
+SKIPPED [1] tests\unit\test_bridge_extended.py:193: PyTorch not installed
+SKIPPED [1] tests\unit\test_bridge_extended.py:233: JAX not installed
+SKIPPED [1] tests\unit\test_bridge_extended.py:257: JAX not installed
+247 passed, 4 skipped, 2 deselected, 2 warnings in 22.25s
