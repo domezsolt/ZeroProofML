@@ -61,8 +61,13 @@ class Optimizer:
         for param in self.parameters:
             param.zero_grad()
     
-    def step(self) -> None:
-        """Perform optimization step."""
+    def step(self, model=None) -> None:
+        """
+        Perform optimization step.
+        
+        Args:
+            model: Optional model reference to apply projections (e.g., L1 projection)
+        """
         from ..core import tr_mul, tr_sub
         
         for param in self.parameters:
@@ -75,6 +80,17 @@ class Optimizer:
                 
                 # Update parameter value in-place
                 param._value = new_value
+        
+        # Apply model-specific projections if model is provided
+        if model is not None:
+            # Check if model has L1 projection (e.g., TRRational layer)
+            if hasattr(model, '_project_phi_l1'):
+                model._project_phi_l1()
+            # For multi-layer models, apply projections to each layer
+            elif hasattr(model, 'layers'):
+                for layer in model.layers:
+                    if hasattr(layer, '_project_phi_l1'):
+                        layer._project_phi_l1()
         
         self.step_count += 1
 
@@ -217,8 +233,8 @@ class TRTrainer:
         if self.config.use_safe_lr:
             safe_lr = self._compute_safe_lr(inputs, predictions)
             self.optimizer.learning_rate = safe_lr
-        # Optimization step
-        self.optimizer.step()
+        # Optimization step (pass model for projections)
+        self.optimizer.step(self.model)
         
         # Collect metrics
         metrics = {

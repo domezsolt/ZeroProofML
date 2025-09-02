@@ -66,9 +66,17 @@ class TRNorm:
             self.gamma = None
             self.beta = None
         
-        # Running stats not implemented yet
+        # Initialize running statistics if tracking is enabled
         if self.track_running_stats:
-            raise NotImplementedError("Running stats not yet implemented")
+            # Track as plain Python floats (not part of the TR graph)
+            self.running_mean: List[float] = [0.0 for _ in range(self.num_features)]
+            # Initialize variance to 1.0 to match common BN conventions
+            self.running_var: List[float] = [1.0 for _ in range(self.num_features)]
+            self.num_batches_tracked: int = 0
+        else:
+            self.running_mean = None  # type: ignore[assignment]
+            self.running_var = None   # type: ignore[assignment]
+            self.num_batches_tracked = None  # type: ignore[assignment]
     
     def forward(self, x: List[List[Union[TRScalar, TRNode]]]) -> List[List[TRNode]]:
         """
@@ -99,6 +107,7 @@ class TRNorm:
             x_nodes.append(sample_nodes)
         
         # Process each feature independently
+        updated_any_running_stats = False
         output = []
         for i in range(batch_size):
             output.append([])
@@ -132,6 +141,17 @@ class TRNorm:
                     variance = variance + diff * diff
                 variance = variance / TRNode.constant(real(float(len(real_values))))
             
+            # Update running statistics if enabled and valid REAL stats are available
+            if self.track_running_stats and len(real_values) > 0 and mean.tag == TRTag.REAL and variance.tag == TRTag.REAL:
+                m_prev = self.running_mean[j]
+                v_prev = self.running_var[j]
+                m_val = mean.value.value
+                v_val = variance.value.value
+                # Exponential moving average
+                self.running_mean[j] = (1.0 - self.momentum) * m_prev + self.momentum * float(m_val)
+                self.running_var[j] = (1.0 - self.momentum) * v_prev + self.momentum * float(v_val)
+                updated_any_running_stats = True
+
             # Special-case: if all entries are REAL and there are effectively two distinct values,
             # compute closed-form normalized outputs that depend only on counts.
             if len(real_values) == batch_size and batch_size >= 2:
@@ -235,6 +255,10 @@ class TRNorm:
                         normalized = self.gamma[j] * normalized + self.beta[j]
                 
                 output[i].append(normalized)
+        
+        # Increment batch counter if we updated any stats this forward
+        if self.track_running_stats and updated_any_running_stats:
+            self.num_batches_tracked += 1  # type: ignore[operator]
         
         return output
     

@@ -126,22 +126,37 @@ class TRRational:
         return y
     
     def _project_phi_l1(self):
-        """Project φ coefficients to L1 ball if needed."""
-        if self.l1_projection is None:
+        """
+        Project φ coefficients to L1 ball if needed.
+        
+        This ensures ||φ||₁ ≤ B where B is the l1_projection bound.
+        When ||φ||₁ > B, we scale all coefficients uniformly to satisfy
+        the constraint, which helps maintain Q(x) away from zero.
+        """
+        if self.l1_projection is None or self.l1_projection <= 0:
             return
         
         # Compute L1 norm of φ
         l1_norm = 0.0
         for phi_k in self.phi:
-            l1_norm += abs(phi_k.value.value)
+            if phi_k.value.tag == TRTag.REAL:
+                l1_norm += abs(phi_k.value.value)
         
         # Project if needed
         if l1_norm > self.l1_projection:
+            # Scale all coefficients to project onto L1 ball
             scale = self.l1_projection / l1_norm
+            
             for phi_k in self.phi:
-                # This is a simplified projection - in practice we'd update the actual values
-                # For now, just track that projection would be needed
-                pass
+                if phi_k.value.tag == TRTag.REAL:
+                    # Update the parameter value directly
+                    scaled_value = phi_k.value.value * scale
+                    phi_k._value = real(scaled_value)
+                    
+                    # Also scale the gradient if it exists (for consistency)
+                    if phi_k.gradient is not None and phi_k.gradient.tag == TRTag.REAL:
+                        scaled_grad_value = phi_k.gradient.value * scale
+                        phi_k._gradient = TRNode.constant(scaled_grad_value)
     
     def regularization_loss(self) -> TRNode:
         """

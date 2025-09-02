@@ -77,6 +77,35 @@ class TestTRNorm:
         for i in range(3):
             assert output[i][0].value.value == 5.0   # β₀
             assert output[i][1].value.value == -3.0  # β₁
+
+    def test_running_stats_tracking(self):
+        """Ensure running stats tracking does not raise and updates values."""
+        norm = TRNorm(num_features=2, track_running_stats=True, momentum=0.5)
+        
+        # Two small batches
+        x1 = [
+            [real(1.0), real(4.0)],
+            [real(3.0), real(6.0)],
+        ]
+        x2 = [
+            [real(2.0), real(5.0)],
+            [real(4.0), real(7.0)],
+        ]
+        
+        # Forward passes should update running stats
+        out1 = norm(x1)
+        out2 = norm(x2)
+        
+        # Check counters and that stats moved away from initial values
+        assert norm.num_batches_tracked is not None
+        assert norm.num_batches_tracked >= 1
+        assert norm.running_mean is not None and norm.running_var is not None
+        # Means should be between initial (0.0) and batch means (~2.0, ~5.0)
+        assert 0.0 <= norm.running_mean[0] <= 3.0
+        assert 0.0 <= norm.running_mean[1] <= 7.0
+        # Vars should be positive and finite
+        assert norm.running_var[0] > 0.0
+        assert norm.running_var[1] > 0.0
     
     def test_forward_with_non_real_values(self):
         """Test normalization with non-REAL values (drop-null)."""

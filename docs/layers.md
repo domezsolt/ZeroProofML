@@ -70,7 +70,15 @@ The library provides several basis function options:
 
 1. **Regularization**: Use `alpha_phi` to penalize large denominator coefficients
 2. **Stability Monitoring**: Track `q_min` (minimum |Q(x)|) during training
-3. **L1 Projection**: Optionally constrain ||φ||₁ < 1/B to ensure Q stays away from zero
+3. **L1 Projection**: Constrain ||φ||₁ ≤ B to ensure Q stays away from zero
+   - Fully implemented with automatic projection during forward pass
+   - Integrated with optimizer for post-update projection
+   - Preserves gradient consistency by scaling gradients proportionally
+
+4. **TR-Norm Running Stats**: Optional tracking for compatibility
+   - `track_running_stats=True` records running mean/var using EMA with `momentum`
+   - Running stats are tracked but not used for inference-time normalization yet
+   - No exceptions are raised; fields: `running_mean`, `running_var`, `num_batches_tracked`
 
 ## TR-Norm (Epsilon-Free Normalization)
 
