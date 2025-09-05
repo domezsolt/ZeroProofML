@@ -10,6 +10,12 @@ from .tr_ops_grad import (
 )
 from .backward import backward_pass, topological_sort
 from .grad_mode import GradientMode, GradientModeConfig, gradient_mode, use_mask_real, use_saturating
+from .hybrid_gradient import (
+    HybridGradientSchedule,
+    HybridGradientContext,
+    ScheduleType,
+    create_default_schedule,
+)
 
 __all__ = [
     # Core classes
@@ -45,4 +51,9 @@ __all__ = [
     "gradient_mode",
     "use_mask_real",
     "use_saturating",
+    # Hybrid gradient schedule
+    "HybridGradientSchedule",
+    "HybridGradientContext",
+    "ScheduleType",
+    "create_default_schedule",
 ]

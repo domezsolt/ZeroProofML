@@ -6,7 +6,7 @@ The layer is total under transreal arithmetic and uses the Mask-REAL rule
 for stable gradients near singularities.
 """
 
-from typing import Optional, Union, Tuple, List
+from typing import Optional, Union, Tuple, List, Any
 import math
 
 from ..core import TRScalar, TRTag, real, pinf, ninf, phi
@@ -34,7 +34,8 @@ class TRRational:
                  lambda_rej: float = 0.0,
                  alpha_phi: float = 1e-3,
                  l1_projection: Optional[float] = None,
-                 adaptive_loss_policy=None):
+                 adaptive_loss_policy=None,
+                 projection_index: Optional[int] = None):
         """
         Initialize TR-Rational layer.
         
@@ -59,6 +60,8 @@ class TRRational:
         self.alpha_phi = alpha_phi
         self.l1_projection = l1_projection
         self.adaptive_loss_policy = adaptive_loss_policy
+        # If set, allows selecting a component from vector inputs
+        self.projection_index = projection_index
         
         # Initialize parameters
         self._initialize_parameters()
@@ -90,6 +93,30 @@ class TRRational:
         Returns:
             Tuple of (output_node, output_tag)
         """
+        # Handle vector-like input with optional projection
+        if not isinstance(x, (TRScalar, TRNode)):
+            # Detect list/tuple/numpy array
+            is_sequence_like = False
+            try:
+                # numpy scalars raise TypeError on len(); sequences return >=1
+                _ = len(x)  # type: ignore
+                is_sequence_like = True
+            except Exception:
+                is_sequence_like = False
+            if is_sequence_like:
+                if self.projection_index is not None:
+                    try:
+                        x = x[self.projection_index]  # type: ignore[index]
+                    except Exception as ex:
+                        raise TypeError(
+                            f"Failed to apply projection_index={self.projection_index} to input"
+                        ) from ex
+                else:
+                    raise TypeError(
+                        "TRRational.forward expects a scalar input. "
+                        "Use forward_batch for lists/ndarrays, or set projection_index to select a component."
+                    )
+
         # Ensure x is a node
         if isinstance(x, TRScalar):
             x = TRNode.constant(x)
@@ -124,6 +151,50 @@ class TRRational:
         """Convenience method returning just the output node."""
         y, _ = self.forward(x)
         return y
+
+    def forward_with_tag(self, x: Union[TRScalar, TRNode]) -> Tuple[TRNode, TRTag]:
+        """Explicit helper returning (y, tag); alias to forward for clarity."""
+        return self.forward(x)
+
+    def forward_batch(self, xs: Any) -> List[TRNode]:
+        """
+        Batched forward pass over list/ndarray inputs.
+
+        Args:
+            xs: Iterable of inputs (list/tuple/ndarray). Each element may be a scalar
+                or a vector; when vector, projection_index must be set to select a component.
+
+        Returns:
+            List of output nodes corresponding to each input element.
+        """
+        # Quick validation that xs is iterable (lists, tuples, numpy arrays)
+        try:
+            iterator = iter(xs)
+        except Exception as ex:
+            raise TypeError("forward_batch expects a list/tuple/ndarray of inputs") from ex
+
+        outputs: List[TRNode] = []
+        for x in iterator:
+            # If element is vector-like and projection_index is provided, apply it
+            is_sequence_like = False
+            if not isinstance(x, (TRScalar, TRNode)):
+                try:
+                    _ = len(x)  # type: ignore
+                    is_sequence_like = True
+                except Exception:
+                    is_sequence_like = False
+            if is_sequence_like:
+                if self.projection_index is not None:
+                    x = x[self.projection_index]  # type: ignore[index]
+                else:
+                    raise TypeError(
+                        "Elements of xs are vector-like; set projection_index to select a component."
+                    )
+
+            y, _ = self.forward(x)
+            outputs.append(y)
+
+        return outputs
     
     def _project_phi_l1(self):
         """

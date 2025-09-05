@@ -312,29 +312,26 @@ def tr_neg(x: TRScalar) -> TRScalar:
     """
     Transreal negation (-x).
     
+    NOTE: This function expects a TRScalar. Call sites that pass a TRNode
+    should pass .value. This ensures correct behavior in autodiff contexts
+    and avoids mishandling TRNode vs TRScalar types.
+    
     Rules:
         - -REAL = REAL with negated value
         - -PINF = NINF
         - -NINF = PINF
         - -PHI = PHI
         - -BOTTOM = BOTTOM (wheel mode)
-    
-    Args:
-        x: Transreal scalar to negate
-        
-    Returns:
-        Transreal scalar representing -x
     """
     if x.tag == TRTag.REAL:
         return real(-x.value)
-    elif x.tag == TRTag.PINF:
+    if x.tag == TRTag.PINF:
         return ninf()
-    elif x.tag == TRTag.NINF:
+    if x.tag == TRTag.NINF:
         return pinf()
-    elif x.tag == TRTag.PHI:
+    if x.tag == TRTag.PHI:
         return phi()
-    else:  # BOTTOM
-        return bottom()
+    return bottom()
 
 
 def tr_abs(x: TRScalar) -> TRScalar:

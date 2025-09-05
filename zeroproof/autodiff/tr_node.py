@@ -86,6 +86,14 @@ class TRNode:
         """Get the transreal value."""
         return self._value
     
+    @value.setter
+    def value(self, new_value: TRScalar) -> None:
+        """Allow updating the value for parameter/constant nodes in tests."""
+        if not isinstance(new_value, TRScalar):
+            from ..core import real as tr_real
+            new_value = tr_real(float(new_value))
+        self._value = new_value
+    
     @property
     def tag(self) -> TRTag:
         """Get the transreal tag."""

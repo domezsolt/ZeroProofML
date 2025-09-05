@@ -17,9 +17,11 @@ class GradientMode(Enum):
     Attributes:
         MASK_REAL: Default mode where non-REAL forward values produce zero gradients
         SATURATING: Alternative mode with bounded gradients near singularities
+        HYBRID: Adaptive mode that switches based on local pole detection
     """
     MASK_REAL = auto()
     SATURATING = auto()
+    HYBRID = auto()  # New mode for hybrid schedule
     
     def __str__(self) -> str:
         return self.name.lower().replace('_', '-')
@@ -30,6 +32,7 @@ class GradientModeConfig:
     
     _mode: GradientMode = GradientMode.MASK_REAL
     _saturation_bound: float = 1.0  # Default bound for saturating mode
+    _local_threshold: Optional[float] = None  # For hybrid mode pole detection
     
     @classmethod
     def set_mode(cls, mode: GradientMode) -> None:
@@ -76,10 +79,31 @@ class GradientModeConfig:
         return cls._mode == GradientMode.SATURATING
     
     @classmethod
+    def is_hybrid(cls) -> bool:
+        """Check if using HYBRID mode."""
+        return cls._mode == GradientMode.HYBRID
+    
+    @classmethod
+    def set_local_threshold(cls, threshold: Optional[float]) -> None:
+        """
+        Set the local threshold for hybrid mode pole detection.
+        
+        Args:
+            threshold: Threshold for |Q| to trigger saturating mode
+        """
+        cls._local_threshold = threshold
+    
+    @classmethod
+    def get_local_threshold(cls) -> Optional[float]:
+        """Get the current local threshold."""
+        return cls._local_threshold
+    
+    @classmethod
     def reset(cls) -> None:
         """Reset to default configuration."""
         cls._mode = GradientMode.MASK_REAL
         cls._saturation_bound = 1.0
+        cls._local_threshold = None
 
 
 @contextmanager

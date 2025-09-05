@@ -5,6 +5,9 @@ from .profiling import *
 from .caching import *
 from .parallel import *
 from .benchmarking import *
+from .metrics import *
+from .logging import *
+from .plotting import *
 
 __all__ = []
 
@@ -114,3 +117,73 @@ try:
     ])
 except ImportError:
     BENCHMARKING_AVAILABLE = False
+
+# Export metrics utilities
+try:
+    from .metrics import (
+        PoleLocation,
+        PoleLocalizationError,
+        SignConsistencyChecker,
+        AsymptoticSlopeAnalyzer,
+        ResidualConsistencyLoss,
+        AntiIllusionMetrics,
+    )
+    __all__.extend([
+        "PoleLocation",
+        "PoleLocalizationError",
+        "SignConsistencyChecker", 
+        "AsymptoticSlopeAnalyzer",
+        "ResidualConsistencyLoss",
+        "AntiIllusionMetrics",
+    ])
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+
+# Export logging utilities
+try:
+    from .logging import (
+        StructuredLogger,
+        ExperimentTracker,
+        MetricsAggregator,
+        log_training_step,
+        get_experiment_tracker,
+    )
+    __all__.extend([
+        "StructuredLogger",
+        "ExperimentTracker",
+        "MetricsAggregator",
+        "log_training_step",
+        "get_experiment_tracker",
+    ])
+    LOGGING_AVAILABLE = True
+except ImportError:
+    LOGGING_AVAILABLE = False
+
+# Export plotting utilities (optional)
+try:
+    from .plotting import (
+        TrainingCurvePlotter,
+        PoleVisualizationPlotter,
+        ResidualAnalysisPlotter,
+        ComparisonPlotter,
+        create_paper_ready_figures,
+        save_all_plots,
+        MATPLOTLIB_AVAILABLE,
+        SEABORN_AVAILABLE,
+    )
+    __all__.extend([
+        "TrainingCurvePlotter",
+        "PoleVisualizationPlotter",
+        "ResidualAnalysisPlotter",
+        "ComparisonPlotter",
+        "create_paper_ready_figures",
+        "save_all_plots",
+        "MATPLOTLIB_AVAILABLE",
+        "SEABORN_AVAILABLE",
+    ])
+    PLOTTING_AVAILABLE = True
+except ImportError as e:
+    PLOTTING_AVAILABLE = False
+    MATPLOTLIB_AVAILABLE = False
+    SEABORN_AVAILABLE = False

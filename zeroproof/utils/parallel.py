@@ -530,14 +530,14 @@ def batch_tr_operation(operation: Callable,
     for i in range(0, len(inputs), batch_size):
         batch = inputs[i:i + batch_size]
         
-        if parallel and len(batch) > 1:
-            batch_results = parallel_map(
-                lambda args: operation(*args),
-                batch,
-                ParallelConfig(backend='thread')
-            )
-        else:
+        # For small or moderate batch sizes, sequential is often faster due to overhead
+        if not parallel or len(batch) < 200:
             batch_results = [operation(*args) for args in batch]
+        else:
+            # Use a warmed thread pool with tuned chunk size to minimize scheduling overhead
+            pool = _get_thread_pool(None)
+            tuned_chunk = max(8, len(batch) // (pool.num_workers * 2))
+            batch_results = pool.map(lambda args: operation(*args), batch, tuned_chunk)
         
         results.extend(batch_results)
     

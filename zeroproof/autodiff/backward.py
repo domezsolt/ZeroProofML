@@ -171,35 +171,52 @@ def compute_input_gradients(node: TRNode, grad_output: TRScalar) -> List[Optiona
     elif op_type == OpType.DIV:
         # d/dx(x / y) = 1/y, d/dy(x / y) = -x/y²
         if len(inputs) >= 2:
-            if use_saturating:
-                # Use saturating gradients
+            # Check for hybrid mode
+            if gradient_mode == GradientMode.HYBRID:
+                # Use hybrid gradient context for decision
+                from .hybrid_gradient import HybridGradientContext
+                y_val = inputs[1].value
+                
+                # Determine if near pole for local saturating
+                should_saturate = False
+                if y_val.tag == TRTag.REAL:
+                    should_saturate = HybridGradientContext.should_use_saturating(y_val.value)
+                
+                if should_saturate:
+                    # Use saturating gradients near pole
+                    from .saturating_ops import saturating_div_grad
+                    grad_output_node = TRNode.constant(grad_output)
+                    grad_x, grad_y = saturating_div_grad(inputs[0], inputs[1], grad_output_node)
+                    return [grad_x, grad_y]
+            elif use_saturating:
+                # Pure saturating mode
                 from .saturating_ops import saturating_div_grad
                 grad_output_node = TRNode.constant(grad_output)
                 grad_x, grad_y = saturating_div_grad(inputs[0], inputs[1], grad_output_node)
                 return [grad_x, grad_y]
+            
+            # Standard Mask-REAL gradients (default or far from pole in hybrid)
+            x_val = inputs[0].value
+            y_val = inputs[1].value
+            # dx = grad_output / y
+            grad_x = tr_div(grad_output, y_val)
+            # dy = -grad_output * x / y²
+            neg_grad = tr_neg(grad_output)
+            grad_x_neg = tr_mul(neg_grad, x_val)
+            y_squared = tr_mul(y_val, y_val)
+            base_grad_y = tr_div(grad_x_neg, y_squared)
+            # Mask-REAL refinement: if denominator is near zero, push gradient to ±∞
+            # to indicate a pole so downstream tests expect PINF.
+            from ..core import tr_sign
+            # Only treat exact zero denominator as a pole; otherwise keep finite gradients
+            if y_val.tag == TRTag.REAL and y_val.value == 0.0:
+                from ..core import pinf, ninf
+                grad_y = pinf() if x_val.value >= 0 else ninf()
             else:
-                # Standard gradients
-                x_val = inputs[0].value
-                y_val = inputs[1].value
-                # dx = grad_output / y
-                grad_x = tr_div(grad_output, y_val)
-                # dy = -grad_output * x / y²
-                neg_grad = tr_neg(grad_output)
-                grad_x_neg = tr_mul(neg_grad, x_val)
-                y_squared = tr_mul(y_val, y_val)
-                base_grad_y = tr_div(grad_x_neg, y_squared)
-                # Mask-REAL refinement: if denominator is near zero, push gradient to ±∞
-                # to indicate a pole so downstream tests expect PINF.
-                from ..core import tr_sign
-                # Only treat exact zero denominator as a pole; otherwise keep finite gradients
-                if y_val.tag == TRTag.REAL and y_val.value == 0.0:
-                    from ..core import pinf, ninf
-                    grad_y = pinf() if x_val.value >= 0 else ninf()
-                else:
-                    # Keep sign refinement across the pole
-                    sign_y = tr_sign(y_val)
-                    grad_y = tr_mul(sign_y, base_grad_y)
-                return [grad_x, grad_y]
+                # Keep sign refinement across the pole
+                sign_y = tr_sign(y_val)
+                grad_y = tr_mul(sign_y, base_grad_y)
+            return [grad_x, grad_y]
         return []
     
     elif op_type == OpType.NEG:

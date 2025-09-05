@@ -52,6 +52,28 @@ class TRNorm:
         
         # Initialize parameters
         self._initialize_parameters()
+
+    @classmethod
+    def from_batch(cls,
+                   batch: List[List[Union[TRScalar, TRNode, float]]],
+                   **kwargs) -> "TRNorm":
+        """Convenience constructor inferring num_features from first batch sample.
+
+        Args:
+            batch: List of samples; each sample is a sequence of features
+            **kwargs: Additional TRNorm constructor kwargs (eps, momentum, ...)
+
+        Returns:
+            TRNorm instance with inferred num_features.
+        """
+        if not batch:
+            raise ValueError("from_batch requires a non-empty batch")
+        first = batch[0]
+        try:
+            num_features = len(first)  # type: ignore[arg-type]
+        except Exception as ex:
+            raise TypeError("Batch elements must be sequences of features") from ex
+        return cls(num_features=num_features, **kwargs)
     
     def _initialize_parameters(self):
         """Initialize affine parameters γ and β."""

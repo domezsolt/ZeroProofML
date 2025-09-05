@@ -11,6 +11,7 @@ import numpy as np
 
 from ..core import TRScalar, TRTag, real, ReductionMode
 from ..autodiff import TRNode
+from ..utils.bridge import to_trnode_constant
 from .coverage import CoverageTracker
 
 
@@ -258,7 +259,7 @@ class AdaptiveLossPolicy:
     
     def compute_batch_loss(self,
                           predictions: List[TRNode],
-                          targets: List[TRNode]) -> TRNode:
+                          targets: List[Union[TRNode, TRScalar, float]]) -> TRNode:
         """
         Compute loss for a batch with adaptive penalties.
         
@@ -279,8 +280,9 @@ class AdaptiveLossPolicy:
         # Compute individual losses
         losses = []
         for pred, target in zip(predictions, targets):
+            target_node = to_trnode_constant(target)
             loss = self.adaptive_lambda.compute_loss(
-                pred, target, self._base_loss_fn
+                pred, target_node, self._base_loss_fn
             )
             losses.append(loss)
         
@@ -308,7 +310,14 @@ class AdaptiveLossPolicy:
 def create_adaptive_loss(target_coverage: float = 0.95,
                         learning_rate: float = 0.01,
                         initial_lambda: float = 1.0,
-                        base_loss: str = "mse") -> AdaptiveLossPolicy:
+                        base_loss: str = "mse",
+                        *,
+                        momentum: float = 0.9,
+                        warmup_steps: int = 100,
+                        update_frequency: int = 10,
+                        exponential_decay: Optional[float] = None,
+                        lambda_min: float = 0.0,
+                        lambda_max: Optional[float] = None) -> AdaptiveLossPolicy:
     """
     Create an adaptive loss policy with sensible defaults.
     
@@ -325,9 +334,12 @@ def create_adaptive_loss(target_coverage: float = 0.95,
         initial_lambda=initial_lambda,
         target_coverage=target_coverage,
         learning_rate=learning_rate,
-        momentum=0.9,  # Use momentum for smoother updates
-        warmup_steps=100,  # Warmup before adjusting
-        update_frequency=10,  # Update every 10 steps
+        lambda_min=lambda_min,
+        lambda_max=lambda_max,
+        momentum=momentum,
+        warmup_steps=warmup_steps,
+        update_frequency=update_frequency,
+        exponential_decay=exponential_decay,
     )
     
     adaptive_lambda = AdaptiveLambda(config)

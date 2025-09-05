@@ -12,6 +12,7 @@ import time
 
 from ..core import TRScalar, TRTag, real
 from ..autodiff import TRNode, backward_pass
+from ..utils.bridge import to_trnode_constant
 from .adaptive_loss import AdaptiveLossPolicy, create_adaptive_loss
 from .coverage import CoverageTracker
 
@@ -30,6 +31,12 @@ class TrainingConfig:
     target_coverage: float = 0.95
     lambda_learning_rate: float = 0.01
     initial_lambda: float = 1.0
+    adaptive_momentum: float = 0.9
+    adaptive_warmup_steps: int = 100
+    adaptive_update_frequency: int = 10
+    adaptive_exponential_decay: Optional[float] = None
+    adaptive_lambda_min: float = 0.0
+    adaptive_lambda_max: Optional[float] = None
     
     # Logging
     log_interval: int = 10
@@ -135,7 +142,13 @@ class TRTrainer:
             self.loss_policy = create_adaptive_loss(
                 target_coverage=self.config.target_coverage,
                 learning_rate=self.config.lambda_learning_rate,
-                initial_lambda=self.config.initial_lambda
+                initial_lambda=self.config.initial_lambda,
+                momentum=self.config.adaptive_momentum,
+                warmup_steps=self.config.adaptive_warmup_steps,
+                update_frequency=self.config.adaptive_update_frequency,
+                exponential_decay=self.config.adaptive_exponential_decay,
+                lambda_min=self.config.adaptive_lambda_min,
+                lambda_max=self.config.adaptive_lambda_max,
             )
         else:
             self.loss_policy = None
@@ -209,15 +222,15 @@ class TRTrainer:
         
         # Compute loss
         if self.loss_policy is not None:
-            # Convert targets to nodes
-            target_nodes = [TRNode.constant(t) for t in targets]
+            # Convert targets to nodes; accept floats/ndarrays/TRScalar/TRNode
+            target_nodes = [to_trnode_constant(t) for t in targets]
             loss = self.loss_policy.compute_batch_loss(predictions, target_nodes)
         else:
             # Simple MSE loss without adaptive policy
             from ..core import tr_sum, tr_div
             losses = []
             for pred, target in zip(predictions, targets):
-                target_node = TRNode.constant(target)
+                target_node = to_trnode_constant(target)
                 diff = pred - target_node
                 sq_loss = TRNode.constant(real(0.5)) * diff * diff
                 losses.append(sq_loss.value)
@@ -232,6 +245,15 @@ class TRTrainer:
         # Optional safe LR clamp
         if self.config.use_safe_lr:
             safe_lr = self._compute_safe_lr(inputs, predictions)
+            # Optional: log q_min / y_max when verbose
+            if self.config.verbose:
+                try:
+                    q_min = self.model.compute_q_min(inputs) if hasattr(self.model, 'compute_q_min') else None
+                    y_vals = [p.value.value for p in predictions if p.tag == TRTag.REAL]
+                    y_max = max([abs(v) for v in y_vals], default=0.0)
+                    print(f"[safe-lr] q_min={q_min} y_max={y_max:.4f} lr->{safe_lr:.6f}")
+                except Exception:
+                    pass
             self.optimizer.learning_rate = safe_lr
         # Optimization step (pass model for projections)
         self.optimizer.step(self.model)
@@ -282,6 +304,7 @@ class TRTrainer:
             
             # Logging
             if self.config.verbose and batch_idx % self.config.log_interval == 0:
+                # If not in train() loop, epoch may be 0; show step count for clarity
                 self._log_batch(batch_idx, len(data_loader), metrics)
             
             self.global_step += 1
@@ -414,7 +437,10 @@ class TRTrainer:
     
     def _log_batch(self, batch_idx: int, total_batches: int, metrics: Dict[str, float]) -> None:
         """Log batch metrics."""
-        msg = f"Epoch {self.epoch} [{batch_idx}/{total_batches}]"
+        if self.epoch <= 0:
+            msg = f"Step {self.global_step} [{batch_idx}/{total_batches}]"
+        else:
+            msg = f"Epoch {self.epoch} [{batch_idx}/{total_batches}]"
         msg += f" Loss: {metrics['loss']:.4f}"
         if "coverage" in metrics:
             msg += f" Coverage: {metrics['coverage']:.3f}"

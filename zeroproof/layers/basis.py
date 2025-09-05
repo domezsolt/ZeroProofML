@@ -111,7 +111,7 @@ class ChebyshevBasis:
         """Transform x from [a, b] to [-1, 1]."""
         # t = 2(x - a)/(b - a) - 1
         if isinstance(x, TRScalar):
-            from ..core import tr_sub, tr_mul, tr_div, real
+            from ..core import tr_sub, tr_mul, tr_div
             two = real(2.0)
             width = real(self.b - self.a)
             shifted = tr_sub(x, real(self.a))
@@ -137,7 +137,7 @@ class ChebyshevBasis:
         
         # Initialize recurrence
         if isinstance(t, TRScalar):
-            from ..core import tr_mul, tr_sub, real
+            from ..core import tr_mul, tr_sub
             T = [real(1.0)]  # T_0 = 1
             
             if degree >= 1:
