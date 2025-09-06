@@ -121,7 +121,7 @@ class TrainingCurvePlotter:
     def plot_tag_distribution(self,
                             training_history: List[Dict[str, Any]],
                             title: str = "Tag Distribution Over Time",
-                            save_path: Optional[str] = None) -> plt.Figure:
+                            save_path: Optional[str] = None) :
         """
         Plot tag distribution evolution during training.
         
@@ -195,7 +195,7 @@ class PoleVisualizationPlotter:
                          y_range: Optional[Tuple[float, float]] = None,
                          resolution: int = 100,
                          title: str = "Pole Detection Heatmap",
-                         save_path: Optional[str] = None) -> plt.Figure:
+                         save_path: Optional[str] = None) :
         """
         Create heatmap of pole detection probabilities.
         
@@ -271,7 +271,7 @@ class PoleVisualizationPlotter:
                                   pole_t: float,
                                   n_points: int = 100,
                                   title: str = "Sign Consistency Along Path",
-                                  save_path: Optional[str] = None) -> plt.Figure:
+                                  save_path: Optional[str] = None) :
         """
         Plot sign behavior along a path crossing a pole.
         
@@ -383,7 +383,7 @@ class PoleVisualizationPlotter:
     def plot_anti_illusion_metrics(self,
                                  ai_history: List[Dict[str, float]],
                                  title: str = "Anti-Illusion Metrics",
-                                 save_path: Optional[str] = None) -> plt.Figure:
+                                 save_path: Optional[str] = None) :
         """
         Plot anti-illusion metrics over training.
         
@@ -462,7 +462,7 @@ class ResidualAnalysisPlotter:
                               residuals: List[float],
                               near_pole_residuals: Optional[List[float]] = None,
                               title: str = "Residual Distribution",
-                              save_path: Optional[str] = None) -> plt.Figure:
+                              save_path: Optional[str] = None) :
         """
         Plot histogram of residual values.
         
@@ -520,7 +520,7 @@ class ResidualAnalysisPlotter:
                           residuals: List[float],
                           q_values: List[float],
                           title: str = "Residuals vs |Q| Values",
-                          save_path: Optional[str] = None) -> plt.Figure:
+                          save_path: Optional[str] = None) :
         """
         Plot residuals vs |Q| values to show pole behavior.
         
@@ -575,7 +575,7 @@ class ComparisonPlotter:
                              results: Dict[str, Dict[str, Any]],
                              metrics: List[str] = None,
                              title: str = "Method Comparison",
-                             save_path: Optional[str] = None) -> plt.Figure:
+                             save_path: Optional[str] = None) :
         """
         Plot comparison between different methods.
         

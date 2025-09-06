@@ -174,49 +174,6 @@ class TRNorm:
                 self.running_var[j] = (1.0 - self.momentum) * v_prev + self.momentum * float(v_val)
                 updated_any_running_stats = True
 
-            # Special-case: if all entries are REAL and there are effectively two distinct values,
-            # compute closed-form normalized outputs that depend only on counts.
-            if len(real_values) == batch_size and batch_size >= 2:
-                # Scale-aware tolerance for grouping values after affine transforms
-                eps = PrecisionConfig.get_epsilon()
-                mean_scale = abs(mean.value.value) if mean.tag == TRTag.REAL else 0.0
-                tau = eps * max(1.0, mean_scale)
-                # Build tolerance-based groups
-                reps: List[float] = []
-                groups: List[List[int]] = []
-                for idx in range(batch_size):
-                    val = x_nodes[idx][j].value.value
-                    placed = False
-                    for gi, rep in enumerate(reps):
-                        if abs(val - rep) <= tau:
-                            groups[gi].append(idx)
-                            placed = True
-                            break
-                    if not placed:
-                        reps.append(val)
-                        groups.append([idx])
-                if len(groups) == 2:
-                    # Determine groups order by representative values
-                    order = sorted(range(2), key=lambda gi: reps[gi])
-                    g0, g1 = order[0], order[1]
-                    v0, v1 = reps[g0], reps[g1]
-                    idxs0, idxs1 = groups[g0], groups[g1]
-                    n0 = len(idxs0)
-                    n1 = len(idxs1)
-                    import math as _math
-                    sign = 1.0 if v1 >= v0 else -1.0
-                    norm0 = -sign * _math.sqrt(n1 / n0)
-                    norm1 =  sign * _math.sqrt(n0 / n1)
-                    for i in range(batch_size):
-                        if i in idxs0:
-                            normalized = TRNode.constant(real(float(norm0)))
-                        else:
-                            normalized = TRNode.constant(real(float(norm1)))
-                        if self.affine:
-                            normalized = self.gamma[j] * normalized + self.beta[j]
-                        output[i].append(normalized)
-                    continue
-
             # Special-case exact two-sample normalization for numerical invariance
             if batch_size == 2 and len(real_values) == 2:
                 x0 = x_nodes[real_indices[0]][j] if real_indices else x_nodes[0][j]
@@ -227,33 +184,20 @@ class TRNorm:
                 delta = x1 - x0
                 half_delta = delta / TRNode.constant(real(2.0))
                 denom = tr_abs(half_delta)
-                # Normalize or bypass using scale-aware tolerance
-                eps = PrecisionConfig.get_epsilon()
-                mean_scale = abs(mean.value.value) if mean.tag == TRTag.REAL else 0.0
-                tau = eps * max(1.0, mean_scale)
-                delta_float = abs(x1.value.value - x0.value.value)
-                denom_is_zero = (denom.tag == TRTag.REAL and (denom.value.value == 0.0 or delta_float <= tau))
+                
+                # Always normalize, even if denom is very small
+                # This preserves affine invariance by maintaining relative ordering
                 for i in range(batch_size):
-                    if denom_is_zero:
-                        # Bypass
-                        normalized = self.beta[j] if self.affine else TRNode.constant(real(0.0))
-                    else:
-                        num = half_delta if i == 1 else tr_neg(half_delta)
-                        normalized = tr_div(num, denom)
-                        if self.affine:
-                            normalized = self.gamma[j] * normalized + self.beta[j]
+                    num = half_delta if i == 1 else tr_neg(half_delta)
+                    normalized = tr_div(num, denom)
+                    if self.affine:
+                        normalized = self.gamma[j] * normalized + self.beta[j]
                     output[i].append(normalized)
                 continue
 
-            # Check if variance is effectively zero (accounting for numerical precision)
-            # Bypass only when variance would cause severe numerical issues
+            # Bypass only when variance is exactly zero in REAL domain
             if variance.tag == TRTag.REAL:
-                # Use a very conservative threshold: bypass only if std would be < sqrt(eps)
-                # This ensures we can still normalize when variance is small but meaningful
-                eps = PrecisionConfig.get_epsilon()
-                # Variance threshold = eps (not eps²) to allow normalizing small variances
-                # This means std > sqrt(eps) ≈ 1.5e-8 for float64
-                var_is_zero = abs(variance.value.value) < eps * eps
+                var_is_zero = (variance.value.value == 0.0)
             else:
                 var_is_zero = False
             

@@ -2,7 +2,7 @@
 
 import pytest
 import math
-from hypothesis import given, strategies as st, assume
+from hypothesis import given, strategies as st, assume, settings, HealthCheck
 
 from zeroproof.core import real, pinf, ninf, phi, TRTag
 from zeroproof.autodiff import TRNode, gradient_tape
@@ -299,6 +299,7 @@ class TestNormalizationProperties:
         assert abs(mean) < 0.01
         assert abs(var - 1.0) < 0.01
     
+    @settings(suppress_health_check=[HealthCheck.too_slow])
     @given(st.lists(st.floats(min_value=-10, max_value=10, 
                              allow_nan=False, allow_infinity=False),
                    min_size=2, max_size=20))
