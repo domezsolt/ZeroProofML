@@ -19,7 +19,8 @@ from zeroproof.layers import MonomialBasis
 from zeroproof.layers.tag_aware_rational import TagAwareRational
 from zeroproof.training.tag_loss import TagClass, compute_tag_accuracy
 from zeroproof.training.hybrid_trainer import HybridTRTrainer, HybridTrainingConfig
-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_multi_pole_data(n_samples: int = 200) -> Tuple[List, List]:
     """

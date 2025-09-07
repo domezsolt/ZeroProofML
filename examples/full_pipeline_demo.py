@@ -117,14 +117,14 @@ def main():
     
     config = HybridTrainingConfig(
         learning_rate=0.01,
-        epochs=80,
+        max_epochs=80,
         
         # Hybrid gradient schedule
-        use_hybrid_schedule=True,
-        warmup_epochs=20,
-        transition_epochs=30,
-        delta_init=0.05,
-        delta_final=1e-4,
+        use_hybrid_gradient=True,
+        hybrid_warmup_epochs=20,
+        hybrid_transition_epochs=30,
+        hybrid_delta_init=0.05,
+        hybrid_delta_final=1e-4,
         
         # Tag loss
         use_tag_loss=True,
@@ -150,10 +150,10 @@ def main():
     )
     
     print(f"Training configuration:")
-    print(f"  - Epochs: {config.epochs}")
+    print(f"  - Epochs: {config.max_epochs}")
     print(f"  - Learning rate: {config.learning_rate}")
-    print(f"  - Hybrid schedule: Warmup({config.warmup_epochs}) → Transition({config.transition_epochs})")
-    print(f"  - Delta decay: {config.delta_init} → {config.delta_final}")
+    print(f"  - Hybrid schedule: Warmup({config.hybrid_warmup_epochs}) → Transition({config.hybrid_transition_epochs})")
+    print(f"  - Delta decay: {config.hybrid_delta_init} → {config.hybrid_delta_final}")
     print(f"  - Loss weights: Tag({config.lambda_tag}), Pole({config.lambda_pole}), Residual({config.lambda_residual})")
     print(f"  - Coverage target: {config.min_coverage}")
     
@@ -187,7 +187,7 @@ def main():
     print("Training started with comprehensive monitoring...")
     
     # Training loop
-    for epoch in range(config.epochs):
+    for epoch in range(config.max_epochs):
         # Mini-batch training
         epoch_losses = []
         epoch_tags = []
@@ -244,8 +244,8 @@ def main():
             tags=epoch_tags,
             coverage=coverage,
             lambda_rej=0.1,  # Would get from trainer
-            gradient_mode="HYBRID" if epoch > config.warmup_epochs else "MASK_REAL",
-            delta=config.delta_init * (config.delta_final / config.delta_init) ** (epoch / config.epochs),
+            gradient_mode="HYBRID" if epoch > config.hybrid_warmup_epochs else "MASK_REAL",
+            delta=config.hybrid_delta_init * (config.hybrid_delta_final / config.hybrid_delta_init) ** (epoch / config.max_epochs),
             additional_metrics={
                 'n_samples': len(epoch_tags),
                 'batch_count': len(epoch_losses)

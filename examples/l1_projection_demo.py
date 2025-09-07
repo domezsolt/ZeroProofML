@@ -16,7 +16,8 @@ from zeroproof.core import real, TRScalar
 from zeroproof.autodiff import TRNode
 from zeroproof.layers import TRRational
 from zeroproof.training import Optimizer, TRTrainer, TrainingConfig
-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 def create_training_data(n_samples: int = 50) -> Tuple[List[TRScalar], List[TRScalar]]:
     """

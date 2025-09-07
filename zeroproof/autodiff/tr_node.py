@@ -186,3 +186,61 @@ class TRNode:
         if name:
             node.name = name
         return node
+    
+    # Arithmetic operators
+    def __add__(self, other):
+        """Addition operator."""
+        from .tr_ops_grad import tr_add
+        return tr_add(self, other)
+    
+    def __radd__(self, other):
+        """Right addition operator."""
+        from .tr_ops_grad import tr_add
+        return tr_add(other, self)
+    
+    def __sub__(self, other):
+        """Subtraction operator."""
+        from .tr_ops_grad import tr_sub
+        return tr_sub(self, other)
+    
+    def __rsub__(self, other):
+        """Right subtraction operator."""
+        from .tr_ops_grad import tr_sub
+        return tr_sub(other, self)
+    
+    def __mul__(self, other):
+        """Multiplication operator."""
+        from .tr_ops_grad import tr_mul
+        return tr_mul(self, other)
+    
+    def __rmul__(self, other):
+        """Right multiplication operator."""
+        from .tr_ops_grad import tr_mul
+        return tr_mul(other, self)
+    
+    def __truediv__(self, other):
+        """Division operator."""
+        from .tr_ops_grad import tr_div
+        return tr_div(self, other)
+    
+    def __rtruediv__(self, other):
+        """Right division operator."""
+        from .tr_ops_grad import tr_div
+        return tr_div(other, self)
+    
+    def __neg__(self):
+        """Negation operator."""
+        from .tr_ops_grad import tr_neg
+        return tr_neg(self)
+    
+    def __abs__(self):
+        """Absolute value operator."""
+        from .tr_ops_grad import tr_abs
+        return tr_abs(self)
+    
+    def __pow__(self, exponent):
+        """Power operator (integer exponents only)."""
+        from .tr_ops_grad import tr_pow_int
+        if not isinstance(exponent, int):
+            raise TypeError(f"TRNode power only supports integer exponents, got {type(exponent)}")
+        return tr_pow_int(self, exponent)

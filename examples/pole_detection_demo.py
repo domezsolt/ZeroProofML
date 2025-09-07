@@ -27,7 +27,8 @@ from zeroproof.training.pole_detection import (
     PoleDetectionConfig,
     DomainSpecificPoleDetector
 )
-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_rational_data(n: int = 100) -> Tuple[List[float], List[float], List[bool]]:
     """
@@ -119,7 +120,7 @@ def train_with_pole_detection():
     # Create trainer with pole detection enabled
     config = HybridTrainingConfig(
         learning_rate=0.01,
-        epochs=50,
+        max_epochs=50,
         use_tag_loss=True,
         lambda_tag=0.05,
         use_pole_head=True,
@@ -131,7 +132,7 @@ def train_with_pole_detection():
     # Initialize trainer
     trainer = HybridTRTrainer(
         model=model,
-        optimizer=Optimizer(learning_rate=config.learning_rate),
+        optimizer=None,  # Let trainer create optimizer automatically
         config=config
     )
     
@@ -143,7 +144,7 @@ def train_with_pole_detection():
     pole_accuracies = []
     losses = []
     
-    for epoch in range(config.epochs):
+    for epoch in range(config.max_epochs):
         epoch_loss = 0.0
         pole_predictions = []
         true_poles = []
@@ -265,7 +266,7 @@ def train_with_pole_detection():
     
     plt.tight_layout()
     plt.savefig('pole_detection_results.png', dpi=150)
-    plt.show()
+    # plt.show()  # Commented out to avoid hanging in batch mode
     
     # Print summary statistics
     print("\n=== Summary Statistics ===")
@@ -307,7 +308,7 @@ def compare_with_without_pole_head():
         enable_pole_head=False
     )
     
-    optimizer = Optimizer(learning_rate=0.01)
+    optimizer = Optimizer(model_without.parameters(), learning_rate=0.01)
     losses_without = []
     
     for epoch in range(30):
@@ -336,7 +337,7 @@ def compare_with_without_pole_head():
         pole_config=PoleDetectionConfig(hidden_dim=8)
     )
     
-    optimizer = Optimizer(learning_rate=0.01)
+    optimizer = Optimizer(model_with.parameters(), learning_rate=0.01)
     losses_with = []
     
     for epoch in range(30):
@@ -352,7 +353,8 @@ def compare_with_without_pole_head():
             else:
                 loss = TRNode.constant(real(1.0))
             
-            # Add pole loss (simplified BCE)
+            # Add pole loss (simplified MSE)
+            # For binary classification: loss = (prediction - target)^2
             target = 1.0 if is_pole else 0.0
             pole_diff = pole_score - TRNode.constant(real(target))
             pole_loss = pole_diff * pole_diff * TRNode.constant(real(0.1))
@@ -417,7 +419,7 @@ def compare_with_without_pole_head():
     
     plt.tight_layout()
     plt.savefig('pole_head_comparison.png', dpi=150)
-    plt.show()
+    # plt.show()  # Commented out to avoid hanging in batch mode
     
     print(f"\nFinal loss without pole head: {losses_without[-1]:.4f}")
     print(f"Final loss with pole head: {losses_with[-1]:.4f}")

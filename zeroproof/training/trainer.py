@@ -300,6 +300,7 @@ class TRTrainer:
             epoch_metrics["loss"].append(metrics["loss"])
             if "coverage" in metrics:
                 epoch_metrics["coverage"].append(metrics["coverage"])
+            if "lambda_rej" in metrics:
                 epoch_metrics["lambda_rej"].append(metrics["lambda_rej"])
             
             # Logging
@@ -347,6 +348,7 @@ class TRTrainer:
             self.training_history["loss"].append(train_metrics["loss"])
             if "coverage" in train_metrics:
                 self.training_history["coverage"].append(train_metrics["coverage"])
+            if "lambda_rej" in train_metrics:
                 self.training_history["lambda_rej"].append(train_metrics["lambda_rej"])
             
             # Validation
@@ -376,6 +378,11 @@ class TRTrainer:
         if self.config.verbose:
             print(f"Training completed in {training_time:.2f} seconds")
         
+        return self.training_history
+    
+    @property
+    def history(self) -> Dict[str, List[float]]:
+        """Alias for training_history for backward compatibility."""
         return self.training_history
     
     def evaluate(self,
@@ -444,6 +451,7 @@ class TRTrainer:
         msg += f" Loss: {metrics['loss']:.4f}"
         if "coverage" in metrics:
             msg += f" Coverage: {metrics['coverage']:.3f}"
+        if "lambda_rej" in metrics:
             msg += f" λ_rej: {metrics['lambda_rej']:.3f}"
         print(msg)
     
@@ -455,6 +463,7 @@ class TRTrainer:
         
         if "coverage" in train_metrics:
             msg += f" Coverage: {train_metrics['coverage']:.3f}"
+        if "lambda_rej" in train_metrics:
             msg += f" λ_rej: {train_metrics['lambda_rej']:.3f}"
         
         if val_metrics:

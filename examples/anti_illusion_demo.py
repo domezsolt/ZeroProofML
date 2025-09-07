@@ -134,12 +134,12 @@ def train_with_anti_illusion_metrics():
     # Create trainer with anti-illusion metrics enabled
     config = HybridTrainingConfig(
         learning_rate=0.005,
-        epochs=100,
+        max_epochs=100,
         
         # Enable all enhancements
-        use_hybrid_schedule=True,
-        warmup_epochs=20,
-        transition_epochs=30,
+        use_hybrid_gradient=True,
+        hybrid_warmup_epochs=20,
+        hybrid_transition_epochs=30,
         
         use_tag_loss=True,
         lambda_tag=0.03,
@@ -167,7 +167,7 @@ def train_with_anti_illusion_metrics():
     illusion_scores = []
     ple_scores = []
     
-    for epoch in range(config.epochs):
+    for epoch in range(config.max_epochs):
         # Train one epoch
         epoch_metrics = {}
         total_loss = 0.0

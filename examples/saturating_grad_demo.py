@@ -8,9 +8,10 @@ gradient modes when training near singularities.
 import numpy as np
 import matplotlib.pyplot as plt
 import zeroproof as zp
-from zeroproof.autodiff import GradientMode, gradient_mode
+from zeroproof.autodiff import GradientMode, gradient_mode, TRNode
 from zeroproof.layers import SaturatingTRRational, ChebyshevBasis
-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_data_with_poles():
     """Generate synthetic data with known poles."""
@@ -92,10 +93,10 @@ def train_with_mode(x_train, y_train, mode, saturation_bound=1.0, epochs=100):
             
             # Loss computation
             if tag == zp.TRTag.REAL:
-                loss = 0.5 * (y_pred - zp.TRNode.constant(y_true)) ** 2
+                loss = 0.5 * (y_pred - TRNode.constant(y_true)) ** 2
             else:
                 # Rejection penalty
-                loss = zp.TRNode.constant(zp.real(1.0))
+                loss = TRNode.constant(zp.real(1.0))
             
             # Backward pass
             loss.backward()

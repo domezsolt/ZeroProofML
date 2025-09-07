@@ -19,7 +19,8 @@ from zeroproof.layers import MonomialBasis
 from zeroproof.layers.hybrid_rational import HybridTRRational
 from zeroproof.training.hybrid_trainer import HybridTRTrainer, HybridTrainingConfig
 from zeroproof.training.enhanced_coverage import CoverageStrategy
-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_challenging_data(n_samples: int = 200) -> Tuple[List, List]:
     """
@@ -115,7 +116,7 @@ def visualize_coverage_control(trainer: HybridTRTrainer,
     
     # 3. Lambda evolution
     ax = axes[0, 2]
-    if 'lambda_rej' in history:
+    if 'lambda_rej' in history and len(history['lambda_rej']) > 0:
         epochs = range(len(history['lambda_rej']))
         lambda_vals = history['lambda_rej']
         
@@ -136,7 +137,9 @@ def visualize_coverage_control(trainer: HybridTRTrainer,
     
     # 4. Coverage vs Lambda correlation
     ax = axes[1, 0]
-    if 'coverage' in history and 'lambda_rej' in history:
+    if ('coverage' in history and len(history['coverage']) > 0 and 
+        'lambda_rej' in history and len(history['lambda_rej']) > 0 and
+        len(history['coverage']) == len(history['lambda_rej'])):
         # Show relationship
         ax.scatter(history['lambda_rej'], history['coverage'], 
                   c=range(len(history['coverage'])), cmap='viridis',
@@ -339,9 +342,9 @@ def run_coverage_control_comparison():
     def get_final_metrics(history):
         """Extract final metrics from history."""
         metrics = {}
-        metrics['loss'] = history['loss'][-1] if 'loss' in history else float('inf')
-        metrics['coverage'] = history['coverage'][-1] if 'coverage' in history else 0
-        metrics['lambda'] = history['lambda_rej'][-1] if 'lambda_rej' in history else 1.0
+        metrics['loss'] = history['loss'][-1] if 'loss' in history and len(history['loss']) > 0 else float('inf')
+        metrics['coverage'] = history['coverage'][-1] if 'coverage' in history and len(history['coverage']) > 0 else 0
+        metrics['lambda'] = history['lambda_rej'][-1] if 'lambda_rej' in history and len(history['lambda_rej']) > 0 else 1.0
         return metrics
     
     metrics_no_control = get_final_metrics(history_no_control)

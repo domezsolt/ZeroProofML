@@ -24,7 +24,8 @@ from zeroproof.autodiff.hybrid_gradient import (
 from zeroproof.layers import MonomialBasis
 from zeroproof.layers.hybrid_rational import HybridTRRational
 from zeroproof.training.hybrid_trainer import HybridTRTrainer, HybridTrainingConfig
-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_near_pole_data(n_samples: int = 100, pole_location: float = 0.5) -> Tuple[List, List]:
     """

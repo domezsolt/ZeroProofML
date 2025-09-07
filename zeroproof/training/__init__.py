@@ -8,11 +8,14 @@ including adaptive loss policies and coverage tracking.
 from .coverage import CoverageTracker, CoverageMetrics
 from .adaptive_loss import AdaptiveLambda, AdaptiveLossPolicy, AdaptiveLossConfig, create_adaptive_loss
 from .trainer import TRTrainer, TrainingConfig, Optimizer
+from .hybrid_trainer import HybridTRTrainer, HybridTrainingConfig
+from .enhanced_coverage import EnhancedCoverageConfig
 
 __all__ = [
     # Coverage tracking
     "CoverageTracker",
     "CoverageMetrics",
+    "EnhancedCoverageConfig",
     
     # Adaptive loss
     "AdaptiveLambda",
@@ -24,4 +27,6 @@ __all__ = [
     "TRTrainer",
     "TrainingConfig",
     "Optimizer",
+    "HybridTRTrainer",
+    "HybridTrainingConfig",
 ]

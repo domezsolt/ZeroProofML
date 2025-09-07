@@ -13,7 +13,7 @@ import numpy as np
 
 from ..core import TRScalar, TRTag, real, pinf, ninf, phi
 from ..autodiff import TRNode
-from ..core import tr_add, tr_mul, tr_div, tr_sub, tr_neg
+from ..autodiff.tr_ops_grad import tr_add, tr_mul, tr_div, tr_sub, tr_neg
 
 
 @dataclass
@@ -83,6 +83,37 @@ def sigmoid(x: TRNode) -> TRNode:
     result = tr_add(result, tr_mul(coeff3, x3))
     
     return result
+
+
+def relu_activation(x: TRNode) -> TRNode:
+    """
+    Compute ReLU activation: max(0, x).
+    
+    Args:
+        x: Input node
+        
+    Returns:
+        ReLU output
+    """
+    zero = TRNode.constant(real(0.0))
+    
+    # Access value to check sign
+    x_val = x.value if hasattr(x, 'value') else x
+    if hasattr(x_val, 'tag'):
+        x_tag = x_val.tag
+        if x_tag == TRTag.REAL:
+            x_real_value = x_val.value
+            if x_real_value > 0:
+                return x
+            else:
+                return zero
+        elif x_tag == TRTag.PINF:
+            return x  # Positive infinity stays positive
+        else:
+            return zero  # Negative infinity, PHI, etc. become 0
+    else:
+        # Fallback - just return x if positive-looking
+        return x
 
 
 def tanh_activation(x: TRNode) -> TRNode:

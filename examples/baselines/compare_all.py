@@ -95,8 +95,8 @@ def run_zeroproof_baseline(train_data: Tuple[List, List],
         
         config = HybridTrainingConfig(
             learning_rate=0.01,
-            epochs=100,
-            use_hybrid_schedule=True,
+            max_epochs=100,
+            use_hybrid_gradient=True,
             use_tag_loss=True,
             lambda_tag=0.05,
             use_pole_head=True,

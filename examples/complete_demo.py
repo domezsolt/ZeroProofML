@@ -170,14 +170,14 @@ def run_complete_demonstration():
     
     training_config = HybridTrainingConfig(
         learning_rate=0.008,
-        epochs=150,
+        max_epochs=150,
         
         # Hybrid gradient schedule
-        use_hybrid_schedule=True,
-        warmup_epochs=30,
-        transition_epochs=50,
-        delta_init=0.02,
-        delta_final=1e-5,
+        use_hybrid_gradient=True,
+        hybrid_warmup_epochs=30,
+        hybrid_transition_epochs=50,
+        hybrid_delta_init=0.02,
+        hybrid_delta_final=1e-5,
         
         # Tag loss
         use_tag_loss=True,
@@ -219,7 +219,7 @@ def run_complete_demonstration():
     training_metrics = []
     ai_evaluation_history = []
     
-    for epoch in range(training_config.epochs):
+    for epoch in range(training_config.max_epochs):
         # Train mini-batches
         batch_size = 25
         epoch_metrics = []

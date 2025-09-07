@@ -14,6 +14,8 @@ from zeroproof.training import (
     create_adaptive_loss
 )
 from zeroproof.layers import TRRational, ChebyshevBasis
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 
 def generate_synthetic_data(n_samples=1000, noise_level=0.1):
@@ -122,7 +124,7 @@ def plot_training_history(history, adaptive_loss):
     
     # Lambda adaptation
     ax = axes[1, 0]
-    if 'lambda_rej' in history:
+    if 'lambda_rej' in history and len(history['lambda_rej']) > 0:
         ax.plot(history['lambda_rej'], label='λ_rej')
         ax.set_xlabel('Epoch')
         ax.set_ylabel('λ_rej')
