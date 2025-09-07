@@ -88,17 +88,21 @@ class TestAdaptiveLambda:
         tags = [TRTag.REAL] * 7 + [TRTag.PHI] * 3  # 70% coverage
         adaptive.update(tags)
         
-        # Gap = 0.9 - 0.7 = 0.2
+        # Gap = 0.9 - 0.7 = 0.2 (outside dead-band of 0.02)
         # Update = 0.1 * 0.2 = 0.02
-        assert abs(adaptive.lambda_rej - 1.02) < 1e-10
+        # With asymmetric update: 0.02 * 0.5 = 0.01 (slower decrease when coverage low)
+        assert abs(adaptive.lambda_rej - 1.01) < 1e-10
         
         # Coverage above target - lambda should decrease
         tags = [TRTag.REAL] * 10  # 100% coverage
         adaptive.update(tags)
         
-        # Gap = 0.9 - 0.85 = 0.05 (cumulative)
+        # Second update: coverage = 0.85, target = 0.9, gap = 0.05
         # Update = 0.1 * 0.05 = 0.005
-        expected = 1.02 + 0.005
+        # Gap > 0 (coverage still too low), so multiply by 0.5
+        # Effective update = 0.005 * 0.5 = 0.0025
+        # lambda_rej = 1.01 + 0.0025 = 1.0125
+        expected = 1.0125
         assert abs(adaptive.lambda_rej - expected) < 1e-6
     
     def test_warmup(self):
@@ -150,10 +154,11 @@ class TestAdaptiveLambda:
         
         # First update
         adaptive.update([TRTag.REAL] * 5 + [TRTag.PHI] * 5)  # 50% coverage
-        # Gap = 0.95 - 0.5 = 0.45
+        # Gap = 0.95 - 0.5 = 0.45 (outside dead-band of 0.02)
         # Update = 0.1 * 0.45 = 0.045
         # Velocity = 0 * 0.9 + 0.045 = 0.045
-        assert abs(adaptive.lambda_rej - 1.045) < 1e-10
+        # With asymmetric update: 0.045 * 0.5 = 0.0225 (slower decrease when coverage low)
+        assert abs(adaptive.lambda_rej - 1.0225) < 1e-10
         
         # Second update with momentum
         old_velocity = adaptive.velocity

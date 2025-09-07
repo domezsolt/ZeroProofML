@@ -98,8 +98,19 @@ class AdaptiveLambda:
         # in basic tests, then switch to batch coverage for responsiveness.
         if self.step_count <= 2:
             coverage_gap = self.coverage_tracker.target_coverage - cum_coverage
+            current_coverage = cum_coverage
         else:
             coverage_gap = self.coverage_tracker.target_coverage - batch_cov
+            current_coverage = batch_cov
+        
+        # Apply dead-band to prevent oscillation
+        # Only update if coverage is outside acceptable range
+        dead_band = 0.02  # ±2% of target is acceptable
+        if abs(coverage_gap) < dead_band:
+            # Within acceptable range, no update needed
+            self.update_history.append(0.0)
+            self.lambda_history.append(self.lambda_rej)
+            return
         
         # Get effective learning rate
         lr = self._get_learning_rate()
@@ -112,11 +123,21 @@ class AdaptiveLambda:
         else:
             effective_update = update
         
-        # Update lambda
+        # Update lambda with asymmetric learning rate
+        # Faster increase when coverage too high, slower decrease when coverage too low
+        if coverage_gap < 0:  # Coverage is too high
+            # Increase lambda more aggressively
+            effective_update *= 2.0
+        else:  # Coverage is too low
+            # Decrease lambda more conservatively
+            effective_update *= 0.5
+        
         self.lambda_rej += effective_update
         
-        # Apply constraints
-        self.lambda_rej = max(self.config.lambda_min, self.lambda_rej)
+        # Apply constraints with minimum threshold to maintain pressure
+        # Never let lambda go below a minimum value to ensure exploration
+        min_lambda = max(self.config.lambda_min, 0.1)  # At least 0.1
+        self.lambda_rej = max(min_lambda, self.lambda_rej)
         if self.config.lambda_max is not None:
             self.lambda_rej = min(self.config.lambda_max, self.lambda_rej)
         

@@ -8,6 +8,7 @@ from .benchmarking import *
 from .metrics import *
 from .logging import *
 from .plotting import *
+from .dataset_generation import *
 
 __all__ = []
 
@@ -187,3 +188,19 @@ except ImportError as e:
     PLOTTING_AVAILABLE = False
     MATPLOTLIB_AVAILABLE = False
     SEABORN_AVAILABLE = False
+
+# Export dataset generation utilities
+try:
+    from .dataset_generation import (
+        SingularityInfo,
+        SingularDatasetGenerator,
+        generate_robotics_singular_configurations,
+    )
+    __all__.extend([
+        "SingularityInfo",
+        "SingularDatasetGenerator",
+        "generate_robotics_singular_configurations",
+    ])
+    DATASET_GENERATION_AVAILABLE = True
+except ImportError:
+    DATASET_GENERATION_AVAILABLE = False

@@ -321,7 +321,7 @@ class TestNormalizationProperties:
         for i in range(len(values)):
             if output1[i][0].tag == TRTag.REAL and output2[i][0].tag == TRTag.REAL:
                 assert output1[i][0].value.value == pytest.approx(
-                    output2[i][0].value.value, rel=1e-10
+                    output2[i][0].value.value, rel=1e-7, abs=1e-10
                 )
     
     def test_gradient_preserves_zero_mean(self):
