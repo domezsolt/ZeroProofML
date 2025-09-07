@@ -8,38 +8,42 @@ to achieve a target coverage rate during training.
 import numpy as np
 import matplotlib.pyplot as plt
 import zeroproof as zp
+from zeroproof.core import TRTag
 from zeroproof.training import (
     TRTrainer, TrainingConfig, 
     AdaptiveLambda, AdaptiveLossConfig,
     create_adaptive_loss
 )
 from zeroproof.layers import TRRational, ChebyshevBasis
+from zeroproof.utils import SingularDatasetGenerator
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 
 def generate_synthetic_data(n_samples=1000, noise_level=0.1):
-    """Generate data with a known singularity at x=0.5."""
-    np.random.seed(42)
+    """Generate data with actual singularities using SingularDatasetGenerator."""
+    # Use the new dataset generator to ensure actual singularities
+    generator = SingularDatasetGenerator(
+        domain=(-1.0, 1.0),
+        seed=42
+    )
     
-    # Generate x avoiding the singularity
-    x = np.random.uniform(-1, 1, n_samples)
-    # Add some points very close to singularity to test coverage
-    x[::20] = 0.5 + np.random.normal(0, 0.01, len(x[::20]))
+    # Add singularity at x=0.5
+    generator.add_pole(location=0.5, strength=0.01)
     
-    # True function: 1 / (x - 0.5) + 2x
-    y = []
-    for xi in x:
-        if abs(xi - 0.5) < 1e-10:
-            # At singularity
-            y.append(float('inf') if xi > 0.5 else float('-inf'))
-        else:
-            y.append(1.0 / (xi - 0.5) + 2 * xi)
+    # Generate dataset with guaranteed singularities
+    x_vals, y_vals, metadata = generator.generate_rational_function_data(
+        n_samples=n_samples,
+        singularity_ratio=0.3,  # 30% near/at singularities
+        force_exact_singularities=True,
+        noise_level=noise_level
+    )
     
-    # Add noise
-    y = np.array(y)
-    mask = np.isfinite(y)
-    y[mask] += np.random.normal(0, noise_level, np.sum(mask))
+    # Convert to numpy arrays for compatibility
+    x = np.array([float(xi.value) if xi.tag == TRTag.REAL else float('inf') * (1 if xi.tag == TRTag.PINF else -1 if xi.tag == TRTag.NINF else 0) 
+                  for xi in x_vals])
+    y = np.array([float(yi.value) if yi.tag == TRTag.REAL else float('inf') * (1 if yi.tag == TRTag.PINF else -1 if yi.tag == TRTag.NINF else 0)
+                  for yi in y_vals])
     
     return x, y
 

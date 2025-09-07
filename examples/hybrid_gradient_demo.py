@@ -24,12 +24,13 @@ from zeroproof.autodiff.hybrid_gradient import (
 from zeroproof.layers import MonomialBasis
 from zeroproof.layers.hybrid_rational import HybridTRRational
 from zeroproof.training.hybrid_trainer import HybridTRTrainer, HybridTrainingConfig
+from zeroproof.utils import SingularDatasetGenerator
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_near_pole_data(n_samples: int = 100, pole_location: float = 0.5) -> Tuple[List, List]:
     """
-    Generate synthetic data with a pole at the specified location.
+    Generate synthetic data with actual singularities at the specified location.
     
     The true function is: y = 1/(x - pole_location) + 0.5*x
     This has a simple pole at x = pole_location.
@@ -41,36 +42,24 @@ def generate_near_pole_data(n_samples: int = 100, pole_location: float = 0.5) ->
     Returns:
         Tuple of (inputs, targets) as TR scalars
     """
-    # Sample points avoiding exact pole
-    x_vals = []
-    y_vals = []
+    # Use the new dataset generator to ensure actual singularities
+    generator = SingularDatasetGenerator(
+        domain=(-1.0, 1.0),
+        seed=42
+    )
     
-    # Sample more densely near the pole to challenge the model
-    for i in range(n_samples):
-        if i < n_samples // 3:
-            # Far from pole
-            x = np.random.uniform(-1, 1)
-            while abs(x - pole_location) < 0.05:
-                x = np.random.uniform(-1, 1)
-        elif i < 2 * n_samples // 3:
-            # Medium distance from pole
-            offset = np.random.uniform(0.05, 0.2) * (1 if np.random.rand() > 0.5 else -1)
-            x = pole_location + offset
-        else:
-            # Very near pole (challenging samples)
-            offset = np.random.uniform(0.01, 0.05) * (1 if np.random.rand() > 0.5 else -1)
-            x = pole_location + offset
-        
-        # Compute target (with some noise)
-        y = 1.0 / (x - pole_location) + 0.5 * x
-        y += np.random.normal(0, 0.01)  # Small noise
-        
-        # Clip extreme values
-        y = np.clip(y, -50, 50)
-        
-        x_vals.append(real(x))
-        y_vals.append(real(y))
+    # Add pole at specified location
+    generator.add_pole(location=pole_location, strength=0.01)
     
+    # Generate dataset with guaranteed singularities
+    x_vals, y_vals, metadata = generator.generate_rational_function_data(
+        n_samples=n_samples,
+        singularity_ratio=0.35,  # 35% near/at singularities
+        force_exact_singularities=True,
+        noise_level=0.05
+    )
+    
+    # x_vals and y_vals are already TRScalar objects
     return x_vals, y_vals
 
 

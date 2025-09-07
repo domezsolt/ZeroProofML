@@ -19,15 +19,16 @@ from zeroproof.layers import MonomialBasis
 from zeroproof.layers.hybrid_rational import HybridTRRational
 from zeroproof.training.hybrid_trainer import HybridTRTrainer, HybridTrainingConfig
 from zeroproof.training.enhanced_coverage import CoverageStrategy
+from zeroproof.utils import SingularDatasetGenerator
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 def generate_challenging_data(n_samples: int = 200) -> Tuple[List, List]:
     """
-    Generate data that challenges coverage control.
+    Generate data that challenges coverage control using SingularDatasetGenerator.
     
-    This dataset has many near-pole samples that the model might
-    want to reject to minimize loss.
+    This dataset has actual singular points and many near-pole samples 
+    that the model might want to reject to minimize loss.
     
     Args:
         n_samples: Number of samples
@@ -35,31 +36,24 @@ def generate_challenging_data(n_samples: int = 200) -> Tuple[List, List]:
     Returns:
         Tuple of (inputs, targets)
     """
-    x_vals = []
-    y_vals = []
+    # Use the new dataset generator to ensure actual singularities
+    generator = SingularDatasetGenerator(
+        domain=(-1.0, 1.0),
+        seed=42
+    )
     
-    for _ in range(n_samples):
-        # 40% near poles, 60% regular
-        if np.random.rand() < 0.4:
-            # Near pole at x=0.5
-            offset = np.random.uniform(0.005, 0.05) * np.random.choice([-1, 1])
-            x = 0.5 + offset
-            # Function with pole
-            y = 1.0 / (x - 0.5) + 0.3 * x
-            y = np.clip(y, -50, 50)
-        else:
-            # Regular region
-            x = np.random.uniform(-1, 1)
-            while abs(x - 0.5) < 0.1:  # Avoid pole
-                x = np.random.uniform(-1, 1)
-            y = np.sin(2 * x) + 0.3 * x
-        
-        # Add noise
-        y += np.random.normal(0, 0.05)
-        
-        x_vals.append(real(x))
-        y_vals.append(real(y))
+    # Add pole at x=0.5
+    generator.add_pole(location=0.5, strength=0.01)
     
+    # Generate dataset with guaranteed singularities
+    x_vals, y_vals, metadata = generator.generate_rational_function_data(
+        n_samples=n_samples,
+        singularity_ratio=0.4,  # 40% near/at singularities
+        force_exact_singularities=True,
+        noise_level=0.05
+    )
+    
+    # x_vals and y_vals are already TRScalar objects
     return x_vals, y_vals
 
 
