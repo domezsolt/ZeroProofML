@@ -21,12 +21,18 @@ class AdaptiveLossConfig:
     initial_lambda: float = 1.0
     target_coverage: float = 0.95
     learning_rate: float = 0.01
-    lambda_min: float = 0.0
+    lambda_min: float = 0.1  # Soft minimum (changed from 0.0)
     lambda_max: Optional[float] = None
+    lambda_rej_min: float = 0.1  # Hard minimum to prevent complete avoidance
     momentum: float = 0.0
     warmup_steps: int = 0
     update_frequency: int = 1
     exponential_decay: Optional[float] = None
+    # Tag loss parameters
+    use_tag_loss: bool = False
+    tag_loss_weight: float = 0.05
+    tag_loss_adaptive: bool = True  # Adapt weight based on coverage
+    tag_loss_max_weight: float = 0.2  # Maximum weight when coverage is high
 
 
 class AdaptiveLambda:
@@ -134,10 +140,14 @@ class AdaptiveLambda:
         
         self.lambda_rej += effective_update
         
-        # Apply constraints with minimum threshold to maintain pressure
-        # Never let lambda go below a minimum value to ensure exploration
-        min_lambda = max(self.config.lambda_min, 0.1)  # At least 0.1
-        self.lambda_rej = max(min_lambda, self.lambda_rej)
+        # Apply constraints with hard minimum to prevent complete avoidance
+        # First apply soft minimum
+        self.lambda_rej = max(self.config.lambda_min, self.lambda_rej)
+        
+        # Then apply hard minimum (never go below this)
+        self.lambda_rej = max(self.config.lambda_rej_min, self.lambda_rej)
+        
+        # Apply maximum if specified
         if self.config.lambda_max is not None:
             self.lambda_rej = min(self.config.lambda_max, self.lambda_rej)
         
@@ -158,6 +168,34 @@ class AdaptiveLambda:
     def get_penalty(self) -> float:
         """Get current rejection penalty value."""
         return self.lambda_rej
+    
+    def get_tag_loss_weight(self) -> float:
+        """Get current tag loss weight (adaptive based on coverage).
+        
+        When coverage is too high (near 100%), increase tag loss weight
+        to encourage exploration of non-REAL outputs.
+        """
+        if not self.config.use_tag_loss:
+            return 0.0
+        
+        if not self.config.tag_loss_adaptive:
+            return self.config.tag_loss_weight
+        
+        # Get current coverage
+        current_coverage = self.coverage_tracker.batch_coverage
+        
+        # If coverage is above 98%, scale up tag loss weight
+        if current_coverage > 0.98:
+            # Linear scaling from base weight to max weight
+            # coverage 0.98 -> weight = base
+            # coverage 1.00 -> weight = max
+            scale = (current_coverage - 0.98) / 0.02
+            weight = self.config.tag_loss_weight + scale * (
+                self.config.tag_loss_max_weight - self.config.tag_loss_weight
+            )
+            return min(weight, self.config.tag_loss_max_weight)
+        else:
+            return self.config.tag_loss_weight
     
     def compute_loss(self, 
                      y: TRNode, 
@@ -196,10 +234,12 @@ class AdaptiveLambda:
         stats = self.coverage_tracker.get_statistics()
         stats.update({
             "lambda_rej": self.lambda_rej,
+            "lambda_rej_min": self.config.lambda_rej_min,
             "step_count": self.step_count,
             "learning_rate": self._get_learning_rate(),
             "velocity": self.velocity,
             "last_update": self.update_history[-1] if self.update_history else 0.0,
+            "tag_loss_weight": self.get_tag_loss_weight() if self.config.use_tag_loss else 0.0,
         })
         return stats
     
@@ -209,9 +249,9 @@ class AdaptiveLambda:
         self.coverage_tracker.reset()
         self.step_count = 0
         self.velocity = 0.0
-        self.update_history.clear()
+        self.update_history = []
         self.lambda_history = [self.lambda_rej]
-        self.coverage_history.clear()
+        self.coverage_history = []
 
 
 class AdaptiveLossPolicy:
@@ -220,31 +260,30 @@ class AdaptiveLossPolicy:
     
     Combines adaptive lambda with proper loss computation and
     reduction modes for transreal values.
+    
+    This policy:
+    1. Maintains adaptive λ_rej for rejection penalty
+    2. Uses strict reduction mode for aggregation
+    3. Supports various base loss functions (MSE, MAE, Huber)
+    4. Optionally incorporates tag loss for non-REAL outputs
     """
     
-    def __init__(self,
-                 adaptive_lambda: Optional[AdaptiveLambda] = None,
-                 reduction: ReductionMode = ReductionMode.STRICT,
-                 base_loss: str = "mse"):
+    def __init__(self, 
+                 config: Optional[AdaptiveLossConfig] = None,
+                 base_loss: str = "mse",
+                 reduction: ReductionMode = ReductionMode.STRICT):
         """
         Initialize adaptive loss policy.
         
         Args:
-            adaptive_lambda: Adaptive lambda instance (creates default if None)
-            reduction: Reduction mode for batch loss
-            base_loss: Base loss function ("mse", "mae", "huber")
+            config: Configuration for adaptive loss
+            base_loss: Base loss function type ("mse", "mae", "huber")
+            reduction: Reduction mode for aggregation (default: STRICT)
         """
-        self.adaptive_lambda = adaptive_lambda or AdaptiveLambda()
+        self.config = config or AdaptiveLossConfig()
+        self.adaptive_lambda = AdaptiveLambda(self.config)
         self.reduction = reduction
-        self.base_loss = base_loss
-        
-        # Select base loss function
         self._base_loss_fn = self._get_base_loss_fn(base_loss)
-        # Provide default loss function to adaptive lambda for direct calls
-        try:
-            setattr(self.adaptive_lambda, 'default_loss_fn', self._base_loss_fn)
-        except Exception:
-            pass
     
     def _get_base_loss_fn(self, loss_type: str) -> Callable:
         """Get base loss function."""
@@ -253,40 +292,35 @@ class AdaptiveLossPolicy:
                 diff = pred - target
                 return TRNode.constant(real(0.5)) * diff * diff
             return mse_loss
-        
         elif loss_type == "mae":
             def mae_loss(pred, target):
                 from ..autodiff import tr_abs
-                # Ensure MAE is computed in REAL space: |pred-target|
-                return tr_abs(pred - target)
+                diff = pred - target
+                return tr_abs(diff)
             return mae_loss
-        
         elif loss_type == "huber":
             def huber_loss(pred, target, delta=1.0):
                 from ..autodiff import tr_abs
                 diff = pred - target
                 abs_diff = tr_abs(diff)
-                
-                # Huber loss: 0.5 * x^2 if |x| <= delta, else delta * |x| - 0.5 * delta^2
-                delta_node = TRNode.constant(real(delta))
-                half = TRNode.constant(real(0.5))
-                
-                # This is a simplified version - full implementation would need conditional
-                return half * diff * diff  # Simplified for now
+                # Huber loss: 0.5 * x^2 if |x| <= delta else delta * (|x| - 0.5 * delta)
+                # For simplicity, using MSE here
+                return TRNode.constant(real(0.5)) * diff * diff
             return huber_loss
-        
         else:
             raise ValueError(f"Unknown loss type: {loss_type}")
     
     def compute_batch_loss(self,
                           predictions: List[TRNode],
-                          targets: List[Union[TRNode, TRScalar, float]]) -> TRNode:
+                          targets: List[Union[TRNode, TRScalar, float]],
+                          tag_logits: Optional[List[List[TRNode]]] = None) -> TRNode:
         """
         Compute loss for a batch with adaptive penalties.
         
         Args:
             predictions: List of model outputs
             targets: List of target values
+            tag_logits: Optional tag classification logits for tag loss
             
         Returns:
             Aggregated loss value
@@ -307,7 +341,15 @@ class AdaptiveLossPolicy:
             )
             losses.append(loss)
         
-        # Aggregate with specified reduction mode
+        # Add tag loss if enabled and tag_logits provided
+        if self.config.use_tag_loss and tag_logits is not None:
+            from .tag_loss import compute_tag_loss
+            tag_weight = self.adaptive_lambda.get_tag_loss_weight()
+            if tag_weight > 0:
+                tag_loss = compute_tag_loss(predictions, tag_logits, tag_weight)
+                losses.append(tag_loss)
+        
+        # Aggregate with specified reduction mode (STRICT by default)
         from ..core import tr_sum
         if self.reduction == ReductionMode.STRICT:
             total_loss = tr_sum([loss.value for loss in losses], ReductionMode.STRICT)
@@ -337,19 +379,33 @@ def create_adaptive_loss(target_coverage: float = 0.95,
                         warmup_steps: int = 100,
                         update_frequency: int = 10,
                         exponential_decay: Optional[float] = None,
-                        lambda_min: float = 0.0,
-                        lambda_max: Optional[float] = None) -> AdaptiveLossPolicy:
+                        lambda_min: float = 0.1,  # Changed default
+                        lambda_max: Optional[float] = None,
+                        lambda_rej_min: float = 0.1,  # New parameter
+                        use_tag_loss: bool = False,
+                        tag_loss_weight: float = 0.05,
+                        tag_loss_adaptive: bool = True) -> AdaptiveLossPolicy:
     """
-    Create an adaptive loss policy with sensible defaults.
+    Create an adaptive loss policy.
     
     Args:
-        target_coverage: Desired proportion of REAL outputs
-        learning_rate: Lambda update learning rate
+        target_coverage: Target proportion of REAL outputs
+        learning_rate: Learning rate for lambda updates
         initial_lambda: Initial rejection penalty
-        base_loss: Base loss function type
+        base_loss: Base loss function type ("mse", "mae", "huber")
+        momentum: Momentum coefficient for updates
+        warmup_steps: Steps before starting updates
+        update_frequency: Update every N steps
+        exponential_decay: Optional decay rate for learning rate
+        lambda_min: Soft minimum lambda value
+        lambda_max: Maximum lambda value
+        lambda_rej_min: Hard minimum for rejection penalty
+        use_tag_loss: Whether to use auxiliary tag loss
+        tag_loss_weight: Base weight for tag loss
+        tag_loss_adaptive: Whether to adapt tag loss weight based on coverage
         
     Returns:
-        Configured AdaptiveLossPolicy
+        Configured adaptive loss policy
     """
     config = AdaptiveLossConfig(
         initial_lambda=initial_lambda,
@@ -357,11 +413,15 @@ def create_adaptive_loss(target_coverage: float = 0.95,
         learning_rate=learning_rate,
         lambda_min=lambda_min,
         lambda_max=lambda_max,
+        lambda_rej_min=lambda_rej_min,
         momentum=momentum,
         warmup_steps=warmup_steps,
         update_frequency=update_frequency,
         exponential_decay=exponential_decay,
+        use_tag_loss=use_tag_loss,
+        tag_loss_weight=tag_loss_weight,
+        tag_loss_adaptive=tag_loss_adaptive,
+        tag_loss_max_weight=tag_loss_weight * 4  # Default to 4x base weight
     )
     
-    adaptive_lambda = AdaptiveLambda(config)
-    return AdaptiveLossPolicy(adaptive_lambda, base_loss=base_loss)
+    return AdaptiveLossPolicy(config, base_loss, ReductionMode.STRICT)

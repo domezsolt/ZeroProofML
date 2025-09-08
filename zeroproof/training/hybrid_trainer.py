@@ -22,13 +22,7 @@ from ..utils.bridge import to_trnode_constant
 from .trainer import TRTrainer, TrainingConfig, Optimizer
 from .adaptive_loss import AdaptiveLossPolicy
 from .coverage import CoverageTracker
-from .enhanced_coverage import (
-    EnhancedCoverageConfig,
-    AdaptiveLambdaController,
-    NearPoleSampler,
-    CoverageEnforcementPolicy,
-    CoverageStrategy
-)
+# Enhanced coverage components imported when needed
 from .pole_detection import (
     PoleDetectionConfig,
     compute_pole_loss,
@@ -43,6 +37,13 @@ from ..utils.logging import (
     StructuredLogger,
     log_training_step
 )
+
+
+class CoverageStrategy:
+    """Strategy for coverage enforcement."""
+    LAGRANGE = "lagrange"  # Lagrange multiplier adjustment
+    PENALTY = "penalty"  # Direct penalty adjustment
+    ADAPTIVE = "adaptive"  # Adaptive strategy based on metrics
 
 
 @dataclass
@@ -69,6 +70,8 @@ class HybridTrainingConfig(TrainingConfig):
     # Tag loss (for non-REAL outputs)
     use_tag_loss: bool = False
     lambda_tag: float = 0.05
+    tag_loss_adaptive: bool = True  # Increase weight when coverage is too high
+    tag_loss_max_weight: float = 0.2  # Maximum tag loss weight
     
     # Pole detection head
     use_pole_head: bool = False
@@ -95,8 +98,22 @@ class HybridTrainingConfig(TrainingConfig):
     max_lambda_for_coverage: float = 10.0
     coverage_strategy: CoverageStrategy = CoverageStrategy.LAGRANGE
     coverage_window_size: int = 50
-    oversample_near_pole: bool = False
+    oversample_near_pole: bool = True  # Changed default to True (critical)
     pole_sampling_threshold: float = 0.1
+    
+    # Enhanced coverage tracking
+    use_enhanced_coverage: bool = True
+    track_near_pole_coverage: bool = True
+    near_pole_target_coverage: float = 0.7
+    coverage_dead_band: float = 0.02
+    asymmetric_increase_rate: float = 2.0
+    asymmetric_decrease_rate: float = 0.5
+    
+    # Adaptive grid sampling
+    use_adaptive_grid: bool = True
+    initial_grid_size: int = 100
+    grid_refinement_factor: int = 5
+    pole_refinement_radius: float = 0.1
     
     # Logging and tracking
     enable_structured_logging: bool = True
@@ -116,7 +133,31 @@ class HybridTRTrainer(TRTrainer):
     - Advanced metrics for pole learning verification
     """
     
-    def __init__(self,
+    def _init_samplers(self) -> None:
+        """Initialize sampling components if configured."""
+        # Initialize near-pole sampler
+        if self.hybrid_config.oversample_near_pole:
+            from .enhanced_coverage import NearPoleSampler
+            self.near_pole_sampler = NearPoleSampler(
+                pole_threshold=self.hybrid_config.pole_sampling_threshold,
+                oversample_ratio=2.0,  # Default ratio
+                adaptive=True
+            )
+        else:
+            self.near_pole_sampler = None
+        
+        # Initialize adaptive grid sampler
+        if self.hybrid_config.use_adaptive_grid:
+            from .enhanced_coverage import AdaptiveGridSampler
+            self.adaptive_grid_sampler = AdaptiveGridSampler(
+                initial_grid_size=self.hybrid_config.initial_grid_size,
+                refinement_factor=self.hybrid_config.grid_refinement_factor,
+                pole_radius=self.hybrid_config.pole_refinement_radius
+            )
+        else:
+            self.adaptive_grid_sampler = None
+    
+    def __init__(self, 
                  model: Any,
                  optimizer: Optional[Optimizer] = None,
                  config: Optional[HybridTrainingConfig] = None):
@@ -134,6 +175,9 @@ class HybridTRTrainer(TRTrainer):
         
         # Cast config to HybridTrainingConfig for type checking
         self.hybrid_config: HybridTrainingConfig = config  # type: ignore
+        
+        # Initialize sampling components
+        self._init_samplers()
         
         # Initialize hybrid gradient schedule if enabled
         self.hybrid_schedule = None
@@ -182,20 +226,16 @@ class HybridTRTrainer(TRTrainer):
         # Initialize coverage enforcement if enabled
         self.coverage_policy = None
         if self.hybrid_config.enforce_coverage:
-            coverage_config = EnhancedCoverageConfig(
-                target_coverage=self.hybrid_config.target_coverage,
-                min_coverage=self.hybrid_config.min_coverage,
-                max_coverage=0.95,
-                strategy=self.hybrid_config.coverage_strategy,
-                lambda_init=self.hybrid_config.initial_lambda,
-                lambda_min=self.hybrid_config.adaptive_lambda_min,
-                lambda_max=self.hybrid_config.max_lambda_for_coverage,
-                learning_rate=self.hybrid_config.lambda_learning_rate,
-                window_size=self.hybrid_config.coverage_window_size,
-                oversample_near_pole=self.hybrid_config.oversample_near_pole,
-                pole_threshold=self.hybrid_config.pole_sampling_threshold
+            from .enhanced_coverage import CoverageEnforcementPolicy
+            self.coverage_policy = CoverageEnforcementPolicy(
+                target_coverage=self.config.target_coverage,
+                near_pole_target=self.hybrid_config.near_pole_target_coverage,
+                dead_band=self.hybrid_config.coverage_dead_band,
+                increase_rate=self.hybrid_config.asymmetric_increase_rate,
+                decrease_rate=self.hybrid_config.asymmetric_decrease_rate,
+                min_lambda=self.config.adaptive_lambda_min,
+                max_lambda=self.hybrid_config.max_lambda_for_coverage
             )
-            self.coverage_policy = CoverageEnforcementPolicy(coverage_config)
     
     def _create_hybrid_schedule(self) -> HybridGradientSchedule:
         """Create hybrid gradient schedule from config."""
@@ -270,7 +310,17 @@ class HybridTRTrainer(TRTrainer):
             "near_pole_ratio": []
         }
         
-        coverage_tracker = CoverageTracker()
+        # Initialize coverage tracker (use enhanced if configured)
+        if self.hybrid_config.use_enhanced_coverage:
+            from .enhanced_coverage import EnhancedCoverageTracker
+            coverage_tracker = EnhancedCoverageTracker(
+                target_coverage=self.config.target_coverage,
+                pole_threshold=self.hybrid_config.pole_sampling_threshold,
+                window_size=self.hybrid_config.coverage_window_size,
+                track_pole_distances=self.hybrid_config.track_near_pole_coverage
+            )
+        else:
+            coverage_tracker = CoverageTracker()
         
         for batch_idx, (inputs, targets) in enumerate(data_loader):
             batch_metrics = self._train_batch(inputs, targets, coverage_tracker)
@@ -446,12 +496,38 @@ class HybridTRTrainer(TRTrainer):
                 predictions.append(y)
                 tags.append(y.tag)
         
-        # Track coverage
-        coverage_tracker.update(tags)
+        # Track coverage with Q values if enhanced
+        if self.hybrid_config.use_enhanced_coverage:
+            # Extract Q values and x values if available
+            q_values_for_tracking = None
+            x_values_for_tracking = None
+            
+            if Q_values:
+                q_values_for_tracking = [abs(q) for q in Q_values]
+            
+            if hasattr(self, '_last_batch_inputs'):
+                x_values_for_tracking = []
+                for x in self._last_batch_inputs:
+                    if x.tag == TRTag.REAL:
+                        x_values_for_tracking.append(x.value)
+                    else:
+                        x_values_for_tracking.append(None)
+            
+            # Update with Q values and x values
+            coverage_tracker.update(tags, q_values_for_tracking, x_values_for_tracking)
+        else:
+            coverage_tracker.update(tags)
+        
+        # Store coverage for tag loss adaptive weighting
+        self._last_coverage = coverage_tracker.batch_coverage
         
         # Compute main loss
         if self.loss_policy:
-            batch_loss = self.loss_policy.compute_batch_loss(predictions, targets)
+            # Pass tag logits to loss policy for integrated tag loss
+            batch_loss = self.loss_policy.compute_batch_loss(
+                predictions, targets, 
+                tag_logits=all_tag_logits if self.hybrid_config.use_tag_loss else None
+            )
         else:
             # Simple MSE loss
             from ..core import tr_sum, tr_div
@@ -461,15 +537,18 @@ class HybridTRTrainer(TRTrainer):
                     diff = pred - to_trnode_constant(target)
                     loss = TRNode.constant(real(0.5)) * diff * diff
                 else:
-                    loss = TRNode.constant(real(self.config.initial_lambda))
+                    # Use minimum rejection penalty if configured
+                    min_lambda = getattr(self.config, 'lambda_rej_min', 0.1)
+                    lambda_val = max(self.config.initial_lambda, min_lambda)
+                    loss = TRNode.constant(real(lambda_val))
                 losses.append(loss)
             
             total = tr_sum([l.value for l in losses])
             batch_loss = TRNode.constant(tr_div(total, real(float(len(losses)))))
         
-        # Add tag loss if enabled
+        # Add tag loss if enabled and not using adaptive loss policy
         tag_loss_value = 0.0
-        if self.hybrid_config.use_tag_loss:
+        if self.hybrid_config.use_tag_loss and not self.loss_policy:
             tag_loss = self._compute_tag_loss(predictions, all_tag_logits)
             if tag_loss is not None:
                 batch_loss = batch_loss + tag_loss  # Already weighted in compute_tag_loss
@@ -564,10 +643,21 @@ class HybridTRTrainer(TRTrainer):
                 return TRNode.constant(real(penalty))
             return None
         
-        # Use proper tag loss computation
+        # Use proper tag loss computation with adaptive weighting
         from ..training.tag_loss import compute_tag_loss
+        
+        # Get current coverage for adaptive weighting
+        coverage = None
+        if hasattr(self, '_last_coverage'):
+            coverage = self._last_coverage
+        
+        # Use adaptive weight if configured
+        adaptive = getattr(self.hybrid_config, 'tag_loss_adaptive', True)
+        
         return compute_tag_loss(predictions, tag_logits, 
-                               weight=self.hybrid_config.lambda_tag)
+                               weight=self.hybrid_config.lambda_tag,
+                               adaptive_weight=adaptive,
+                               coverage=coverage)
     
     def _compute_pole_loss(self,
                           predictions: List[TRNode],

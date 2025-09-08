@@ -171,14 +171,18 @@ def cross_entropy_loss(pred_probs: List[TRNode],
 
 def compute_tag_loss(predictions: List[TRNode],
                      tag_logits: List[List[TRNode]],
-                     weight: float = 0.05) -> TRNode:
+                     weight: float = 0.05,
+                     adaptive_weight: bool = False,
+                     coverage: Optional[float] = None) -> TRNode:
     """
     Compute auxiliary tag classification loss.
     
     Args:
         predictions: Main model predictions (used to extract true tags)
         tag_logits: Predicted tag logits [batch_size, 4]
-        weight: Weight for tag loss
+        weight: Base weight for tag loss
+        adaptive_weight: Whether to adapt weight based on coverage
+        coverage: Current coverage (required if adaptive_weight=True)
         
     Returns:
         Weighted tag loss
@@ -189,20 +193,35 @@ def compute_tag_loss(predictions: List[TRNode],
     if len(predictions) != len(tag_logits):
         raise ValueError("Batch size mismatch between predictions and tag logits")
     
+    # Adapt weight if coverage is too high
+    effective_weight = weight
+    if adaptive_weight and coverage is not None:
+        # When coverage > 98%, increase weight to encourage exploration
+        if coverage > 0.98:
+            # Scale up to 4x the base weight when coverage = 100%
+            scale = (coverage - 0.98) / 0.02
+            effective_weight = weight * (1 + 3 * scale)  # 1x to 4x scaling
+    
     losses = []
     for pred, logits in zip(predictions, tag_logits):
         # Get true tag
         true_tag = pred.tag
         true_class = TagClass.from_tag(true_tag)
         
-        # Only compute loss for non-REAL outputs
+        # Compute loss for all outputs (not just non-REAL)
+        # This helps the model learn to predict REAL tags correctly too
+        # Compute softmax probabilities
+        probs = softmax(logits)
+        
+        # Compute cross-entropy loss
+        ce_loss = cross_entropy_loss(probs, true_class)
+        
+        # Weight non-REAL predictions more heavily
         if true_tag != TRTag.REAL:
-            # Compute softmax probabilities
-            probs = softmax(logits)
-            
-            # Compute cross-entropy loss
-            ce_loss = cross_entropy_loss(probs, true_class)
-            losses.append(ce_loss)
+            # Double weight for non-REAL to encourage learning these cases
+            ce_loss = tr_mul(TRNode.constant(real(2.0)), ce_loss)
+        
+        losses.append(ce_loss)
     
     if not losses:
         return TRNode.constant(real(0.0))
@@ -214,8 +233,8 @@ def compute_tag_loss(predictions: List[TRNode],
     
     avg_loss = tr_div(total, TRNode.constant(real(float(len(losses)))))
     
-    # Apply weight
-    weighted_loss = tr_mul(TRNode.constant(real(weight)), avg_loss)
+    # Apply effective weight
+    weighted_loss = tr_mul(TRNode.constant(real(effective_weight)), avg_loss)
     
     return weighted_loss
 

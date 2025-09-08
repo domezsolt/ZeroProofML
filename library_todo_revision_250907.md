@@ -39,17 +39,17 @@ This to‑do list integrates earlier core requirements with the new normative ch
   - **Add**: Increase tag_loss weight when coverage is too high
 - [ ] **Add minimum rejection penalty**: λ_rej_min parameter to prevent complete avoidance
 
-### 1.3 Training & Coverage
-- [ ] Extend **CoverageTracker**:
+### 1.3 Training & Coverage ✅
+- [x] Extend **CoverageTracker**: (Completed)
   - Track both global REAL coverage and **near‑pole coverage**.
   - **Add**: Track actual non-REAL outputs (currently always 0%)
   - **Add**: Monitor distance to nearest singularity for each sample
-- [ ] Update **Adaptive λ₍rej₎** (currently too weak):
+- [x] Update **Adaptive λ₍rej₎** (currently too weak): (Completed)
   - Control target REAL coverage `c*`.
   - Prevent trivial solutions where the model rejects too many near‑pole samples.
   - **Add**: Asymmetric updates (faster increase, slower decrease)
   - **Add**: Dead-band around target coverage to prevent oscillation
-- [ ] Add support for **oversampling near poles** in training data pipelines:
+- [x] Add support for **oversampling near poles** in training data pipelines: (Completed)
   - **Priority**: This is critical - current sampling is inadequate
   - Implement adaptive grid refinement near detected poles
   - Weight sampling by 1/|Q(x)| proximity

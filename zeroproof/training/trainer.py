@@ -31,11 +31,12 @@ class TrainingConfig:
     target_coverage: float = 0.95
     lambda_learning_rate: float = 0.01
     initial_lambda: float = 1.0
+    lambda_rej_min: float = 0.1  # Hard minimum rejection penalty
     adaptive_momentum: float = 0.9
     adaptive_warmup_steps: int = 100
     adaptive_update_frequency: int = 10
     adaptive_exponential_decay: Optional[float] = None
-    adaptive_lambda_min: float = 0.0
+    adaptive_lambda_min: float = 0.1  # Soft minimum
     adaptive_lambda_max: Optional[float] = None
     
     # Logging
@@ -149,6 +150,7 @@ class TRTrainer:
                 exponential_decay=self.config.adaptive_exponential_decay,
                 lambda_min=self.config.adaptive_lambda_min,
                 lambda_max=self.config.adaptive_lambda_max,
+                lambda_rej_min=self.config.lambda_rej_min,
             )
         else:
             self.loss_policy = None

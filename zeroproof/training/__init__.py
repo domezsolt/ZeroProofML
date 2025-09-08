@@ -9,13 +9,23 @@ from .coverage import CoverageTracker, CoverageMetrics
 from .adaptive_loss import AdaptiveLambda, AdaptiveLossPolicy, AdaptiveLossConfig, create_adaptive_loss
 from .trainer import TRTrainer, TrainingConfig, Optimizer
 from .hybrid_trainer import HybridTRTrainer, HybridTrainingConfig
-from .enhanced_coverage import EnhancedCoverageConfig
+from .enhanced_coverage import (
+    EnhancedCoverageMetrics,
+    EnhancedCoverageTracker,
+    CoverageEnforcementPolicy,
+    NearPoleSampler,
+    AdaptiveGridSampler,
+)
 
 __all__ = [
     # Coverage tracking
     "CoverageTracker",
     "CoverageMetrics",
-    "EnhancedCoverageConfig",
+    "EnhancedCoverageMetrics",
+    "EnhancedCoverageTracker",
+    "CoverageEnforcementPolicy",
+    "NearPoleSampler",
+    "AdaptiveGridSampler",
     
     # Adaptive loss
     "AdaptiveLambda",

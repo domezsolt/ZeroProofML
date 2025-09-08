@@ -1,264 +1,521 @@
 """
-Enhanced coverage control with adaptive lambda and near-pole sampling.
+Enhanced coverage tracking with near-pole monitoring.
 
-This module implements sophisticated coverage control mechanisms to prevent
-the model from trivially rejecting too many near-pole points while maintaining
-training stability.
+This module extends the basic coverage tracking with additional metrics
+for near-pole regions and singularity distances.
 """
 
-from typing import List, Dict, Optional, Tuple, Callable
-from dataclasses import dataclass
-from enum import Enum
-import math
+from typing import List, Dict, Optional, Tuple, Any
+from dataclasses import dataclass, field
 import numpy as np
+from collections import deque
 
-from ..core import TRScalar, TRTag, real
-from ..autodiff import TRNode
-
-
-class CoverageStrategy(Enum):
-    """Strategies for maintaining target coverage."""
-    LAGRANGE = "lagrange"      # Lagrange multiplier approach
-    PID = "pid"                # PID controller
-    ADAPTIVE_RATE = "adaptive" # Adaptive learning rate
-    DUAL_PHASE = "dual"        # Different strategies for warmup vs training
+from ..core import TRTag
 
 
 @dataclass
-class EnhancedCoverageConfig:
-    """
-    Configuration for enhanced coverage control.
+class EnhancedCoverageMetrics:
+    """Extended metrics for coverage tracking."""
+    # Basic tag counts
+    total_samples: int = 0
+    real_samples: int = 0
+    pinf_samples: int = 0
+    ninf_samples: int = 0
+    phi_samples: int = 0
     
-    Attributes:
-        target_coverage: Desired proportion of REAL outputs
-        min_coverage: Minimum acceptable coverage (triggers intervention)
-        max_coverage: Maximum acceptable coverage (for balance)
-        strategy: Control strategy to use
-        lambda_init: Initial rejection penalty
-        lambda_min: Minimum lambda value
-        lambda_max: Maximum lambda value
-        learning_rate: Learning rate for lambda updates
-        momentum: Momentum for lambda updates
-        pid_gains: PID controller gains (Kp, Ki, Kd)
-        warmup_epochs: Epochs before enforcing coverage
-        window_size: Window for moving average coverage
-        oversample_near_pole: Whether to oversample near-pole regions
-        pole_threshold: Threshold for identifying near-pole samples
-    """
-    target_coverage: float = 0.85
-    min_coverage: float = 0.70
-    max_coverage: float = 0.95
-    strategy: CoverageStrategy = CoverageStrategy.LAGRANGE
-    lambda_init: float = 1.0
-    lambda_min: float = 0.0
-    lambda_max: float = 10.0
-    learning_rate: float = 0.01
-    momentum: float = 0.9
-    pid_gains: Tuple[float, float, float] = (1.0, 0.1, 0.01)
-    warmup_epochs: int = 10
-    window_size: int = 50
-    oversample_near_pole: bool = True
-    pole_threshold: float = 0.1
-
-
-class AdaptiveLambdaController:
-    """
-    Advanced controller for rejection penalty lambda.
+    # Near-pole tracking
+    near_pole_samples: int = 0
+    near_pole_real: int = 0
+    near_pole_nonreal: int = 0
     
-    This implements multiple control strategies to maintain target coverage
-    while preventing trivial rejection of difficult samples.
-    """
+    # Distance tracking
+    min_q_value: Optional[float] = None
+    mean_q_value: Optional[float] = None
+    q_values: List[float] = field(default_factory=list)
     
-    def __init__(self, config: EnhancedCoverageConfig):
+    # Actual non-REAL outputs tracking
+    actual_nonreal_outputs: List[Tuple[int, TRTag]] = field(default_factory=list)
+    
+    @property
+    def coverage(self) -> float:
+        """Proportion of REAL samples."""
+        if self.total_samples == 0:
+            return 1.0
+        return self.real_samples / self.total_samples
+    
+    @property
+    def near_pole_coverage(self) -> float:
+        """Coverage specifically in near-pole regions."""
+        if self.near_pole_samples == 0:
+            return 1.0
+        return self.near_pole_real / self.near_pole_samples
+    
+    @property
+    def actual_nonreal_rate(self) -> float:
+        """Actual rate of non-REAL outputs."""
+        if self.total_samples == 0:
+            return 0.0
+        return len(self.actual_nonreal_outputs) / self.total_samples
+    
+    @property
+    def tag_distribution(self) -> Dict[str, float]:
+        """Distribution of tags as proportions."""
+        if self.total_samples == 0:
+            return {"REAL": 1.0, "PINF": 0.0, "NINF": 0.0, "PHI": 0.0}
+        
+        return {
+            "REAL": self.real_samples / self.total_samples,
+            "PINF": self.pinf_samples / self.total_samples,
+            "NINF": self.ninf_samples / self.total_samples,
+            "PHI": self.phi_samples / self.total_samples,
+        }
+    
+    def update(self, 
+               tags: List[TRTag],
+               q_values: Optional[List[float]] = None,
+               pole_threshold: float = 0.1) -> None:
         """
-        Initialize adaptive lambda controller.
+        Update metrics with new batch of tags and Q values.
         
         Args:
-            config: Coverage control configuration
+            tags: List of output tags
+            q_values: Optional list of |Q(x)| values
+            pole_threshold: Threshold for considering as near-pole
         """
-        self.config = config
-        self.lambda_value = config.lambda_init
+        for i, tag in enumerate(tags):
+            self.total_samples += 1
+            
+            # Update tag counts
+            if tag == TRTag.REAL:
+                self.real_samples += 1
+            elif tag == TRTag.PINF:
+                self.pinf_samples += 1
+                self.actual_nonreal_outputs.append((self.total_samples - 1, tag))
+            elif tag == TRTag.NINF:
+                self.ninf_samples += 1
+                self.actual_nonreal_outputs.append((self.total_samples - 1, tag))
+            elif tag == TRTag.PHI:
+                self.phi_samples += 1
+                self.actual_nonreal_outputs.append((self.total_samples - 1, tag))
+            
+            # Update Q-value tracking if provided
+            if q_values and i < len(q_values):
+                q_val = abs(q_values[i])
+                self.q_values.append(q_val)
+                
+                # Update min Q
+                if self.min_q_value is None or q_val < self.min_q_value:
+                    self.min_q_value = q_val
+                
+                # Check if near pole
+                if q_val <= pole_threshold:
+                    self.near_pole_samples += 1
+                    if tag == TRTag.REAL:
+                        self.near_pole_real += 1
+                    else:
+                        self.near_pole_nonreal += 1
         
-        # State tracking
-        self.epoch = 0
-        self.coverage_history = []
-        self.lambda_history = [self.lambda_value]
-        self.error_history = []
-        
-        # Momentum state
-        self.velocity = 0.0
-        
-        # PID state
-        self.integral_error = 0.0
-        self.prev_error = 0.0
-        
-        # Statistics
-        self.adjustments_made = 0
-        self.coverage_violations = 0
+        # Update mean Q value
+        if self.q_values:
+            self.mean_q_value = np.mean(self.q_values)
     
-    def update(self, current_coverage: float) -> None:
+    def reset(self) -> None:
+        """Reset all metrics to zero."""
+        self.total_samples = 0
+        self.real_samples = 0
+        self.pinf_samples = 0
+        self.ninf_samples = 0
+        self.phi_samples = 0
+        self.near_pole_samples = 0
+        self.near_pole_real = 0
+        self.near_pole_nonreal = 0
+        self.min_q_value = None
+        self.mean_q_value = None
+        self.q_values = []
+        self.actual_nonreal_outputs = []
+
+
+class EnhancedCoverageTracker:
+    """
+    Enhanced coverage tracker with near-pole monitoring and distance tracking.
+    
+    This tracker provides:
+    - Global REAL coverage
+    - Near-pole specific coverage
+    - Actual non-REAL output tracking
+    - Distance to nearest singularity monitoring
+    """
+    
+    def __init__(self,
+                 target_coverage: float = 0.95,
+                 pole_threshold: float = 0.1,
+                 window_size: Optional[int] = None,
+                 track_pole_distances: bool = True):
         """
-        Update lambda based on current coverage.
+        Initialize enhanced coverage tracker.
         
         Args:
-            current_coverage: Current proportion of REAL outputs
+            target_coverage: Desired proportion of REAL outputs
+            pole_threshold: |Q| threshold for near-pole classification
+            window_size: Size of sliding window (None for cumulative)
+            track_pole_distances: Whether to track distances to poles
         """
-        self.coverage_history.append(current_coverage)
+        if not 0 <= target_coverage <= 1:
+            raise ValueError(f"Target coverage must be in [0,1], got {target_coverage}")
         
-        # Check if we're still in warmup
-        if self.epoch < self.config.warmup_epochs:
-            self.epoch += 1
-            return
+        self.target_coverage = target_coverage
+        self.pole_threshold = pole_threshold
+        self.window_size = window_size
+        self.track_pole_distances = track_pole_distances
         
-        # Calculate error
-        error = self.config.target_coverage - current_coverage
-        self.error_history.append(error)
+        # Current batch metrics
+        self.current_batch = EnhancedCoverageMetrics()
         
-        # Check for coverage violations
-        if current_coverage < self.config.min_coverage:
-            self.coverage_violations += 1
+        # Cumulative metrics
+        self.cumulative = EnhancedCoverageMetrics()
         
-        # Apply strategy-specific update
-        if self.config.strategy == CoverageStrategy.LAGRANGE:
-            self._lagrange_update(error)
-        elif self.config.strategy == CoverageStrategy.PID:
-            self._pid_update(error)
-        elif self.config.strategy == CoverageStrategy.ADAPTIVE_RATE:
-            self._adaptive_rate_update(error, current_coverage)
-        elif self.config.strategy == CoverageStrategy.DUAL_PHASE:
-            self._dual_phase_update(error, current_coverage)
+        # History for sliding window
+        self.history: deque = deque(maxlen=window_size) if window_size else deque()
         
-        # Clamp lambda
-        self.lambda_value = max(
-            self.config.lambda_min,
-            min(self.config.lambda_max, self.lambda_value)
+        # Moving averages
+        self.window_coverage: Optional[float] = None
+        self.window_near_pole_coverage: Optional[float] = None
+        
+        # Pole location tracking
+        self.detected_pole_locations: List[float] = []
+        self.pole_encounter_history: List[Tuple[int, float]] = []  # (step, |Q|)
+    
+    def update(self,
+               tags: List[TRTag],
+               q_values: Optional[List[float]] = None,
+               x_values: Optional[List[float]] = None) -> None:
+        """
+        Update coverage statistics with a batch.
+        
+        Args:
+            tags: List of output tags
+            q_values: Optional list of |Q(x)| values
+            x_values: Optional list of input x values
+        """
+        # Update current batch
+        self.current_batch.reset()
+        self.current_batch.update(tags, q_values, self.pole_threshold)
+        
+        # Update cumulative
+        self.cumulative.update(tags, q_values, self.pole_threshold)
+        
+        # Track pole encounters
+        if q_values and self.track_pole_distances:
+            for i, q_val in enumerate(q_values):
+                if abs(q_val) <= self.pole_threshold:
+                    step = self.cumulative.total_samples - len(tags) + i
+                    self.pole_encounter_history.append((step, abs(q_val)))
+                    
+                    # Track pole location if x_values provided
+                    if x_values and i < len(x_values):
+                        x_val = x_values[i]
+                        if not any(abs(x_val - p) < 0.01 for p in self.detected_pole_locations):
+                            self.detected_pole_locations.append(x_val)
+        
+        # Update window if applicable
+        if self.window_size is not None:
+            self._update_window()
+    
+    def _update_window(self) -> None:
+        """Update sliding window statistics."""
+        # Add current batch to history
+        batch_copy = EnhancedCoverageMetrics(
+            total_samples=self.current_batch.total_samples,
+            real_samples=self.current_batch.real_samples,
+            pinf_samples=self.current_batch.pinf_samples,
+            ninf_samples=self.current_batch.ninf_samples,
+            phi_samples=self.current_batch.phi_samples,
+            near_pole_samples=self.current_batch.near_pole_samples,
+            near_pole_real=self.current_batch.near_pole_real,
+            near_pole_nonreal=self.current_batch.near_pole_nonreal,
+            min_q_value=self.current_batch.min_q_value,
+            mean_q_value=self.current_batch.mean_q_value,
         )
+        self.history.append(batch_copy)
         
-        # Record
-        self.lambda_history.append(self.lambda_value)
-        self.adjustments_made += 1
-        self.epoch += 1
+        # Compute window coverage
+        total = sum(m.total_samples for m in self.history)
+        real = sum(m.real_samples for m in self.history)
+        self.window_coverage = real / total if total > 0 else 1.0
+        
+        # Compute window near-pole coverage
+        near_total = sum(m.near_pole_samples for m in self.history)
+        near_real = sum(m.near_pole_real for m in self.history)
+        self.window_near_pole_coverage = near_real / near_total if near_total > 0 else 1.0
     
-    def _lagrange_update(self, error: float) -> None:
-        """
-        Lagrange multiplier update: λ ← λ + η * (c* - c_actual)
-        
-        Args:
-            error: Coverage error (target - actual)
-        """
-        # Update with momentum
-        # Use sign so that when coverage is low (error>0) lambda decreases,
-        # and when coverage is high (error<0) lambda increases.
-        self.velocity = (self.config.momentum * self.velocity - 
-                        self.config.learning_rate * error)
-        self.lambda_value += self.velocity
-        # Additional gentle damping to avoid overshoot in tests
-        if self.lambda_value > self.config.lambda_max:
-            self.lambda_value = self.config.lambda_max
-        if self.lambda_value < self.config.lambda_min:
-            self.lambda_value = self.config.lambda_min
+    @property
+    def coverage(self) -> float:
+        """Get current coverage (window or cumulative)."""
+        if self.window_size is not None and self.window_coverage is not None:
+            return self.window_coverage
+        return self.cumulative.coverage
     
-    def _pid_update(self, error: float) -> None:
-        """
-        PID controller update.
-        
-        Args:
-            error: Coverage error
-        """
-        Kp, Ki, Kd = self.config.pid_gains
-        
-        # Proportional term
-        P = Kp * error
-        
-        # Integral term
-        self.integral_error += error
-        I = Ki * self.integral_error
-        
-        # Derivative term
-        D = Kd * (error - self.prev_error)
-        self.prev_error = error
-        
-        # Update lambda
-        self.lambda_value += P + I + D
+    @property
+    def near_pole_coverage(self) -> float:
+        """Get near-pole coverage (window or cumulative)."""
+        if self.window_size is not None and self.window_near_pole_coverage is not None:
+            return self.window_near_pole_coverage
+        return self.cumulative.near_pole_coverage
     
-    def _adaptive_rate_update(self, error: float, coverage: float) -> None:
-        """
-        Adaptive learning rate based on coverage gap magnitude.
-        
-        Args:
-            error: Coverage error
-            coverage: Current coverage
-        """
-        # Adaptive learning rate: larger updates for larger gaps
-        if coverage < self.config.min_coverage:
-            # Emergency: large decrease in lambda
-            adaptive_lr = self.config.learning_rate * 5.0
-        elif coverage < self.config.target_coverage - 0.1:
-            # Below target: moderate decrease
-            adaptive_lr = self.config.learning_rate * 2.0
-        elif coverage > self.config.max_coverage:
-            # Above max: increase lambda to reduce coverage
-            adaptive_lr = self.config.learning_rate * 2.0
-        else:
-            # Near target: normal rate
-            adaptive_lr = self.config.learning_rate
-        
-        # Update with adaptive rate
-        self.velocity = self.config.momentum * self.velocity + adaptive_lr * error
-        self.lambda_value += self.velocity
+    @property
+    def batch_coverage(self) -> float:
+        """Coverage of the most recent batch."""
+        return self.current_batch.coverage
     
-    def _dual_phase_update(self, error: float, coverage: float) -> None:
-        """
-        Different strategies for different training phases.
-        
-        Args:
-            error: Coverage error
-            coverage: Current coverage
-        """
-        if self.epoch < self.config.warmup_epochs * 2:
-            # Early phase: aggressive PID
-            self._pid_update(error * 2.0)
-        else:
-            # Later phase: smooth Lagrange
-            self._lagrange_update(error)
+    @property
+    def batch_near_pole_coverage(self) -> float:
+        """Near-pole coverage of the most recent batch."""
+        return self.current_batch.near_pole_coverage
     
-    def get_penalty(self) -> float:
-        """Get current rejection penalty."""
-        return self.lambda_value
+    @property
+    def min_distance_to_pole(self) -> Optional[float]:
+        """Minimum |Q| value encountered (distance to nearest pole)."""
+        return self.cumulative.min_q_value
     
-    def get_statistics(self) -> Dict[str, float]:
-        """Get controller statistics."""
+    @property
+    def mean_distance_to_pole(self) -> Optional[float]:
+        """Mean |Q| value (average distance to poles)."""
+        return self.cumulative.mean_q_value
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get comprehensive coverage statistics."""
         stats = {
-            'lambda': self.lambda_value,
-            'adjustments': self.adjustments_made,
-            'violations': self.coverage_violations,
-            'epoch': self.epoch
+            # Basic coverage
+            "target_coverage": self.target_coverage,
+            "current_coverage": self.coverage,
+            "batch_coverage": self.batch_coverage,
+            "cumulative_coverage": self.cumulative.coverage,
+            
+            # Near-pole coverage
+            "near_pole_coverage": self.near_pole_coverage,
+            "batch_near_pole_coverage": self.batch_near_pole_coverage,
+            "near_pole_samples": self.cumulative.near_pole_samples,
+            "near_pole_real": self.cumulative.near_pole_real,
+            "near_pole_nonreal": self.cumulative.near_pole_nonreal,
+            
+            # Non-REAL tracking
+            "actual_nonreal_rate": self.cumulative.actual_nonreal_rate,
+            "nonreal_count": len(self.cumulative.actual_nonreal_outputs),
+            
+            # Distance metrics
+            "min_q_value": self.min_distance_to_pole,
+            "mean_q_value": self.mean_distance_to_pole,
+            
+            # Pole detection
+            "detected_poles": len(self.detected_pole_locations),
+            "pole_locations": self.detected_pole_locations.copy(),
+            "pole_encounters": len(self.pole_encounter_history),
+            
+            # Tag distribution
+            "tag_distribution": self.cumulative.tag_distribution,
+            "total_samples": self.cumulative.total_samples,
         }
         
-        if self.coverage_history:
-            stats['avg_coverage'] = np.mean(self.coverage_history)
-            stats['min_coverage'] = np.min(self.coverage_history)
-            stats['max_coverage'] = np.max(self.coverage_history)
-            stats['coverage_std'] = np.std(self.coverage_history)
-        
-        if self.error_history:
-            stats['avg_error'] = np.mean(self.error_history)
-            stats['error_std'] = np.std(self.error_history)
+        # Add window stats if applicable
+        if self.window_size is not None:
+            stats["window_coverage"] = self.window_coverage
+            stats["window_near_pole_coverage"] = self.window_near_pole_coverage
         
         return stats
     
+    def get_nonreal_samples(self, last_n: Optional[int] = None) -> List[Tuple[int, TRTag]]:
+        """
+        Get actual non-REAL output samples.
+        
+        Args:
+            last_n: Return only last N non-REAL samples (None for all)
+            
+        Returns:
+            List of (sample_index, tag) tuples
+        """
+        outputs = self.cumulative.actual_nonreal_outputs
+        if last_n is not None:
+            return outputs[-last_n:]
+        return outputs.copy()
+    
     def reset(self) -> None:
-        """Reset controller state."""
-        self.lambda_value = self.config.lambda_init
-        self.epoch = 0
-        self.coverage_history.clear()
-        self.lambda_history = [self.lambda_value]
-        self.error_history.clear()
-        self.velocity = 0.0
-        self.integral_error = 0.0
-        self.prev_error = 0.0
-        self.adjustments_made = 0
-        self.coverage_violations = 0
+        """Reset all tracking statistics."""
+        self.current_batch.reset()
+        self.cumulative.reset()
+        self.history.clear()
+        self.window_coverage = None
+        self.window_near_pole_coverage = None
+        self.detected_pole_locations = []
+        self.pole_encounter_history = []
+
+
+class CoverageEnforcementPolicy:
+    """
+    Policy for enforcing coverage targets with improved control.
+    
+    Features:
+    - Asymmetric updates (faster increase, slower decrease)
+    - Dead-band to prevent oscillation
+    - Special handling for near-pole coverage
+    """
+    
+    def __init__(self,
+                 target_coverage: float = 0.90,
+                 near_pole_target: float = 0.70,
+                 dead_band: float = 0.02,
+                 increase_rate: float = 2.0,
+                 decrease_rate: float = 0.5,
+                 min_lambda: float = 0.1,
+                 max_lambda: float = 10.0):
+        """
+        Initialize coverage enforcement policy.
+        
+        Args:
+            target_coverage: Target global coverage
+            near_pole_target: Target coverage in near-pole regions
+            dead_band: Tolerance band around target (±)
+            increase_rate: Multiplier for lambda increases
+            decrease_rate: Multiplier for lambda decreases
+            min_lambda: Minimum lambda value
+            max_lambda: Maximum lambda value
+        """
+        self.target_coverage = target_coverage
+        self.near_pole_target = near_pole_target
+        self.dead_band = dead_band
+        self.increase_rate = increase_rate
+        self.decrease_rate = decrease_rate
+        self.min_lambda = min_lambda
+        self.max_lambda = max_lambda
+        
+        # State tracking
+        self.lambda_history: List[float] = []
+        self.coverage_history: List[float] = []
+        self.intervention_count = 0
+    
+    def compute_lambda_update(self,
+                             current_coverage: float,
+                             current_lambda: float,
+                             near_pole_coverage: Optional[float] = None) -> float:
+        """
+        Compute lambda update based on coverage.
+        
+        Args:
+            current_coverage: Current global coverage
+            current_lambda: Current lambda value
+            near_pole_coverage: Optional near-pole coverage
+            
+        Returns:
+            Updated lambda value
+        """
+        # Check if within dead-band
+        coverage_gap = self.target_coverage - current_coverage
+        if abs(coverage_gap) < self.dead_band:
+            # Within acceptable range, no change
+            return current_lambda
+        
+        # Base update magnitude
+        base_update = abs(coverage_gap) * 0.1  # Base learning rate
+        
+        # Apply asymmetric rates with correct direction
+        if coverage_gap < 0:  # Coverage too high, need to increase lambda
+            # Make update positive to increase lambda
+            effective_update = base_update * self.increase_rate
+        else:  # Coverage too low, need to decrease lambda
+            # Make update negative to decrease lambda
+            effective_update = -base_update * self.decrease_rate
+        
+        # Special adjustment for poor near-pole coverage
+        if near_pole_coverage is not None and near_pole_coverage < self.near_pole_target:
+            # Boost lambda to encourage exploration
+            pole_gap = self.near_pole_target - near_pole_coverage
+            pole_adjustment = pole_gap * 0.05 * self.increase_rate
+            effective_update += pole_adjustment
+        
+        # Apply update
+        new_lambda = current_lambda + effective_update
+        
+        # Apply bounds
+        new_lambda = max(self.min_lambda, min(self.max_lambda, new_lambda))
+        
+        # Track history
+        self.lambda_history.append(new_lambda)
+        self.coverage_history.append(current_coverage)
+        
+        return new_lambda
+    
+    def should_intervene(self, 
+                        current_coverage: float,
+                        steps_since_last: int = 0) -> bool:
+        """
+        Determine if intervention is needed.
+        
+        Args:
+            current_coverage: Current coverage
+            steps_since_last: Steps since last intervention
+            
+        Returns:
+            True if intervention needed
+        """
+        # Critical intervention if coverage way off
+        if current_coverage > 0.99:  # Almost no exploration
+            return True
+        if current_coverage < 0.5:  # Too much rejection
+            return True
+        
+        # Regular intervention if outside dead-band and enough time passed
+        if abs(self.target_coverage - current_coverage) > self.dead_band * 2:
+            if steps_since_last >= 10:  # Wait at least 10 steps
+                return True
+        
+        return False
+    
+    def enforce(self,
+               current_coverage: float,
+               current_lambda: float,
+               near_pole_coverage: Optional[float] = None,
+               Q_values: Optional[List[float]] = None) -> Dict[str, Any]:
+        """
+        Enforce coverage policy.
+        
+        Args:
+            current_coverage: Current global coverage
+            current_lambda: Current lambda value
+            near_pole_coverage: Optional near-pole coverage
+            Q_values: Optional list of Q values for analysis
+            
+        Returns:
+            Dictionary with enforcement results
+        """
+        # Check if intervention needed
+        should_update = abs(self.target_coverage - current_coverage) > self.dead_band
+        
+        if not should_update:
+            return {
+                "lambda_updated": False,
+                "new_lambda": current_lambda,
+                "coverage_gap": self.target_coverage - current_coverage,
+                "intervention_triggered": False
+            }
+        
+        # Compute new lambda
+        new_lambda = self.compute_lambda_update(
+            current_coverage, current_lambda, near_pole_coverage
+        )
+        
+        # Check if this is an intervention
+        intervention = abs(new_lambda - current_lambda) > current_lambda * 0.2
+        if intervention:
+            self.intervention_count += 1
+        
+        return {
+            "lambda_updated": True,
+            "new_lambda": new_lambda,
+            "old_lambda": current_lambda,
+            "coverage_gap": self.target_coverage - current_coverage,
+            "near_pole_gap": (self.near_pole_target - near_pole_coverage) if near_pole_coverage else None,
+            "intervention_triggered": intervention,
+            "intervention_count": self.intervention_count
+        }
 
 
 class NearPoleSampler:
@@ -277,13 +534,13 @@ class NearPoleSampler:
         Initialize near-pole sampler.
         
         Args:
-            pole_threshold: |Q| threshold for near-pole identification
+            pole_threshold: |Q| threshold for near-pole classification
             oversample_ratio: How much to oversample near-pole regions
             adaptive: Whether to adapt ratio based on coverage
         """
         self.pole_threshold = pole_threshold
-        self.base_oversample_ratio = oversample_ratio
         self.oversample_ratio = oversample_ratio
+        self.base_oversample_ratio = oversample_ratio
         self.adaptive = adaptive
         
         # Tracking
@@ -340,161 +597,148 @@ class NearPoleSampler:
                     batch_size: int,
                     Q_values: Optional[List[float]] = None) -> List[Tuple]:
         """
-        Sample a batch with oversampling of near-pole regions.
+        Sample a batch with oversampling near poles.
         
         Args:
-            data: List of (input, target) tuples
-            batch_size: Batch size
-            Q_values: Optional pre-computed |Q| values
+            data: List of data tuples
+            batch_size: Size of batch to sample
+            Q_values: Optional Q values for weighted sampling
             
         Returns:
             Sampled batch
         """
         if Q_values is None:
-            # Uniform sampling if no Q values provided
+            # Random sampling if no Q values
             indices = np.random.choice(len(data), batch_size, replace=True)
         else:
             # Weighted sampling based on Q values
             weights = self.compute_sample_weights(Q_values)
-            indices = np.random.choice(
-                len(data), batch_size, replace=True, p=weights
-            )
+            indices = np.random.choice(len(data), batch_size, p=weights, replace=True)
         
         return [data[i] for i in indices]
-    
-    def get_statistics(self) -> Dict[str, float]:
-        """Get sampler statistics."""
-        stats = {
-            'oversample_ratio': self.oversample_ratio,
-            'near_pole_count': len(self.near_pole_indices),
-            'near_pole_ratio': len(self.near_pole_indices) / len(self.sample_weights) 
-                              if self.sample_weights else 0
-        }
-        
-        if self.coverage_history:
-            stats['avg_coverage_seen'] = np.mean(self.coverage_history)
-        
-        return stats
 
 
-class CoverageEnforcementPolicy:
+class AdaptiveGridSampler:
     """
-    High-level policy for enforcing coverage constraints.
+    Adaptive grid refinement for sampling near detected poles.
     
-    Combines lambda control, sampling strategy, and intervention mechanisms.
+    This sampler dynamically refines the sampling grid around
+    detected singularities to ensure adequate exploration.
     """
     
     def __init__(self,
-                 config: EnhancedCoverageConfig,
-                 lambda_controller: Optional[AdaptiveLambdaController] = None,
-                 sampler: Optional[NearPoleSampler] = None):
+                 initial_grid_size: int = 100,
+                 refinement_factor: int = 5,
+                 pole_radius: float = 0.1):
         """
-        Initialize enforcement policy.
+        Initialize adaptive grid sampler.
         
         Args:
-            config: Coverage configuration
-            lambda_controller: Lambda controller (creates default if None)
-            sampler: Near-pole sampler (creates default if None)
+            initial_grid_size: Initial number of grid points
+            refinement_factor: How many points to add near poles
+            pole_radius: Radius around poles for refinement
         """
-        self.config = config
+        self.initial_grid_size = initial_grid_size
+        self.refinement_factor = refinement_factor
+        self.pole_radius = pole_radius
         
-        self.lambda_controller = lambda_controller or AdaptiveLambdaController(config)
-        self.sampler = sampler or NearPoleSampler(
-            pole_threshold=config.pole_threshold,
-            oversample_ratio=2.0
-        ) if config.oversample_near_pole else None
-        
-        # Intervention tracking
-        self.interventions = []
-        self.coverage_restored_epoch = None
+        # Grid state
+        self.grid_points = []
+        self.detected_poles = []
+        self.refinement_history = []
     
-    def enforce(self,
-               current_coverage: float,
-               epoch: int,
-               Q_values: Optional[List[float]] = None) -> Dict[str, any]:
+    def initialize_grid(self, x_min: float, x_max: float) -> np.ndarray:
         """
-        Apply coverage enforcement policy.
+        Initialize uniform grid.
         
         Args:
-            current_coverage: Current coverage
-            epoch: Current epoch
-            Q_values: Optional denominator values
+            x_min: Minimum x value
+            x_max: Maximum x value
             
         Returns:
-            Dictionary of actions taken
+            Initial grid points
         """
-        actions = {
-            'lambda_updated': False,
-            'sampling_adjusted': False,
-            'intervention_triggered': False,
-            'new_lambda': self.lambda_controller.get_penalty()
-        }
-        
-        # Update lambda controller
-        self.lambda_controller.update(current_coverage)
-        actions['lambda_updated'] = True
-        actions['new_lambda'] = self.lambda_controller.get_penalty()
-        
-        # Check for critical coverage violation
-        if current_coverage < self.config.min_coverage:
-            actions['intervention_triggered'] = True
-            self._trigger_intervention(current_coverage, epoch)
-        
-        # Adjust sampling if enabled
-        if self.sampler and Q_values:
-            weights = self.sampler.compute_sample_weights(
-                Q_values, current_coverage
-            )
-            actions['sampling_adjusted'] = True
-            actions['sample_weights'] = weights
-        
-        # Check if coverage restored
-        if (self.coverage_restored_epoch is None and 
-            current_coverage >= self.config.target_coverage):
-            self.coverage_restored_epoch = epoch
-        
-        return actions
+        self.grid_points = np.linspace(x_min, x_max, self.initial_grid_size)
+        return self.grid_points
     
-    def _trigger_intervention(self, coverage: float, epoch: int) -> None:
+    def refine_near_pole(self, pole_location: float) -> np.ndarray:
         """
-        Trigger emergency intervention for critical coverage loss.
+        Refine grid near a detected pole.
         
         Args:
-            coverage: Current coverage
-            epoch: Current epoch
+            pole_location: Location of detected pole
+            
+        Returns:
+            New grid points added
         """
-        intervention = {
-            'epoch': epoch,
-            'coverage': coverage,
-            'action': 'emergency_lambda_reduction'
-        }
+        # Add refined points around pole
+        new_points = []
+        for offset in np.linspace(-self.pole_radius, self.pole_radius, 
+                                 self.refinement_factor):
+            point = pole_location + offset
+            if point not in self.grid_points:
+                new_points.append(point)
         
-        # Emergency lambda reduction
-        self.lambda_controller.lambda_value *= 0.5
+        # Update grid
+        if new_points:
+            self.grid_points = np.sort(np.concatenate([self.grid_points, new_points]))
+            self.refinement_history.append((pole_location, len(new_points)))
         
-        # Reset PID if using PID strategy
-        if self.config.strategy == CoverageStrategy.PID:
-            self.lambda_controller.integral_error = 0
-        
-        self.interventions.append(intervention)
+        return np.array(new_points)
     
-    def get_statistics(self) -> Dict[str, any]:
-        """Get comprehensive policy statistics."""
-        stats = {
-            'lambda_stats': self.lambda_controller.get_statistics(),
-            'interventions': len(self.interventions),
-            'coverage_restored_epoch': self.coverage_restored_epoch
-        }
+    def update_poles(self, Q_values: List[float], 
+                    x_values: List[float],
+                    threshold: float = 0.1) -> List[float]:
+        """
+        Detect and refine around new poles.
         
-        if self.sampler:
-            stats['sampler_stats'] = self.sampler.get_statistics()
+        Args:
+            Q_values: |Q(x)| values
+            x_values: Corresponding x values
+            threshold: Threshold for pole detection
+            
+        Returns:
+            List of newly detected pole locations
+        """
+        new_poles = []
         
-        return stats
+        for q_val, x_val in zip(Q_values, x_values):
+            if abs(q_val) <= threshold:
+                # Check if this is a new pole
+                if not any(abs(x_val - p) < self.pole_radius/2 for p in self.detected_poles):
+                    self.detected_poles.append(x_val)
+                    new_poles.append(x_val)
+                    # Refine grid around new pole
+                    self.refine_near_pole(x_val)
+        
+        return new_poles
     
-    def reset(self) -> None:
-        """Reset policy state."""
-        self.lambda_controller.reset()
-        if self.sampler:
-            self.sampler.coverage_history.clear()
-        self.interventions.clear()
-        self.coverage_restored_epoch = None
+    def get_weighted_samples(self, n_samples: int) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Get weighted samples with emphasis near poles.
+        
+        Args:
+            n_samples: Number of samples to generate
+            
+        Returns:
+            Tuple of (sample_points, weights)
+        """
+        # Compute weights based on proximity to poles
+        weights = np.ones(len(self.grid_points))
+        
+        for point in self.grid_points:
+            for pole in self.detected_poles:
+                dist = abs(point - pole)
+                if dist <= self.pole_radius:
+                    # Weight inversely proportional to distance
+                    weight_boost = 1.0 / (dist + 0.01)
+                    weights[self.grid_points == point] *= (1 + weight_boost)
+        
+        # Normalize weights
+        weights = weights / weights.sum()
+        
+        # Sample points
+        indices = np.random.choice(len(self.grid_points), n_samples, p=weights)
+        samples = self.grid_points[indices]
+        
+        return samples, weights[indices]
