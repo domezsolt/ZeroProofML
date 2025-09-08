@@ -151,10 +151,11 @@ class EnhancedTRRational(TRRational):
     
     def parameters(self) -> List[TRNode]:
         """Get all parameters including pole detection head."""
-        if self.pole_interface:
-            return self.pole_interface.get_parameters()
-        else:
-            return super().parameters()
+        params = super().parameters()
+        if self.pole_interface is not None and hasattr(self.pole_interface, 'pole_head'):
+            # Append pole head parameters only; avoid recursive call back into interface
+            params.extend(self.pole_interface.pole_head.parameters())
+        return params
     
     def evaluate_pole_detection(self, 
                                test_data: List[Tuple[float, bool]]) -> Dict[str, float]:

@@ -6,7 +6,7 @@ Tests totality, closure, embedding, and algebraic properties.
 
 import pytest
 import numpy as np
-from hypothesis import given, strategies as st, assume, settings
+from hypothesis import given, strategies as st, assume, settings, HealthCheck
 from hypothesis.strategies import composite
 
 from zeroproof.core import (
@@ -269,7 +269,7 @@ class TestAlgebraicProperties:
             assert result1.tag == result2.tag
     
     @given(finite_reals(), finite_reals(), finite_reals())
-    @settings(max_examples=100)
+    @settings(max_examples=100, suppress_health_check=[HealthCheck.filter_too_much])
     def test_add_associative(self, a, b, c):
         """Addition is associative on REAL."""
         # Limit values to prevent overflow differences

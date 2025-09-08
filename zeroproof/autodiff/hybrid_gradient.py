@@ -113,6 +113,27 @@ class HybridGradientSchedule:
         delta = self.get_delta(epoch)
         return f"converged (delta={delta:.3e})"
     
+    # Lightweight context manager API used by tests
+    def apply(self, epoch: int):
+        """Context manager to apply this schedule for a given epoch.
+
+        Usage:
+            with schedule.apply(epoch=5):
+                # do backward passes
+        """
+        from contextlib import contextmanager
+        @contextmanager
+        def _ctx():
+            # Register schedule and epoch
+            HybridGradientContext.set_schedule(self)
+            HybridGradientContext.update_epoch(epoch)
+            try:
+                yield
+            finally:
+                # No-op on exit; keep stats for inspection
+                pass
+        return _ctx()
+    
     def update_detected_poles(self, new_poles: List[float], epoch: int) -> None:
         """Update detected poles and schedule exploration."""
         if not self.force_pole_exploration:

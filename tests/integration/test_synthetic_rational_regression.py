@@ -21,7 +21,7 @@ from zeroproof.training import (
     create_integrated_sampler,
     CoverageTracker,
 )
-from zeroproof.datasets import SingularDatasetGenerator
+from zeroproof.utils import SingularDatasetGenerator
 
 
 @dataclass
@@ -67,15 +67,57 @@ class SyntheticRationalDataset:
         
         # Generate data with actual singularities
         self.generator = SingularDatasetGenerator(
-            n_samples=1000,
-            input_dim=1,
-            pole_locations=config.pole_locations,
-            include_singular_points=True,  # Critical!
-            near_pole_ratio=0.3,  # 30% near poles
+            domain=(-1.0, 1.0),
+            seed=42
         )
         
-        self.x_train, self.y_train = self.generator.generate()
-        self.x_test, self.y_test = self.generator.generate(n_samples=200)
+        # Add poles from config
+        for pole_loc in config.pole_locations:
+            self.generator.add_pole(pole_loc, strength=0.01)
+        
+        # Generate training data
+        x_train, y_train, _ = self.generator.generate_rational_function_data(
+            n_samples=1000, 
+            singularity_ratio=0.3,
+            force_exact_singularities=True
+        )
+        # Convert to tensors, preserving infinities
+        x_values = []
+        y_values = []
+        for x, y in zip(x_train, y_train):
+            x_values.append(x.value)
+            if y.tag == TRTag.REAL:
+                y_values.append(y.value)
+            elif y.tag == TRTag.PINF:
+                y_values.append(float('inf'))
+            elif y.tag == TRTag.NINF:
+                y_values.append(float('-inf'))
+            else:  # PHI
+                y_values.append(float('nan'))
+        self.x_train = torch.tensor(x_values, dtype=torch.float32)
+        self.y_train = torch.tensor(y_values, dtype=torch.float32)
+        
+        # Generate test data
+        x_test, y_test, _ = self.generator.generate_rational_function_data(
+            n_samples=200,
+            singularity_ratio=0.3,
+            force_exact_singularities=True
+        )
+        # Convert test data to tensors, preserving infinities
+        x_test_values = []
+        y_test_values = []
+        for x, y in zip(x_test, y_test):
+            x_test_values.append(x.value)
+            if y.tag == TRTag.REAL:
+                y_test_values.append(y.value)
+            elif y.tag == TRTag.PINF:
+                y_test_values.append(float('inf'))
+            elif y.tag == TRTag.NINF:
+                y_test_values.append(float('-inf'))
+            else:  # PHI
+                y_test_values.append(float('nan'))
+        self.x_test = torch.tensor(x_test_values, dtype=torch.float32)
+        self.y_test = torch.tensor(y_test_values, dtype=torch.float32)
     
     def get_batch(self, batch_size: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get random batch from training data."""
@@ -100,9 +142,10 @@ class TestSyntheticRationalRegression:
         
         # Create model
         model = TRRational(
-            degree_p=4,
-            degree_q=3,
+            d_p=4,
+            d_q=3,
             lambda_rej=1.0,
+            projection_index=0  # tests pass [[x]] vectors in some places
         )
         
         # Create advanced controller
@@ -124,7 +167,7 @@ class TestSyntheticRationalRegression:
         
         # Training configuration
         train_config = HybridTrainingConfig(
-            n_epochs=config.n_epochs,
+            max_epochs=config.n_epochs,
             batch_size=config.batch_size,
             learning_rate=config.learning_rate,
             target_coverage=config.target_coverage,
@@ -153,7 +196,8 @@ class TestSyntheticRationalRegression:
                 x_batch, y_batch = dataset.get_batch(config.batch_size)
                 
                 # Forward pass
-                y_pred = model(x_batch)
+                y_pred_nodes = model.forward_batch(x_batch.tolist())
+                y_pred = y_pred_nodes
                 
                 # Track Q values for sampling
                 batch_q_values.extend(model.get_q_values(x_batch))
@@ -248,7 +292,7 @@ class TestSyntheticRationalRegression:
             
             # Create dataset and model
             dataset = SyntheticRationalDataset(config)
-            model = TRRational(degree_p=3, degree_q=2)
+            model = TRRational(d_p=3, d_q=2, projection_index=0)
             
             # Create controller
             controller = create_advanced_controller(
@@ -266,8 +310,8 @@ class TestSyntheticRationalRegression:
                 # Get batch
                 x_batch, y_batch = dataset.get_batch(32)
                 
-                # Forward pass
-                y_pred = model(x_batch)
+                # Forward pass (batched)
+                y_pred = model.forward_batch(x_batch.tolist())
                 
                 # Compute coverage
                 tags = [pred.tag for pred in y_pred]
@@ -292,7 +336,7 @@ class TestSyntheticRationalRegression:
         dataset = SyntheticRationalDataset(config)
         
         # Model with hybrid gradient schedule
-        model = TRRational(degree_p=3, degree_q=2)
+        model = TRRational(d_p=3, d_q=2, projection_index=0)
         
         # Track gradient magnitudes
         gradient_history = []
@@ -307,7 +351,7 @@ class TestSyntheticRationalRegression:
             ], requires_grad=True)
             
             # Forward pass
-            outputs = model(near_pole_inputs)
+            outputs = model.forward_batch(near_pole_inputs.tolist())
             
             # Create dummy loss
             loss = sum(o.value if o.tag == TRTag.REAL else 0.0 for o in outputs)
@@ -392,7 +436,7 @@ class TestConvergenceMetrics:
         """Test that loss decreases and converges."""
         config = RegressionTestConfig(n_epochs=50)
         dataset = SyntheticRationalDataset(config)
-        model = TRRational(degree_p=3, degree_q=2)
+        model = TRRational(d_p=3, d_q=2, projection_index=0)
         
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
         

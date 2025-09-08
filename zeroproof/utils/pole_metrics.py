@@ -483,6 +483,21 @@ class PoleEvaluator:
         if predicted_poles is None:
             predicted_poles = detect_poles_from_Q(x_values, Q_values, self.near_threshold)
         
+        # Normalize y_values to TR-like where needed (accept numpy floats)
+        processed_y: List[Union[TRNode, TRScalar]] = []
+        import numpy as np
+        for y in y_values:
+            if hasattr(y, 'tag') or (hasattr(y, 'value') and hasattr(y.value, 'tag')):
+                processed_y.append(y)
+            else:
+                y_float = float(y)
+                if np.isinf(y_float):
+                    processed_y.append(pinf() if y_float > 0 else ninf())
+                elif np.isnan(y_float):
+                    processed_y.append(phi())
+                else:
+                    processed_y.append(real(y_float))
+
         # Compute PLE
         ple, ple_breakdown = compute_pole_localization_error(
             predicted_poles, self.true_poles
@@ -490,12 +505,12 @@ class PoleEvaluator:
         
         # Check sign consistency
         sign_consistency, sign_errors = check_sign_consistency(
-            x_values, y_values, self.true_poles
+            x_values, processed_y, self.true_poles
         )
         
         # Compute asymptotic slope
         slope_error, slope_corr = compute_asymptotic_slope_error(
-            x_values, y_values, Q_values, self.near_threshold
+            x_values, processed_y, Q_values, self.near_threshold
         )
         
         # Compute residual consistency
