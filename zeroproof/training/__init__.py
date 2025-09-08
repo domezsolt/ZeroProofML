@@ -44,6 +44,18 @@ from .pole_supervision import (
     create_pole_teacher,
 )
 
+from .sampling_diagnostics import (
+    SamplingStrategy,
+    ImportanceSampler,
+    ImportanceSamplerConfig,
+    ActiveSampler,
+    ActiveSamplerConfig,
+    DiagnosticMonitor,
+    DiagnosticConfig,
+    IntegratedSampler,
+    create_integrated_sampler,
+)
+
 __all__ = [
     # Coverage tracking
     "CoverageTracker",
@@ -90,4 +102,15 @@ __all__ = [
     "PoleHeadPretrainer",
     "HybridTeacher",
     "create_pole_teacher",
+    
+    # Sampling and diagnostics
+    "SamplingStrategy",
+    "ImportanceSampler",
+    "ImportanceSamplerConfig",
+    "ActiveSampler",
+    "ActiveSamplerConfig",
+    "DiagnosticMonitor",
+    "DiagnosticConfig",
+    "IntegratedSampler",
+    "create_integrated_sampler",
 ]

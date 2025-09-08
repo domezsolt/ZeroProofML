@@ -99,11 +99,11 @@ This to‑do list integrates earlier core requirements with the new normative ch
   - Proxy: instability signals as weak supervision.
   - **Add**: Pre-train pole head on synthetic data with known poles
 
-### 2.3 Sampling & Diagnostics
-- [ ] Active sampling in pole neighborhoods (adaptive x‑grid refinement).
-- [ ] **Critical**: Implement importance sampling with weight ∝ 1/|Q(x)|²
-- [ ] Diagnostic API to export **P(x), Q(x), q_min** for monitoring.
-- [ ] Logging improvements:
+### 2.3 Sampling & Diagnostics ✅
+- [x] Active sampling in pole neighborhoods (adaptive x‑grid refinement). (Completed)
+- [x] **Critical**: Implement importance sampling with weight ∝ 1/|Q(x)|² (Completed)
+- [x] Diagnostic API to export **P(x), Q(x), q_min** for monitoring. (Completed)
+- [x] Logging improvements: (Completed)
   - Stable keys in training history (`lambda_rej`, `coverage_train`, `coverage_eval_tau`, etc.).
   - Batch‑wise q_min, tag distributions, and pole metrics.
   - **Add**: Log actual number of PINF/NINF/PHI outputs per epoch
@@ -113,23 +113,23 @@ This to‑do list integrates earlier core requirements with the new normative ch
 
 ## 3. Testing & CI
 
-### 3.1 Unit Tests
-- [ ] Property‑based tests for TR ops (totality, closure, embedding).
-- [ ] Gradient equivalence on REAL paths vs analytic formulas.
-- [ ] Zero‑grad property for non‑REAL paths (Mask‑REAL, hybrid schedule).
-- [ ] Tag‑loss correctness (classification of non‑REAL outputs).
-- [ ] **Add**: Test that models actually produce non-REAL outputs when expected
-- [ ] **Add**: Verify gradient flow through pole detection head
+### 3.1 Unit Tests ✅
+- [x] Property‑based tests for TR ops (totality, closure, embedding). (Completed)
+- [x] Gradient equivalence on REAL paths vs analytic formulas. (Completed)
+- [x] Zero‑grad property for non‑REAL paths (Mask‑REAL, hybrid schedule). (Completed)
+- [x] Tag‑loss correctness (classification of non‑REAL outputs). (Completed)
+- [x] **Add**: Test that models actually produce non-REAL outputs when expected (Completed)
+- [x] **Add**: Verify gradient flow through pole detection head (Completed)
 
-### 3.2 Integration Tests
-- [ ] End‑to‑end run with synthetic rational regression:
+### 3.2 Integration Tests ✅
+- [x] End‑to‑end run with synthetic rational regression: (Completed)
   - Coverage adapts to target c*.
   - λ₍rej₎ stabilizes.
   - **Critical**: Verify coverage < 100% (actual singularities encountered)
-- [ ] Pole reconstruction demo with ground‑truth poles:
+- [x] Pole reconstruction demo with ground‑truth poles: (Completed)
   - Verify PLE, sign consistency, slope, residual metrics.
   - **Add**: Test should fail if pole accuracy < 60%
-- [ ] **Add**: Robotics IK test with actual singular configurations
+- [x] **Add**: Robotics IK test with actual singular configurations (Completed)
 
 ### 3.3 Continuous Integration
 - [ ] Add CI jobs for:
