@@ -92,8 +92,8 @@ This to‑do list integrates earlier core requirements with the new normative ch
 - [x] Ablations comparing proportional vs PI λ‑update. (Completed)
 - [x] **Add curriculum learning**: Start with easy (far from poles) samples, gradually introduce harder ones (Completed)
 
-### 2.2 Supervision
-- [ ] **Teacher / proxy supervision** for pole‑head (critical for improving 40% accuracy):
+### 2.2 Supervision ✅
+- [x] **Teacher / proxy supervision** for pole‑head (critical for improving 40% accuracy): (Completed)
   - Robotics: det(J) as analytic label.
   - Physics: singular mass matrices.
   - Proxy: instability signals as weak supervision.

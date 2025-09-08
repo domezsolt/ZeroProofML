@@ -33,6 +33,17 @@ from .control_ablation import (
     run_control_ablation,
 )
 
+from .pole_supervision import (
+    SupervisionType,
+    TeacherConfig,
+    RoboticsTeacher,
+    ProxyTeacher,
+    SyntheticPoleDataset,
+    PoleHeadPretrainer,
+    HybridTeacher,
+    create_pole_teacher,
+)
+
 __all__ = [
     # Coverage tracking
     "CoverageTracker",
@@ -69,4 +80,14 @@ __all__ = [
     "AblationConfig",
     "AblationRunner",
     "run_control_ablation",
+    
+    # Pole supervision
+    "SupervisionType",
+    "TeacherConfig",
+    "RoboticsTeacher",
+    "ProxyTeacher",
+    "SyntheticPoleDataset",
+    "PoleHeadPretrainer",
+    "HybridTeacher",
+    "create_pole_teacher",
 ]
