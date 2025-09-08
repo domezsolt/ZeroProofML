@@ -204,3 +204,61 @@ try:
     DATASET_GENERATION_AVAILABLE = True
 except ImportError:
     DATASET_GENERATION_AVAILABLE = False
+
+# Export pole metrics utilities
+try:
+    from .pole_metrics import (
+        PoleMetrics,
+        PoleEvaluator,
+        compute_pole_localization_error,
+        check_sign_consistency,
+        compute_asymptotic_slope_error,
+        compute_residual_consistency,
+        count_singularities,
+        compute_coverage_by_distance,
+        detect_poles_from_Q,
+    )
+    __all__.extend([
+        "PoleMetrics",
+        "PoleEvaluator",
+        "compute_pole_localization_error",
+        "check_sign_consistency",
+        "compute_asymptotic_slope_error",
+        "compute_residual_consistency",
+        "count_singularities",
+        "compute_coverage_by_distance",
+        "detect_poles_from_Q",
+    ])
+    POLE_METRICS_AVAILABLE = True
+except ImportError:
+    POLE_METRICS_AVAILABLE = False
+
+# Export pole visualization utilities
+try:
+    from .pole_visualization import (
+        PoleVisualizer,
+    )
+    __all__.extend([
+        "PoleVisualizer",
+    ])
+    POLE_VISUALIZATION_AVAILABLE = True
+except ImportError:
+    POLE_VISUALIZATION_AVAILABLE = False
+
+# Export evaluation API
+try:
+    from .evaluation_api import (
+        EvaluationConfig,
+        IntegratedEvaluator,
+        TrainingLogger,
+        create_evaluator,
+    )
+    __all__.extend([
+        "EvaluationConfig",
+        "IntegratedEvaluator",
+        "TrainingLogger",
+        "create_evaluator",
+    ])
+    EVALUATION_API_AVAILABLE = True
+except ImportError:
+    EVALUATION_API_AVAILABLE = False

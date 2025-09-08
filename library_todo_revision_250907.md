@@ -64,22 +64,22 @@ This to‑do list integrates earlier core requirements with the new normative ch
 - [x] Ensure pole‑head integrates with loss (tag‑loss, PLE) and supervision (teacher/proxy). (Completed)
 - [x] **Add pole regularization**: Encourage Q(x) to have poles at specific locations during training (Completed)
 
-### 1.5 Evaluation & Metrics
-- [ ] Implement new metrics (currently missing):
+### 1.5 Evaluation & Metrics ✅
+- [x] Implement new metrics (currently missing): (Completed)
   - **Pole Localization Error (PLE):** distance between learned poles and ground truth.
   - **Sign‑consistency:** check correct +∞ ↔ −∞ flips across poles.
   - **Asymptotic slope loss:** enforce log|y| ∼ −log|Q|.
   - **Residual consistency:** R(x) = Q(x)·y(x) − P(x) ≈ 0 near poles.
   - **Add**: Actual singularity count vs predicted count
   - **Add**: Coverage breakdown by distance from pole (near/mid/far)
-- [ ] Integrate metrics into evaluation API and training logs.
-- [ ] **Add visualization tools**:
+- [x] Integrate metrics into evaluation API and training logs. (Completed)
+- [x] **Add visualization tools**: (Completed)
   - Plot learned Q(x) vs ground truth
   - Visualize pole locations in input space
   - Show gradient flow near singularities
 
-### 1.6 Wheel Mode
-- [ ] Preserve strict **isolation of Wheel mode**:
+### 1.6 Wheel Mode ✅
+- [x] Preserve strict **isolation of Wheel mode**: (Completed)
   - TR and Wheel semantics must never mix inside a single operation.
   - Wheel remains a compile‑time switch mapping Φ→⊥ and enforcing wheel axioms.
 

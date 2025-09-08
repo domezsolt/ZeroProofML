@@ -1,8 +1,7 @@
 """
 Unit tests for enhanced coverage control functionality.
 
-Tests the adaptive lambda controller, near-pole sampler, and
-coverage enforcement policy.
+Tests the enhanced coverage tracker, enforcement policy, and sampling strategies.
 """
 
 import pytest
@@ -11,388 +10,390 @@ from typing import List
 
 from zeroproof.core import TRTag
 from zeroproof.training.enhanced_coverage import (
-    EnhancedCoverageConfig,
-    AdaptiveLambdaController,
-    NearPoleSampler,
+    EnhancedCoverageMetrics,
+    EnhancedCoverageTracker,
     CoverageEnforcementPolicy,
-    CoverageStrategy
+    NearPoleSampler,
+    AdaptiveGridSampler
 )
 
 
-class TestAdaptiveLambdaController:
-    """Test adaptive lambda controller."""
+class TestEnhancedCoverageMetrics:
+    """Test enhanced coverage metrics."""
     
     def test_initialization(self):
-        """Test controller initialization."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            lambda_init=2.0,
-            lambda_min=0.1,
-            lambda_max=10.0
-        )
-        
-        controller = AdaptiveLambdaController(config)
-        
-        assert controller.lambda_value == 2.0
-        assert controller.epoch == 0
-        assert len(controller.lambda_history) == 1
+        """Test metrics initialization."""
+        metrics = EnhancedCoverageMetrics()
+        assert metrics.total_samples == 0
+        assert metrics.coverage == 1.0  # Default when no samples
+        assert metrics.near_pole_coverage == 1.0
+        assert metrics.actual_nonreal_rate == 0.0
     
-    def test_warmup_period(self):
-        """Test that lambda doesn't change during warmup."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            lambda_init=1.0,
-            warmup_epochs=5
+    def test_coverage_computation(self):
+        """Test coverage calculation."""
+        metrics = EnhancedCoverageMetrics(
+            total_samples=100,
+            real_samples=85,
+            pinf_samples=10,
+            ninf_samples=3,
+            phi_samples=2
         )
-        
-        controller = AdaptiveLambdaController(config)
-        initial_lambda = controller.lambda_value
-        
-        # Update during warmup
-        for i in range(5):
-            controller.update(0.5)  # Low coverage
-            assert controller.lambda_value == initial_lambda
-        
-        # After warmup, should update
-        controller.update(0.5)
-        assert controller.lambda_value != initial_lambda
+        assert metrics.coverage == 0.85
+        assert metrics.actual_nonreal_rate == 0.15
     
-    def test_lagrange_update(self):
-        """Test Lagrange multiplier update strategy."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            lambda_init=1.0,
-            strategy=CoverageStrategy.LAGRANGE,
-            learning_rate=0.1,
-            momentum=0.0,
-            warmup_epochs=0
+    def test_near_pole_coverage(self):
+        """Test near-pole coverage calculation."""
+        metrics = EnhancedCoverageMetrics(
+            near_pole_samples=20,
+            near_pole_real=12,
+            near_pole_nonreal=8
         )
-        
-        controller = AdaptiveLambdaController(config)
-        
-        # Low coverage -> decrease lambda
-        controller.update(0.7)  # Below target
-        assert controller.lambda_value < 1.0
-        
-        # High coverage -> increase lambda
-        controller.lambda_value = 1.0
-        controller.update(0.95)  # Above target
-        assert controller.lambda_value > 1.0
+        assert metrics.near_pole_coverage == 0.6
     
-    def test_pid_update(self):
-        """Test PID controller update strategy."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            lambda_init=1.0,
-            strategy=CoverageStrategy.PID,
-            pid_gains=(1.0, 0.1, 0.01),
-            warmup_epochs=0
-        )
+    def test_update_with_q_values(self):
+        """Test updating metrics with Q values."""
+        metrics = EnhancedCoverageMetrics()
         
-        controller = AdaptiveLambdaController(config)
+        tags = [TRTag.REAL, TRTag.REAL, TRTag.PINF, TRTag.REAL]
+        q_values = [0.5, 0.05, 0.01, 1.0]  # Two near pole
         
-        # Track lambda changes
-        lambdas = [controller.lambda_value]
+        metrics.update(tags, q_values, pole_threshold=0.1)
         
-        # Simulate coverage oscillation
-        coverages = [0.7, 0.75, 0.8, 0.85, 0.9, 0.87, 0.85]
-        for cov in coverages:
-            controller.update(cov)
-            lambdas.append(controller.lambda_value)
-        
-        # Should converge toward stable value
-        late_variance = np.var(lambdas[-3:])
-        early_variance = np.var(lambdas[:3])
-        assert late_variance < early_variance
+        assert metrics.total_samples == 4
+        assert metrics.real_samples == 3
+        assert metrics.near_pole_samples == 2  # q=0.05 and q=0.01
+        assert metrics.near_pole_real == 1  # Only q=0.05 is REAL
+        assert metrics.min_q_value == 0.01
+        assert pytest.approx(metrics.mean_q_value) == np.mean(q_values)
+
+
+class TestEnhancedCoverageTracker:
+    """Test enhanced coverage tracker."""
     
-    def test_adaptive_rate_update(self):
-        """Test adaptive learning rate strategy."""
-        config = EnhancedCoverageConfig(
+    def test_initialization(self):
+        """Test tracker initialization."""
+        tracker = EnhancedCoverageTracker(
             target_coverage=0.85,
-            min_coverage=0.70,
-            lambda_init=5.0,
-            strategy=CoverageStrategy.ADAPTIVE_RATE,
-            learning_rate=0.1,
-            momentum=0.0,
-            warmup_epochs=0
+            pole_threshold=0.1,
+            window_size=50
         )
-        
-        controller = AdaptiveLambdaController(config)
-        
-        # Emergency coverage (very low)
-        controller.update(0.5)
-        emergency_change = abs(controller.lambda_value - 5.0)
-        
-        # Reset and test normal coverage
-        controller.lambda_value = 5.0
-        controller.velocity = 0.0
-        controller.update(0.83)  # Near target
-        normal_change = abs(controller.lambda_value - 5.0)
-        
-        # Emergency should have larger change
-        assert emergency_change > normal_change * 2
+        assert tracker.target_coverage == 0.85
+        assert tracker.pole_threshold == 0.1
+        assert tracker.global_coverage == 1.0  # Default
     
-    def test_lambda_clamping(self):
-        """Test that lambda stays within bounds."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            lambda_init=1.0,
-            lambda_min=0.5,
-            lambda_max=2.0,
-            learning_rate=10.0,  # Large to test clamping
-            warmup_epochs=0
+    def test_update_tracking(self):
+        """Test updating the tracker."""
+        tracker = EnhancedCoverageTracker(
+            target_coverage=0.8,
+            pole_threshold=0.1
         )
         
-        controller = AdaptiveLambdaController(config)
+        # Simulate a batch
+        tags = [TRTag.REAL] * 8 + [TRTag.PINF, TRTag.NINF]
+        q_values = [1.0] * 5 + [0.05, 0.08, 0.12] + [0.01, 0.02]
+        x_values = list(range(10))
         
-        # Try to push lambda below min
-        controller.update(0.3)  # Very low coverage
-        assert controller.lambda_value >= 0.5
+        tracker.update(tags, q_values, x_values)
         
-        # Try to push lambda above max
-        controller.lambda_value = 2.0
-        controller.update(1.0)  # Perfect coverage
-        assert controller.lambda_value <= 2.0
+        assert tracker.current_batch.total_samples == 10
+        assert tracker.current_batch.real_samples == 8
+        assert tracker.global_coverage == 0.8
+        
+        # Check near-pole tracking (q <= 0.1)
+        assert tracker.current_batch.near_pole_samples == 4  # 0.05, 0.08, 0.01, 0.02
+        assert tracker.near_pole_coverage == 0.5  # 2 REAL out of 4 near-pole
     
-    def test_statistics_tracking(self):
-        """Test that statistics are properly tracked."""
-        config = EnhancedCoverageConfig(
+    def test_pole_detection(self):
+        """Test pole location detection."""
+        tracker = EnhancedCoverageTracker(pole_threshold=0.1)
+        
+        # Create data with clear poles at x=5
+        tags = [TRTag.REAL] * 10
+        q_values = [1.0] * 4 + [0.01] + [1.0] * 5  # Pole at index 4
+        x_values = list(range(10))
+        
+        tracker.update(tags, q_values, x_values)
+        
+        assert len(tracker.detected_pole_locations) == 1
+        assert tracker.detected_pole_locations[0] == 4  # x=4 where q=0.01
+
+
+class TestCoverageEnforcementPolicy:
+    """Test coverage enforcement policy."""
+    
+    def test_initialization(self):
+        """Test policy initialization."""
+        policy = CoverageEnforcementPolicy(
             target_coverage=0.85,
-            min_coverage=0.70,
-            warmup_epochs=0
+            near_pole_target=0.7,
+            dead_band=0.02,
+            increase_rate=2.0,
+            decrease_rate=0.5
+        )
+        assert policy.target_coverage == 0.85
+        assert policy.near_pole_target == 0.7
+        assert policy.current_lambda == 1.0  # Default
+    
+    def test_dead_band(self):
+        """Test dead-band behavior."""
+        policy = CoverageEnforcementPolicy(
+            target_coverage=0.85,
+            dead_band=0.02
         )
         
-        controller = AdaptiveLambdaController(config)
+        # Coverage within dead-band
+        current_coverage = 0.84  # Within 0.85 ± 0.02
+        near_pole_coverage = 0.8
         
-        # Generate some coverage history
-        coverages = [0.6, 0.7, 0.8, 0.85, 0.9]
-        for cov in coverages:
-            controller.update(cov)
+        result = policy.enforce(current_coverage, near_pole_coverage)
         
-        stats = controller.get_statistics()
+        # Should not update due to dead-band
+        assert result['lambda_updated'] == False
+        assert result['new_lambda'] == policy.current_lambda
+    
+    def test_asymmetric_updates(self):
+        """Test asymmetric increase/decrease rates."""
+        policy = CoverageEnforcementPolicy(
+            target_coverage=0.85,
+            dead_band=0.01,
+            increase_rate=2.0,
+            decrease_rate=0.5,
+            min_lambda=0.1,
+            max_lambda=10.0
+        )
         
-        assert stats['adjustments'] == 5
-        assert stats['violations'] == 1  # Only 0.6 < 0.70
-        assert abs(stats['avg_coverage'] - np.mean(coverages)) < 1e-6
-        assert stats['min_coverage'] == 0.6
-        assert stats['max_coverage'] == 0.9
+        # Test increase (coverage too high)
+        old_lambda = policy.current_lambda
+        result = policy.enforce(0.95, 0.8)  # Coverage too high
+        assert result['lambda_updated'] == True
+        assert result['new_lambda'] > old_lambda  # Lambda increases
+        
+        # Test decrease (coverage too low)
+        policy.current_lambda = 5.0
+        result = policy.enforce(0.70, 0.8)  # Coverage too low
+        assert result['lambda_updated'] == True
+        assert result['new_lambda'] < 5.0  # Lambda decreases
+    
+    def test_near_pole_adjustment(self):
+        """Test near-pole coverage adjustment."""
+        policy = CoverageEnforcementPolicy(
+            target_coverage=0.85,
+            near_pole_target=0.7,
+            dead_band=0.01
+        )
+        
+        # Good global coverage but poor near-pole coverage
+        result = policy.enforce(0.85, 0.4)  # Near-pole coverage too low
+        
+        assert result['lambda_updated'] == True
+        assert result['new_lambda'] > policy.current_lambda  # Boost lambda
+        assert result['reason'] == 'near_pole_adjustment'
 
 
 class TestNearPoleSampler:
-    """Test near-pole sampler."""
+    """Test near-pole oversampling."""
+    
+    def test_initialization(self):
+        """Test sampler initialization."""
+        sampler = NearPoleSampler(
+            pole_threshold=0.1,
+            oversample_ratio=3.0
+        )
+        assert sampler.pole_threshold == 0.1
+        assert sampler.oversample_ratio == 3.0
     
     def test_weight_computation(self):
         """Test sample weight computation."""
         sampler = NearPoleSampler(
             pole_threshold=0.1,
-            oversample_ratio=3.0,
-            adaptive=False
+            oversample_ratio=3.0
         )
         
-        # Q values with some near pole
-        Q_values = [1.0, 0.5, 0.05, 0.2, 0.01, 0.8]
+        q_values = [0.05, 0.5, 0.08, 1.0, 0.01]  # 3 near poles
+        weights = sampler.compute_sample_weights(q_values)
         
-        weights = sampler.compute_sample_weights(Q_values)
+        # Near-pole samples should have higher weights
+        assert weights[0] > weights[1]  # 0.05 < 0.1, so higher weight
+        assert weights[2] > weights[3]  # 0.08 < 0.1
+        assert weights[4] > weights[1]  # 0.01 < 0.1
         
-        # Near-pole samples (indices 2, 4) should have higher weight
-        assert weights[2] > weights[0]
-        assert weights[4] > weights[0]
-        assert weights[2] / weights[0] == pytest.approx(3.0, rel=0.1)
-        
-        # Weights should sum to 1
-        assert abs(weights.sum() - 1.0) < 1e-6
+        # Check normalization
+        assert pytest.approx(sum(weights)) == 1.0
     
-    def test_adaptive_oversampling(self):
-        """Test adaptive adjustment of oversample ratio."""
+    def test_adaptive_ratio(self):
+        """Test adaptive oversample ratio."""
         sampler = NearPoleSampler(
             pole_threshold=0.1,
             oversample_ratio=2.0,
             adaptive=True
         )
         
-        Q_values = [0.05, 0.5, 1.0]
+        q_values = [0.05, 0.5, 1.0]
         
-        # Low coverage -> increase oversampling
-        weights1 = sampler.compute_sample_weights(Q_values, current_coverage=0.6)
-        ratio1 = sampler.oversample_ratio
+        # Low coverage should increase ratio
+        weights_low = sampler.compute_sample_weights(q_values, current_coverage=0.5)
         
-        # Good coverage -> normal oversampling
-        sampler.oversample_ratio = 2.0  # Reset
-        weights2 = sampler.compute_sample_weights(Q_values, current_coverage=0.85)
-        ratio2 = sampler.oversample_ratio
+        # High coverage should decrease ratio
+        weights_high = sampler.compute_sample_weights(q_values, current_coverage=0.95)
         
-        assert ratio1 > ratio2
-        assert weights1[0] > weights2[0]  # More weight on near-pole when coverage low
+        # Near-pole weight should be higher when coverage is low
+        assert weights_low[0] > weights_high[0]
     
-    def test_sample_batch(self):
+    def test_batch_sampling(self):
         """Test batch sampling with weights."""
         sampler = NearPoleSampler(pole_threshold=0.1)
         
-        # Create dummy data
-        data = [(i, i*2) for i in range(10)]
-        Q_values = [0.05 if i < 2 else 0.5 for i in range(10)]
+        data = list(range(10))
+        q_values = [1.0] * 5 + [0.05] * 5  # Half near poles
         
-        # Sample batch
-        batch = sampler.sample_batch(data, batch_size=100, Q_values=Q_values)
+        batch = sampler.sample_batch(data, q_values, batch_size=5)
         
-        # Count how many times near-pole samples appear
-        near_pole_count = sum(1 for item in batch if item[0] < 2)
-        far_pole_count = sum(1 for item in batch if item[0] >= 2)
-        
-        # Near-pole should be oversampled
-        near_pole_ratio = near_pole_count / 100
-        expected_ratio = 0.2 * sampler.oversample_ratio / (
-            0.2 * sampler.oversample_ratio + 0.8
-        )
-        
-        # Check within reasonable bounds (sampling is stochastic)
-        assert abs(near_pole_ratio - expected_ratio) < 0.2
+        assert len(batch) == 5
+        # Should oversample from near-pole region (indices 5-9)
+        near_pole_count = sum(1 for x in batch if x >= 5)
+        assert near_pole_count >= 2  # At least some near-pole samples
 
 
-class TestCoverageEnforcementPolicy:
-    """Test coverage enforcement policy."""
+class TestAdaptiveGridSampler:
+    """Test adaptive grid refinement."""
     
-    def test_policy_initialization(self):
-        """Test policy initialization."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            min_coverage=0.70
+    def test_initialization(self):
+        """Test grid initialization."""
+        sampler = AdaptiveGridSampler(
+            initial_grid_size=10,
+            refinement_factor=3,
+            pole_radius=0.1
         )
         
-        policy = CoverageEnforcementPolicy(config)
+        x_range = (-1, 1)
+        sampler.initialize_grid(x_range)
         
-        assert policy.lambda_controller is not None
-        assert policy.config.target_coverage == 0.85
+        assert len(sampler.grid_points) == 10
+        assert min(sampler.grid_points) >= -1
+        assert max(sampler.grid_points) <= 1
     
-    def test_enforcement_actions(self):
-        """Test enforcement action generation."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            min_coverage=0.70,
-            warmup_epochs=0,
-            oversample_near_pole=True
+    def test_pole_refinement(self):
+        """Test grid refinement near pole."""
+        sampler = AdaptiveGridSampler(
+            initial_grid_size=10,
+            refinement_factor=3,
+            pole_radius=0.2
         )
         
-        policy = CoverageEnforcementPolicy(config)
+        sampler.initialize_grid((-1, 1))
+        initial_size = len(sampler.grid_points)
         
-        # Normal coverage
-        actions = policy.enforce(0.82, epoch=1)
-        assert actions['lambda_updated'] == True
-        assert actions['intervention_triggered'] == False
+        # Refine near x=0
+        sampler.refine_near_pole(0.0)
         
-        # Critical coverage
-        actions = policy.enforce(0.65, epoch=2)
-        assert actions['intervention_triggered'] == True
-        assert len(policy.interventions) == 1
+        # Should add refinement_factor - 1 new points
+        assert len(sampler.grid_points) == initial_size + 2
+        
+        # New points should be near x=0
+        new_points = sorted(sampler.grid_points)
+        near_zero = [x for x in new_points if abs(x) < 0.2]
+        assert len(near_zero) >= 3  # Original + refined
     
-    def test_intervention_triggering(self):
-        """Test that interventions are triggered correctly."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            min_coverage=0.70,
-            lambda_init=2.0,
-            warmup_epochs=0
+    def test_weighted_sampling(self):
+        """Test weighted sampling from refined grid."""
+        sampler = AdaptiveGridSampler(
+            initial_grid_size=10,
+            refinement_factor=3,
+            pole_radius=0.1
         )
         
-        policy = CoverageEnforcementPolicy(config)
-        initial_lambda = policy.lambda_controller.lambda_value
+        sampler.initialize_grid((-1, 1))
+        sampler.refine_near_pole(0.5)
         
-        # Trigger intervention with very low coverage
-        actions = policy.enforce(0.5, epoch=1)
+        # Set Q values (low near x=0.5)
+        q_values = []
+        for x in sampler.grid_points:
+            q = abs(x - 0.5) + 0.01  # Minimum at x=0.5
+            q_values.append(q)
         
-        assert actions['intervention_triggered'] == True
-        # Lambda should be reduced (emergency)
-        assert policy.lambda_controller.lambda_value < initial_lambda
-        assert len(policy.interventions) == 1
-        assert policy.interventions[0]['coverage'] == 0.5
+        samples = sampler.get_weighted_samples(q_values, n_samples=5)
+        
+        assert len(samples) == 5
+        # Should oversample near x=0.5
+        near_pole = sum(1 for x in samples if abs(x - 0.5) < 0.2)
+        assert near_pole >= 2  # At least some near the pole
     
-    def test_coverage_restoration_tracking(self):
-        """Test tracking of coverage restoration."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            warmup_epochs=0
+    def test_auto_pole_detection(self):
+        """Test automatic pole detection and refinement."""
+        sampler = AdaptiveGridSampler(
+            initial_grid_size=10,
+            refinement_factor=3,
+            pole_radius=0.1
         )
         
-        policy = CoverageEnforcementPolicy(config)
+        sampler.initialize_grid((-1, 1))
         
-        # Low coverage initially
-        policy.enforce(0.7, epoch=1)
-        assert policy.coverage_restored_epoch is None
+        # Create Q values with clear pole at x ≈ 0
+        q_values = [abs(x) + 0.01 for x in sampler.grid_points]
         
-        # Coverage restored
-        policy.enforce(0.86, epoch=5)
-        assert policy.coverage_restored_epoch == 5
+        sampler.update_poles(sampler.grid_points, q_values, threshold=0.05)
         
-        # Stays recorded
-        policy.enforce(0.84, epoch=6)
-        assert policy.coverage_restored_epoch == 5
-    
-    def test_statistics_collection(self):
-        """Test comprehensive statistics collection."""
-        config = EnhancedCoverageConfig(
-            target_coverage=0.85,
-            oversample_near_pole=True,
-            warmup_epochs=0
-        )
-        
-        policy = CoverageEnforcementPolicy(config)
-        
-        # Generate some history
-        coverages = [0.65, 0.7, 0.75, 0.85, 0.86]
-        for i, cov in enumerate(coverages):
-            policy.enforce(cov, epoch=i+1)
-        
-        stats = policy.get_statistics()
-        
-        assert 'lambda_stats' in stats
-        assert stats['interventions'] == 1  # Only first was below min
-        assert stats['coverage_restored_epoch'] == 4  # When hit 0.85
+        # Should detect and refine near x=0
+        assert len(sampler.detected_poles) > 0
+        # Grid should be refined
+        assert len(sampler.grid_points) > 10
 
 
-def test_integration_with_coverage_strategies():
-    """Test different coverage strategies work together."""
-    strategies = [
-        CoverageStrategy.LAGRANGE,
-        CoverageStrategy.PID,
-        CoverageStrategy.ADAPTIVE_RATE,
-        CoverageStrategy.DUAL_PHASE
-    ]
+class TestIntegration:
+    """Test integration of all components."""
     
-    for strategy in strategies:
-        config = EnhancedCoverageConfig(
+    def test_full_pipeline(self):
+        """Test full enhanced coverage pipeline."""
+        # Create components
+        tracker = EnhancedCoverageTracker(
             target_coverage=0.85,
-            strategy=strategy,
-            warmup_epochs=0
+            pole_threshold=0.1
         )
         
-        controller = AdaptiveLambdaController(config)
-        initial_lambda = controller.lambda_value
+        policy = CoverageEnforcementPolicy(
+            target_coverage=0.85,
+            near_pole_target=0.7,
+            dead_band=0.02
+        )
         
-        # All should respond to low coverage
-        controller.update(0.6)
-        assert controller.lambda_value != initial_lambda
+        sampler = NearPoleSampler(
+            pole_threshold=0.1,
+            oversample_ratio=2.0
+        )
+        
+        # Simulate training data
+        x_values = np.linspace(-2, 2, 100).tolist()
+        q_values = [abs(x) + 0.1 for x in x_values]  # Pole-like at x=0
+        
+        # Most samples are REAL except very near x=0
+        tags = []
+        for q in q_values:
+            if q < 0.15:
+                tags.append(TRTag.PINF)
+            else:
+                tags.append(TRTag.REAL)
+        
+        # Update tracker
+        tracker.update(tags, q_values, x_values)
+        
+        # Get coverage stats
+        global_cov = tracker.global_coverage
+        near_pole_cov = tracker.near_pole_coverage
+        
+        # Apply policy
+        result = policy.enforce(global_cov, near_pole_cov)
+        
+        # Sample next batch with oversampling
+        weights = sampler.compute_sample_weights(q_values)
+        
+        # Verify integration
+        assert tracker.current_batch.total_samples == 100
+        assert 0.0 <= global_cov <= 1.0
+        assert 0.0 <= near_pole_cov <= 1.0
+        assert 'new_lambda' in result
+        assert len(weights) == len(q_values)
+        assert pytest.approx(sum(weights)) == 1.0
 
 
-def test_coverage_enforcement_with_near_pole_sampling():
-    """Test that near-pole sampling integrates with enforcement."""
-    config = EnhancedCoverageConfig(
-        target_coverage=0.85,
-        oversample_near_pole=True,
-        pole_threshold=0.1,
-        warmup_epochs=0
-    )
-    
-    policy = CoverageEnforcementPolicy(config)
-    
-    # Provide Q values for sampling
-    Q_values = [0.05, 0.2, 0.5, 1.0, 0.02, 0.8]
-    
-    actions = policy.enforce(0.75, epoch=1, Q_values=Q_values)
-    
-    assert actions['sampling_adjusted'] == True
-    assert 'sample_weights' in actions
-    
-    # Check weights favor near-pole samples
-    weights = actions['sample_weights']
-    assert weights[0] > weights[2]  # 0.05 < 0.1 threshold
-    assert weights[4] > weights[3]  # 0.02 < 0.1 threshold
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

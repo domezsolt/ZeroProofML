@@ -35,6 +35,27 @@ from .reductions import tr_sum, tr_mean, tr_prod, tr_min, tr_max
 from .precision_config import PrecisionConfig, PrecisionMode, precision_context
 from .wheel_mode import ArithmeticMode, WheelModeConfig, wheel_mode, arithmetic_mode, use_transreal, use_wheel
 
+# Mode isolation imports
+from .mode_isolation import (
+    ModeIsolationConfig,
+    ModeViolationError,
+    ModeSwitchGuard,
+    WheelAxioms,
+    isolated_operation,
+    compile_time_switch,
+    ensure_mode_purity,
+    tr_only,
+    wheel_only,
+    check_value_mode_compatibility,
+    validate_mode_transition,
+    IsolatedModule,
+)
+
+from .separated_ops import (
+    safe_add,
+    safe_mul,
+)
+
 __all__ = [
     # Types
     "TRScalar",
@@ -86,4 +107,22 @@ __all__ = [
     "arithmetic_mode",
     "use_transreal",
     "use_wheel",
+    
+    # Mode isolation
+    "ModeIsolationConfig",
+    "ModeViolationError",
+    "ModeSwitchGuard",
+    "WheelAxioms",
+    "isolated_operation",
+    "compile_time_switch",
+    "ensure_mode_purity",
+    "tr_only",
+    "wheel_only",
+    "check_value_mode_compatibility",
+    "validate_mode_transition",
+    "IsolatedModule",
+    
+    # Safe operations
+    "safe_add",
+    "safe_mul",
 ]
