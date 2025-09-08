@@ -17,6 +17,22 @@ from .enhanced_coverage import (
     AdaptiveGridSampler,
 )
 
+from .advanced_control import (
+    ControlStrategy,
+    PIController,
+    PIControllerConfig,
+    CurriculumScheduler,
+    CurriculumConfig,
+    HybridController,
+    create_advanced_controller,
+)
+
+from .control_ablation import (
+    AblationConfig,
+    AblationRunner,
+    run_control_ablation,
+)
+
 __all__ = [
     # Coverage tracking
     "CoverageTracker",
@@ -39,4 +55,18 @@ __all__ = [
     "Optimizer",
     "HybridTRTrainer",
     "HybridTrainingConfig",
+    
+    # Advanced control
+    "ControlStrategy",
+    "PIController",
+    "PIControllerConfig",
+    "CurriculumScheduler",
+    "CurriculumConfig",
+    "HybridController",
+    "create_advanced_controller",
+    
+    # Control ablation
+    "AblationConfig",
+    "AblationRunner",
+    "run_control_ablation",
 ]

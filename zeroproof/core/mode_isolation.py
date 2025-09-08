@@ -5,7 +5,7 @@ This module ensures that TR and Wheel semantics never mix within a single
 operation, enforcing compile-time switching and proper axiom application.
 """
 
-from typing import Any, Optional, Callable, TypeVar, Dict, Set
+from typing import Any, Optional, Callable, TypeVar, Dict, Set, List
 from functools import wraps
 from enum import Enum
 import threading

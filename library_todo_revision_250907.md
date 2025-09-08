@@ -87,10 +87,10 @@ This to‑do list integrates earlier core requirements with the new normative ch
 
 ## 2. Optional / Experimental Tasks
 
-### 2.1 Loss & Control
-- [ ] **Dead‑band or PI controller** for λ₍rej₎ (stability improvement).
-- [ ] Ablations comparing proportional vs PI λ‑update.
-- [ ] **Add curriculum learning**: Start with easy (far from poles) samples, gradually introduce harder ones
+### 2.1 Loss & Control ✅
+- [x] **Dead‑band or PI controller** for λ₍rej₎ (stability improvement). (Completed)
+- [x] Ablations comparing proportional vs PI λ‑update. (Completed)
+- [x] **Add curriculum learning**: Start with easy (far from poles) samples, gradually introduce harder ones (Completed)
 
 ### 2.2 Supervision
 - [ ] **Teacher / proxy supervision** for pole‑head (critical for improving 40% accuracy):
