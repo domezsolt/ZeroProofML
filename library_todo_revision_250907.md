@@ -54,15 +54,15 @@ This to‑do list integrates earlier core requirements with the new normative ch
   - Implement adaptive grid refinement near detected poles
   - Weight sampling by 1/|Q(x)| proximity
 
-### 1.4 Layers
-- [ ] Extend **TRRational layer**:
+### 1.4 Layers ✅
+- [x] Extend **TRRational layer**: (Completed)
   - Optional **pole‑head module** predicting regions where Q(x) ≈ 0.
   - Interface to attach pole‑head to TRRational or TRRationalMulti.
   - **Improve pole detection accuracy** (currently only 40%):
     - Better initialization strategy for pole head
     - Increase pole loss weight in total loss
-- [ ] Ensure pole‑head integrates with loss (tag‑loss, PLE) and supervision (teacher/proxy).
-- [ ] **Add pole regularization**: Encourage Q(x) to have poles at specific locations during training
+- [x] Ensure pole‑head integrates with loss (tag‑loss, PLE) and supervision (teacher/proxy). (Completed)
+- [x] **Add pole regularization**: Encourage Q(x) to have poles at specific locations during training (Completed)
 
 ### 1.5 Evaluation & Metrics
 - [ ] Implement new metrics (currently missing):

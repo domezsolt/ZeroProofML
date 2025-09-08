@@ -31,6 +31,17 @@ from .pole_aware_rational import (
     PoleAwareRational,
     FullyIntegratedRational,
 )
+from .enhanced_pole_detection import (
+    EnhancedPoleConfig,
+    EnhancedPoleDetectionHead,
+    PoleRegularizer,
+    PoleAwareRationalInterface,
+)
+from .enhanced_rational import (
+    EnhancedTRRational,
+    EnhancedTRRationalMulti,
+    create_enhanced_rational,
+)
 
 __all__ = [
     # Basis functions
@@ -63,4 +74,15 @@ __all__ = [
     # Pole-aware layers
     "PoleAwareRational",
     "FullyIntegratedRational",
+    
+    # Enhanced pole detection
+    "EnhancedPoleConfig",
+    "EnhancedPoleDetectionHead",
+    "PoleRegularizer",
+    "PoleAwareRationalInterface",
+    
+    # Enhanced rational layers
+    "EnhancedTRRational",
+    "EnhancedTRRationalMulti",
+    "create_enhanced_rational",
 ]
