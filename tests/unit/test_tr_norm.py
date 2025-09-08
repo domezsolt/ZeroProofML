@@ -301,11 +301,15 @@ class TestNormalizationProperties:
     
     @settings(suppress_health_check=[HealthCheck.too_slow])
     @given(st.lists(st.floats(min_value=-10, max_value=10, 
-                             allow_nan=False, allow_infinity=False),
+                             allow_nan=False, allow_infinity=False,
+                             allow_subnormal=False),  # Exclude subnormals
                    min_size=2, max_size=20))
     def test_invariance_to_affine_transform(self, values):
         """Test that normalization is invariant to affine input transforms."""
         assume(len(set(values)) > 1)  # Need variance > 0
+        # Also ensure meaningful variance (not just floating point differences)
+        var = sum((v - sum(values)/len(values))**2 for v in values) / len(values)
+        assume(var > 1e-10)  # Skip cases with effectively zero variance
         
         norm = TRNorm(num_features=1, affine=False)
         

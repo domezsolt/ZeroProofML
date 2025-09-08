@@ -103,6 +103,28 @@ def backward_pass(root: TRNode,
                     # No accumulation needed - it's just zero
             continue
         
+        # HYBRID MODE: Check if we should use saturating near poles
+        if gradient_mode == GradientMode.HYBRID and node.tag == TRTag.REAL:
+            # Extract Q value if this is a division node (TR-Rational)
+            if node._grad_info.op_type == OpType.DIV:
+                inputs = [ref() for ref in node._grad_info.inputs if ref() is not None]
+                if len(inputs) >= 2:
+                    Q_node = inputs[1]  # Denominator
+                    if Q_node and Q_node.value.tag == TRTag.REAL:
+                        from .hybrid_gradient import HybridGradientContext
+                        abs_q = abs(Q_node.value.value)
+                        # Update Q tracking
+                        HybridGradientContext.update_q_value(abs_q)
+                        
+                        # Check if we should use saturating for this node
+                        # (x_value would need to be tracked separately for exploration regions)
+                        use_saturating = HybridGradientContext.should_use_saturating(abs_q)
+                        
+                        # If using saturating, modify the gradient computation
+                        if use_saturating:
+                            # This will be handled in compute_input_gradients
+                            pass
+        
         # Compute gradients for inputs based on operation type
         input_grads = compute_input_gradients(node, node_grad)
         

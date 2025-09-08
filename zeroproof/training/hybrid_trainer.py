@@ -57,6 +57,15 @@ class HybridTrainingConfig(TrainingConfig):
     hybrid_delta_final: float = 1e-6
     hybrid_aggressive: bool = False
     
+    # New: Enhanced hybrid gradient parameters
+    hybrid_force_pole_exploration: bool = True
+    hybrid_pole_exploration_radius: float = 0.05  # δ-neighborhood radius
+    hybrid_pole_exploration_epochs: int = 5  # Epochs to explore each pole
+    hybrid_pole_detection_threshold: float = 0.1  # |Q| threshold for pole
+    hybrid_adaptive_delta: bool = True  # Adapt delta based on q_min
+    hybrid_min_delta: float = 1e-8  # Minimum delta value
+    hybrid_schedule_type: str = "EXPONENTIAL"  # LINEAR, EXPONENTIAL, COSINE
+    
     # Tag loss (for non-REAL outputs)
     use_tag_loss: bool = False
     lambda_tag: float = 0.05
@@ -190,13 +199,33 @@ class HybridTRTrainer(TRTrainer):
     
     def _create_hybrid_schedule(self) -> HybridGradientSchedule:
         """Create hybrid gradient schedule from config."""
+        from ..autodiff import ScheduleType
+        
+        # Map string to enum
+        schedule_type_map = {
+            "LINEAR": ScheduleType.LINEAR,
+            "EXPONENTIAL": ScheduleType.EXPONENTIAL,
+            "COSINE": ScheduleType.COSINE
+        }
+        schedule_type = schedule_type_map.get(
+            self.hybrid_config.hybrid_schedule_type.upper(),
+            ScheduleType.EXPONENTIAL
+        )
+        
         return HybridGradientSchedule(
             warmup_epochs=self.hybrid_config.hybrid_warmup_epochs,
             transition_epochs=self.hybrid_config.hybrid_transition_epochs,
             delta_init=self.hybrid_config.hybrid_delta_init,
             delta_final=self.hybrid_config.hybrid_delta_final,
+            schedule_type=schedule_type,
             enable=True,
-            saturating_bound=0.1 if self.hybrid_config.hybrid_aggressive else 1.0
+            saturating_bound=0.1 if self.hybrid_config.hybrid_aggressive else 1.0,
+            force_pole_exploration=self.hybrid_config.hybrid_force_pole_exploration,
+            pole_exploration_radius=self.hybrid_config.hybrid_pole_exploration_radius,
+            pole_exploration_epochs=self.hybrid_config.hybrid_pole_exploration_epochs,
+            pole_detection_threshold=self.hybrid_config.hybrid_pole_detection_threshold,
+            adaptive_delta=self.hybrid_config.hybrid_adaptive_delta,
+            min_delta=self.hybrid_config.hybrid_min_delta
         )
     
     def train_epoch(self,
@@ -226,6 +255,11 @@ class HybridTRTrainer(TRTrainer):
             else:
                 GradientModeConfig.set_mode(GradientMode.HYBRID)
                 GradientModeConfig.set_local_threshold(delta)
+            
+            # Set exploration regions for this epoch
+            exploration_regions = self.hybrid_schedule.get_exploration_regions(self.epoch)
+            if exploration_regions:
+                HybridGradientContext.set_exploration_regions(exploration_regions)
         
         metrics = {
             "loss": [],
@@ -245,6 +279,26 @@ class HybridTRTrainer(TRTrainer):
             for key, value in batch_metrics.items():
                 if key in metrics and value is not None:
                     metrics[key].append(value)
+            
+            # Detect poles after batch if hybrid schedule is active
+            if self.hybrid_schedule and self.hybrid_schedule.force_pole_exploration:
+                # Get detected near-pole samples from this batch
+                near_pole_indices = HybridGradientContext.detect_poles(
+                    self.hybrid_schedule.pole_detection_threshold
+                )
+                
+                # If we have near-pole samples, extract their x values
+                if near_pole_indices and hasattr(self, '_last_batch_inputs'):
+                    pole_x_values = []
+                    for idx in near_pole_indices:
+                        if idx < len(self._last_batch_inputs):
+                            x_val = self._last_batch_inputs[idx]
+                            if x_val.tag == TRTag.REAL:
+                                pole_x_values.append(x_val.value)
+                    
+                    # Update schedule with detected poles
+                    if pole_x_values:
+                        self.hybrid_schedule.update_detected_poles(pole_x_values, self.epoch)
             
             # Log if needed
             if self.config.verbose and batch_idx % self.config.log_interval == 0:
@@ -332,6 +386,9 @@ class HybridTRTrainer(TRTrainer):
                     inputs: List[TRScalar],
                     targets: List[TRScalar],
                     coverage_tracker: CoverageTracker) -> Dict[str, float]:
+        
+        # Store inputs for pole detection
+        self._last_batch_inputs = inputs
         """
         Train on a single batch with hybrid features.
         
