@@ -33,7 +33,7 @@ class PIControllerConfig:
     kd: float = 0.0  # Derivative gain (for PID)
     
     # Limits
-    output_min: float = 0.1  # Minimum λ_rej
+    output_min: float = 0.0  # Minimum λ_rej (allow zero penalty)
     output_max: float = 10.0  # Maximum λ_rej
     integral_limit: float = 5.0  # Anti-windup limit
     
@@ -95,8 +95,10 @@ class PIController:
         Returns:
             Tuple of (λ_rej value, debug info)
         """
-        # Compute error (negative because we want to increase λ when coverage is high)
-        error = current_coverage - self.config.target_coverage
+        # Compute error: positive when coverage is below target
+        # Increasing λ should reduce coverage (encourage more non-REAL or singular encounters),
+        # so we use target - current to drive λ down when coverage is too high.
+        error = self.config.target_coverage - current_coverage
         
         # Apply dead-band
         if abs(error) < self.config.dead_band:

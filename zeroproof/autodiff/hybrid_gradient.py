@@ -127,6 +127,10 @@ class HybridGradientSchedule:
             # Register schedule and epoch
             HybridGradientContext.set_schedule(self)
             HybridGradientContext.update_epoch(epoch)
+            # Ensure gradient mode reflects hybrid scheduling and bound
+            from .grad_mode import GradientModeConfig, GradientMode
+            GradientModeConfig.set_mode(GradientMode.HYBRID)
+            GradientModeConfig.set_saturation_bound(self.saturating_bound)
             try:
                 yield
             finally:

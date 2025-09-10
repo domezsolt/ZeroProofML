@@ -114,6 +114,13 @@ class TRScalar:
             return "Φ"
         else:  # BOTTOM
             return "⊥"
+
+    def __format__(self, format_spec: str) -> str:
+        """Formatted string representation, compatible with floats for REAL values."""
+        try:
+            return format(float(self), format_spec)
+        except Exception:
+            return str(self)
     
     def __eq__(self, other: Any) -> bool:
         """
@@ -141,6 +148,15 @@ class TRScalar:
         if self._tag == TRTag.REAL:
             return hash((self._tag, self._value))
         return hash(self._tag)
+
+    def __float__(self) -> float:
+        """Allow implicit conversion to float for REAL values.
+
+        For non-REAL tags, returns NaN to preserve safety in aggregations.
+        """
+        if self._tag == TRTag.REAL:
+            return float(self._value)
+        return float('nan')
     
     def __bool__(self) -> bool:
         """
@@ -156,6 +172,39 @@ class TRScalar:
             return True
         else:  # PHI
             return False
+
+    # Rich comparisons (only meaningful for REAL values)
+    def _as_real_float(self, other: Any) -> Optional[float]:
+        try:
+            if isinstance(other, TRScalar):
+                return float(other)
+            return float(other)
+        except Exception:
+            return None
+
+    def __lt__(self, other: Any) -> bool:
+        other_val = self._as_real_float(other)
+        if self._tag != TRTag.REAL or other_val is None or math.isnan(other_val):
+            return False
+        return float(self._value) < other_val
+
+    def __le__(self, other: Any) -> bool:
+        other_val = self._as_real_float(other)
+        if self._tag != TRTag.REAL or other_val is None or math.isnan(other_val):
+            return False
+        return float(self._value) <= other_val
+
+    def __gt__(self, other: Any) -> bool:
+        other_val = self._as_real_float(other)
+        if self._tag != TRTag.REAL or other_val is None or math.isnan(other_val):
+            return False
+        return float(self._value) > other_val
+
+    def __ge__(self, other: Any) -> bool:
+        other_val = self._as_real_float(other)
+        if self._tag != TRTag.REAL or other_val is None or math.isnan(other_val):
+            return False
+        return float(self._value) >= other_val
     
     def is_real(self) -> bool:
         """Check if this is a finite real value."""
@@ -186,50 +235,78 @@ class TRScalar:
     def __add__(self, other: Union[TRScalar, float, int]) -> TRScalar:
         """Addition operator (+)."""
         from .tr_ops import tr_add
-        if isinstance(other, (int, float)):
-            other = real(float(other))
+        if not isinstance(other, TRScalar):
+            try:
+                other = real(float(other))
+            except Exception:
+                pass
         return tr_add(self, other)
     
     def __radd__(self, other: Union[float, int]) -> TRScalar:
         """Right addition operator (other + self)."""
         from .tr_ops import tr_add
-        return tr_add(real(float(other)), self)
+        try:
+            other_val = real(float(other))
+        except Exception:
+            other_val = other  # type: ignore
+        return tr_add(other_val, self)
     
     def __sub__(self, other: Union[TRScalar, float, int]) -> TRScalar:
         """Subtraction operator (-)."""
         from .tr_ops import tr_sub
-        if isinstance(other, (int, float)):
-            other = real(float(other))
+        if not isinstance(other, TRScalar):
+            try:
+                other = real(float(other))
+            except Exception:
+                pass
         return tr_sub(self, other)
     
     def __rsub__(self, other: Union[float, int]) -> TRScalar:
         """Right subtraction operator (other - self)."""
         from .tr_ops import tr_sub
-        return tr_sub(real(float(other)), self)
+        try:
+            other_val = real(float(other))
+        except Exception:
+            other_val = other  # type: ignore
+        return tr_sub(other_val, self)
     
     def __mul__(self, other: Union[TRScalar, float, int]) -> TRScalar:
         """Multiplication operator (*)."""
         from .tr_ops import tr_mul
-        if isinstance(other, (int, float)):
-            other = real(float(other))
+        if not isinstance(other, TRScalar):
+            try:
+                other = real(float(other))
+            except Exception:
+                pass
         return tr_mul(self, other)
     
     def __rmul__(self, other: Union[float, int]) -> TRScalar:
         """Right multiplication operator (other * self)."""
         from .tr_ops import tr_mul
-        return tr_mul(real(float(other)), self)
+        try:
+            other_val = real(float(other))
+        except Exception:
+            other_val = other  # type: ignore
+        return tr_mul(other_val, self)
     
     def __truediv__(self, other: Union[TRScalar, float, int]) -> TRScalar:
         """Division operator (/)."""
         from .tr_ops import tr_div
-        if isinstance(other, (int, float)):
-            other = real(float(other))
+        if not isinstance(other, TRScalar):
+            try:
+                other = real(float(other))
+            except Exception:
+                pass
         return tr_div(self, other)
     
     def __rtruediv__(self, other: Union[float, int]) -> TRScalar:
         """Right division operator (other / self)."""
         from .tr_ops import tr_div
-        return tr_div(real(float(other)), self)
+        try:
+            other_val = real(float(other))
+        except Exception:
+            other_val = other  # type: ignore
+        return tr_div(other_val, self)
     
     def __neg__(self) -> TRScalar:
         """Negation operator (-)."""

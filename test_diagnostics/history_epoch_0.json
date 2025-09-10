@@ -1,0 +1,58 @@
+{
+  "main": {
+    "epoch": [
+      0
+    ],
+    "lambda_rej": [
+      null
+    ],
+    "coverage_train": [
+      0.940625
+    ],
+    "coverage_eval": [
+      null
+    ],
+    "coverage_eval_tau": [
+      null
+    ],
+    "q_min": [
+      0.0
+    ],
+    "q_mean": [
+      0.5829154253005981
+    ],
+    "q_std": [
+      0.3773685097694397
+    ],
+    "loss_train": [
+      68808.23775247984
+    ],
+    "loss_eval": [
+      null
+    ]
+  },
+  "tags": {
+    "n_real": [
+      301
+    ],
+    "n_pinf": [
+      0
+    ],
+    "n_ninf": [
+      19
+    ],
+    "n_phi": [
+      0
+    ],
+    "real_ratio": [
+      0.940625
+    ]
+  },
+  "gradients": {
+    "near_pole_mean": [],
+    "near_pole_max": [],
+    "far_pole_mean": [],
+    "far_pole_max": [],
+    "gradient_ratio": []
+  }
+}

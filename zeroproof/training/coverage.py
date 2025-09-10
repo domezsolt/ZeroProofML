@@ -163,6 +163,13 @@ class CoverageTracker:
     
     def get_statistics(self) -> Dict[str, float]:
         """Get comprehensive coverage statistics."""
+        # Provide tag counts for tests that expect raw counts
+        tag_counts = {
+            "n_real": self.cumulative.real_samples,
+            "n_pinf": self.cumulative.pinf_samples,
+            "n_ninf": self.cumulative.ninf_samples,
+            "n_phi": self.cumulative.phi_samples,
+        }
         return {
             "target_coverage": self.target_coverage,
             "current_coverage": self.coverage,
@@ -171,7 +178,7 @@ class CoverageTracker:
             "cumulative_coverage": self.cumulative.coverage,
             "window_coverage": self.window_coverage if self.window_size else None,
             "total_samples": self.cumulative.total_samples,
-            "tag_distribution": self.cumulative.tag_distribution,
+            "tag_distribution": tag_counts,
         }
     
     def reset(self) -> None:

@@ -169,6 +169,14 @@ class HybridTRTrainer(TRTrainer):
             optimizer: Optimizer instance
             config: Hybrid training configuration
         """
+        # Support legacy/init-with-config usage: HybridTRTrainer(config)
+        if isinstance(model, HybridTrainingConfig) and optimizer is None and config is None:
+            config = model
+            # Minimal placeholder model with no trainable parameters
+            class _NoModel:
+                def parameters(self):
+                    return []
+            model = _NoModel()
         # Use hybrid config or create default
         config = config or HybridTrainingConfig()
         super().__init__(model, optimizer, config)
@@ -236,6 +244,137 @@ class HybridTRTrainer(TRTrainer):
                 min_lambda=self.config.adaptive_lambda_min,
                 max_lambda=self.hybrid_config.max_lambda_for_coverage
             )
+
+    # Lightweight loss helper to support tests that call trainer.compute_loss(preds, targets)
+    def compute_loss(self, 
+                     predictions: List[TRNode], 
+                     targets: Any) -> Any:
+        """
+        Compute batch loss for a list of TRNode predictions and targets.
+        Returns an adapter with .backward() and .item() to fit simple training loops.
+        """
+        # Normalize targets to Python floats/TRNodes
+        from ..utils.bridge import to_trnode_constant
+        if hasattr(targets, 'tolist'):
+            target_list = targets.tolist()
+        else:
+            target_list = list(targets)
+        target_nodes = [to_trnode_constant(t) for t in target_list]
+
+        # Reuse internal policy if available, else simple MSE
+        if self.loss_policy:
+            loss_node = self.loss_policy.compute_batch_loss(predictions, target_nodes)
+        else:
+            from ..core import tr_sum, tr_div
+            losses = []
+            for pred, target in zip(predictions, target_nodes):
+                diff = pred - target
+                losses.append((TRNode.constant(real(0.5)) * diff * diff).value)
+            total = tr_sum(losses)
+            loss_node = TRNode.constant(tr_div(total, real(float(len(losses)))))
+
+        # Infer model parameters from the prediction graph if optimizer has none
+        try:
+            if isinstance(predictions, list):
+                inferred = self._infer_parameters_from_predictions(predictions)
+                if inferred:
+                    self.optimizer.parameters = inferred
+        except Exception:
+            # Non-fatal: keep existing optimizer parameter list
+            pass
+
+        class _LossAdapter:
+            def __init__(self, node: TRNode):
+                self._node = node
+            def backward(self):
+                self._node.backward()
+            def item(self):
+                return float(self._node.value.value) if self._node.value.tag == TRTag.REAL else float('nan')
+
+        # Register exact-pole enforcement requests (no ε): use metadata embedded in predictions
+        try:
+            # Ensure the optimizer can store requests
+            if not hasattr(self.optimizer, '_enforce_requests'):
+                self.optimizer._enforce_requests = []  # type: ignore[attr-defined]
+            # Record at most d_q requests per batch to avoid over-constraint
+            requests = []
+            for pred, tgt in zip(predictions, target_nodes):
+                tgt_tag = tgt.value.tag if hasattr(tgt, 'value') else None
+                if tgt_tag is not None and tgt_tag != TRTag.REAL:
+                    gi = getattr(pred, '_grad_info', None)
+                    if gi is not None:
+                        x_val = gi.extra_data.get('input_x', None)
+                        phi_refs = gi.extra_data.get('tr_rational_phi', None)
+                        basis_ref = gi.extra_data.get('tr_rational_basis', None)
+                        d_q = gi.extra_data.get('tr_rational_dq', None)
+                        if x_val is not None and phi_refs and basis_ref and d_q:
+                            requests.append({
+                                'x': float(x_val),
+                                'phi': phi_refs,
+                                'basis': basis_ref,
+                                'd_q': int(d_q),
+                            })
+            # Limit number of constraints per step
+            if requests:
+                # Keep at most the first d_q unique x values
+                seen = set()
+                limited = []
+                for r in requests:
+                    xv = r['x']
+                    if xv in seen:
+                        continue
+                    limited.append(r)
+                    seen.add(xv)
+                    if len(limited) >= min(len(requests[0]['phi']), requests[0]['d_q']):
+                        break
+                self.optimizer._enforce_requests.extend(limited)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+        return _LossAdapter(loss_node)
+
+    def _infer_parameters_from_predictions(self, predictions: List[TRNode]) -> List[TRNode]:
+        """
+        Traverse the TR graph(s) to collect leaf parameter nodes.
+
+        A parameter is identified as a TRNode with requires_grad=True and
+        no grad_info (i.e., created via TRNode.parameter()).
+        """
+        params: List[TRNode] = []
+        seen = set()
+
+        def visit(node: TRNode) -> None:
+            node_id = id(node)
+            if node_id in seen:
+                return
+            seen.add(node_id)
+
+            # Parameter leaf
+            if getattr(node, "requires_grad", False) and getattr(node, "_grad_info", None) is None:
+                params.append(node)
+                return
+
+            gi = getattr(node, "_grad_info", None)
+            if gi and getattr(gi, "inputs", None):
+                for ref in gi.inputs:
+                    inp = ref()
+                    if inp is not None:
+                        visit(inp)
+
+        for p in predictions:
+            if p is not None:
+                visit(p)
+
+        # Deduplicate while preserving order
+        seen_ids = set()
+        unique_params: List[TRNode] = []
+        for p in params:
+            pid = id(p)
+            if pid not in seen_ids:
+                unique_params.append(p)
+                seen_ids.add(pid)
+
+        return unique_params
     
     def _create_hybrid_schedule(self) -> HybridGradientSchedule:
         """Create hybrid gradient schedule from config."""

@@ -12,7 +12,7 @@ try:
 except Exception:
 	NUMPY_AVAILABLE = False
     
-from ..core import TRScalar, real
+from ..core import TRScalar, real, pinf, ninf, phi
 from ..autodiff import TRNode
 
 
@@ -35,21 +35,48 @@ def to_real_scalar(x: Any) -> TRScalar:
 			except Exception:
 				pass
 		raise TypeError("Cannot coerce TRNode directly to TRScalar; wrap with TRNode.constant if needed.")
-	# Python numeric
+	# Python numeric (map inf/NaN to TR tags)
 	try:
-		return real(float(x))
+		import math
+		xf = float(x)
+		if math.isnan(xf):
+			return phi()
+		if math.isinf(xf):
+			return pinf() if xf > 0 else ninf()
+		return real(xf)
 	except Exception:
 		pass
 	# NumPy paths
 	if NUMPY_AVAILABLE:
 		try:
 			if np.isscalar(x):  # numpy scalar
-				return real(float(x))
+				xf = float(x)
+				if np.isnan(xf):
+					return phi()
+				if np.isposinf(xf):
+					return pinf()
+				if np.isneginf(xf):
+					return ninf()
+				return real(xf)
 			arr = np.asarray(x)
 			if arr.shape == ():
-				return real(float(arr))
+				xf = float(arr)
+				if np.isnan(xf):
+					return phi()
+				if np.isposinf(xf):
+					return pinf()
+				if np.isneginf(xf):
+					return ninf()
+				return real(xf)
 			if arr.size == 1:
-				return real(float(arr.reshape(())))
+				xf = float(arr.reshape(()))
+				if np.isnan(xf):
+					return phi()
+				if np.isposinf(xf):
+					return pinf()
+				if np.isneginf(xf):
+					return ninf()
+				return real(xf)
 		except Exception:
 			pass
 	raise TypeError(f"Unsupported type for to_real_scalar: {type(x)}")
@@ -67,5 +94,4 @@ def to_trnode_constant(x: Any) -> TRNode:
 	if isinstance(x, TRScalar):
 		return TRNode.constant(x)
 	return TRNode.constant(to_real_scalar(x))
-
 

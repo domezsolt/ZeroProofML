@@ -112,10 +112,20 @@ class TRRational:
                             f"Failed to apply projection_index={self.projection_index} to input"
                         ) from ex
                 else:
-                    raise TypeError(
-                        "TRRational.forward expects a scalar input. "
-                        "Use forward_batch for lists/ndarrays, or set projection_index to select a component."
-                    )
+                    # Fallback: if it's a 1-element vector, use the first element
+                    try:
+                        if len(x) == 1:  # type: ignore[arg-type]
+                            x = x[0]  # type: ignore[index]
+                        else:
+                            raise TypeError(
+                                "TRRational.forward expects a scalar input. "
+                                "Use forward_batch for lists/ndarrays, or set projection_index to select a component."
+                            )
+                    except Exception:
+                        raise TypeError(
+                            "TRRational.forward expects a scalar input. "
+                            "Use forward_batch for lists/ndarrays, or set projection_index to select a component."
+                        )
 
         # Ensure x is a node
         if isinstance(x, TRScalar):
@@ -137,6 +147,11 @@ class TRRational:
         for k in range(1, self.d_q + 1):
             if k < len(psi):
                 Q = Q + self.phi[k-1] * psi[k]
+        # Track last |Q| for diagnostics and pole interfaces
+        try:
+            self._last_Q_abs = abs(Q.value.value) if Q.tag == TRTag.REAL else 0.0
+        except Exception:
+            self._last_Q_abs = None
         
         # Apply L1 projection if specified
         if self.l1_projection is not None:
@@ -144,11 +159,42 @@ class TRRational:
         
         # Compute y = P / Q with TR semantics
         y = P / Q
+
+        # Attach contextual metadata for downstream training utilities (no ε, exact pole tooling)
+        try:
+            if hasattr(y, '_grad_info') and y._grad_info is not None:
+                # Remember input x for this prediction
+                x_val = None
+                if isinstance(x, TRNode) and x.value.tag == TRTag.REAL:
+                    x_val = float(x.value.value)
+                elif isinstance(x, TRScalar) and x.tag == TRTag.REAL:
+                    x_val = float(x.value)
+                y._grad_info.extra_data['input_x'] = x_val
+                # Provide references needed for exact Q=0 enforcement (projection)
+                y._grad_info.extra_data['tr_rational_phi'] = self.phi
+                y._grad_info.extra_data['tr_rational_basis'] = self.basis
+                y._grad_info.extra_data['tr_rational_dq'] = self.d_q
+        except Exception:
+            pass
+
+        # Strict TR semantics (no ε): singular tags arise only from exact division rules
         
         return y, y.tag
     
-    def __call__(self, x: Union[TRScalar, TRNode]) -> TRNode:
-        """Convenience method returning just the output node."""
+    def __call__(self, x: Union[TRScalar, TRNode, Any]) -> Any:
+        """
+        Convenience call: accept scalar or batch-like inputs.
+
+        - For scalar inputs, returns a TRNode.
+        - For list/ndarray/torch.Tensor inputs, returns a List[TRNode].
+        """
+        # Detect batch-like inputs and delegate to forward_batch
+        if not isinstance(x, (TRScalar, TRNode)):
+            try:
+                _ = len(x)  # type: ignore[arg-type]
+                return self.forward_batch(x)
+            except Exception:
+                pass
         y, _ = self.forward(x)
         return y
 
@@ -187,9 +233,18 @@ class TRRational:
                 if self.projection_index is not None:
                     x = x[self.projection_index]  # type: ignore[index]
                 else:
-                    raise TypeError(
-                        "Elements of xs are vector-like; set projection_index to select a component."
-                    )
+                    # Fallback to first element for 1-element vectors
+                    try:
+                        if len(x) == 1:  # type: ignore[arg-type]
+                            x = x[0]  # type: ignore[index]
+                        else:
+                            raise TypeError(
+                                "Elements of xs are vector-like; set projection_index to select a component."
+                            )
+                    except Exception:
+                        raise TypeError(
+                            "Elements of xs are vector-like; set projection_index to select a component."
+                        )
 
             y, _ = self.forward(x)
             outputs.append(y)
@@ -283,6 +338,71 @@ class TRRational:
     def num_parameters(self) -> int:
         """Get total number of parameters."""
         return len(self.theta) + len(self.phi)
+
+    # Convenience utilities used by integration tests
+    def get_q_values(self, xs: Any) -> List[float]:
+        """
+        Compute |Q(x)| for a batch of inputs.
+
+        Args:
+            xs: Iterable of scalar inputs (list/tuple/ndarray/torch.Tensor)
+
+        Returns:
+            List of absolute Q values as Python floats
+        """
+        # Convert potential torch tensor to a Python list
+        try:
+            if hasattr(xs, 'tolist'):
+                xs_list = xs.tolist()
+            else:
+                xs_list = list(xs)
+        except TypeError:
+            xs_list = [xs]
+
+        q_abs_values: List[float] = []
+        for x in xs_list:
+            # If element is vector-like and projection_index is provided, apply it
+            is_sequence_like = False
+            if not isinstance(x, (TRScalar, TRNode)):
+                try:
+                    _ = len(x)  # type: ignore
+                    is_sequence_like = True
+                except Exception:
+                    is_sequence_like = False
+            if is_sequence_like:
+                if self.projection_index is not None:
+                    x = x[self.projection_index]  # type: ignore[index]
+                else:
+                    # Fallback: take first element
+                    x = x[0]  # type: ignore[index]
+
+            # Ensure TRNode
+            if isinstance(x, TRScalar):
+                x_node = TRNode.constant(x)
+            elif isinstance(x, TRNode):
+                x_node = x
+            else:
+                try:
+                    x_node = TRNode.constant(real(float(x)))
+                except Exception:
+                    # If conversion fails, skip
+                    q_abs_values.append(float('inf'))
+                    continue
+
+            # Evaluate basis up to denominator degree
+            psi = self.basis(x_node, self.d_q)
+            Q = TRNode.constant(real(1.0))
+            for k in range(1, self.d_q + 1):
+                if k < len(psi) and k <= len(self.phi):
+                    Q = Q + self.phi[k-1] * psi[k]
+
+            if Q.tag == TRTag.REAL:
+                q_abs_values.append(abs(Q.value.value))
+            else:
+                # Non-REAL Q treated as 0 distance (at pole)
+                q_abs_values.append(0.0)
+
+        return q_abs_values
 
 
 class TRRationalMulti:

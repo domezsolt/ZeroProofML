@@ -64,6 +64,27 @@ Critical cases:
 - `∞/∞ → PHI`
 - `x/∞ → 0` (REAL)
 
+#### Wheel Mode (Optional)
+ZeroProofML also supports a stricter Wheel algebra mode that replaces certain indeterminate forms with a bottom element (⊥) rather than Φ. Key differences:
+- `0 × ∞ = ⊥` (instead of Φ)
+- `∞ + ∞ = ⊥`, `∞ - ∞ = ⊥` (instead of Φ)
+
+Usage sketch:
+```
+with wheel_mode():
+    # operations follow wheel semantics; bottom (⊥) may appear
+    ...
+```
+The core type includes an additional tag for BOTTOM (⊥), used only in wheel mode.
+
+#### Precision and Overflow
+REAL values enforce a configured floating precision. When REAL computations overflow at the numeric level, results deterministically become `+∞` or `-∞` under TR semantics based on operand signs. This ensures totality without NaNs in the REAL slice.
+
+#### Reduction Semantics
+Aggregations use explicit modes to handle non‑REAL values:
+- STRICT: PHI/⊥ propagate and dominate; mixed infinities may yield Φ/⊥.
+- DROP_NULL: Ignore Φ elements for monitoring; if all are Φ, result is Φ.
+
 ### 1.3 Key Properties
 
 **Totality Theorem**: ∀ a,b ∈ TR, all operations a⊕b, a⊗b, a⊘b return valid TR values.
@@ -113,6 +134,21 @@ def hybrid_gradient(epoch, q_value, delta):
     
     # delta decays: δ(t) = δ₀ * decay_rate^t
 ```
+
+Extended schedule and context:
+- Warmup epochs with pure Mask‑REAL, followed by a transition where `δ` decays via linear, exponential, or cosine schedules.
+- Adaptive delta: increase tolerance when batch `q_min` is very small (more saturating near poles).
+- Forced exploration: track detected poles and schedule neighborhoods to receive saturating gradients for a few epochs.
+- Context statistics: per‑batch `q_min`, near‑pole ratio, and saturating vs mask‑real activations.
+
+API sketch:
+```
+schedule = create_default_schedule(aggressive=False, warmup_epochs=0, force_exploration=True)
+with schedule.apply(epoch):
+    # backward passes use hybrid decisions internally
+    ...
+```
+
 
 ### 2.2 Gradient Stability Guarantees
 
@@ -167,6 +203,10 @@ class EnhancedTRRational:
         return y, pole_scores, pole_loss
 ```
 
+Additional notes:
+- Basis options: both monomial and Chebyshev bases are supported; choose Chebyshev for better conditioning on bounded intervals.
+- Multi‑output variants can share a common denominator Q and optionally a shared pole detection head for efficiency.
+
 ---
 
 ## Part IV: Loss Policies and Coverage Control
@@ -211,7 +251,30 @@ class AdaptiveLambda:
         λ_rej = max(λ_rej, λ_min)
 ```
 
-### 4.3 Coverage Metrics
+### 4.3 Integrated Adaptive Loss Policy
+ZeroProofML provides a configurable policy that combines:
+- Adaptive rejection penalty λ_rej with learning‑rate, momentum, asymmetric updates, and a hard floor `λ_rej_min` to avoid trivial rejection.
+- Optional tag‑loss with adaptive weight scaling when coverage is near 100% to promote exploration.
+- Explicit reduction mode for aggregation (STRICT by default).
+
+Usage sketch:
+```
+policy = create_adaptive_loss(
+    target_coverage=0.95,
+    learning_rate=0.01,
+    initial_lambda=1.0,
+    momentum=0.9,
+    warmup_steps=100,
+    update_frequency=10,
+    lambda_rej_min=0.1,
+    use_tag_loss=True,
+    tag_loss_weight=0.05,
+)
+loss = policy.compute_batch_loss(predictions, targets, tag_logits=optional_logits)
+stats = policy.get_statistics()
+```
+
+### 4.4 Coverage Metrics
 
 Enhanced tracking of REAL vs non-REAL outputs:
 
@@ -230,6 +293,8 @@ class CoverageTracker:
             }
         }
 ```
+
+Coverage can be tracked as batch, cumulative, or via a sliding window, and exposes tag distributions for REAL, PINF, NINF, PHI. Hybrid gradient context separately tracks per‑batch `q_min` and near‑pole ratios.
 
 ---
 
@@ -274,6 +339,11 @@ def generate_synthetic_poles():
     Q(x) = Π(x - pole_i)  # Guaranteed zeros
     return dataset_with_labels
 ```
+
+### 5.3 Enhanced Pole Detection Head and Regularization
+An integrated pole detection head provides multi‑layer scoring with improved initialization (Xavier/He), residual connections, and weighted binary cross‑entropy with label smoothing. Self‑supervised targets derive from |Q(x)| proximity, with distinct penalties for false positives/negatives. A pole regularizer encourages small |Q| around target pole locations using sampled neighborhoods.
+
+Multi‑output layers can share a single pole head to reduce parameters when singularities are shared across outputs.
 
 ---
 
@@ -337,39 +407,46 @@ Complete training algorithm with all components:
 
 ```python
 def train_with_singularities():
-    model = EnhancedTRRational()
-    controller = AdaptiveLambdaController(target=0.85)
+    # Model
+    model = EnhancedTRRational(d_p=..., d_q=..., enable_pole_detection=True)
+
+    # Loss policy and sampler
+    policy = create_adaptive_loss(
+        target_coverage=0.95,
+        learning_rate=0.01,
+        initial_lambda=1.0,
+        momentum=0.9,
+        warmup_steps=100,
+        update_frequency=10,
+        lambda_rej_min=0.1,
+        use_tag_loss=True,
+        tag_loss_weight=0.05,
+    )
     sampler = NearPoleSampler()
-    schedule = HybridGradientSchedule()
-    
+    schedule = create_default_schedule(aggressive=False, warmup_epochs=0, force_exploration=True)
+
     for epoch in range(n_epochs):
         # Sample with importance weighting
         x_batch = sampler.sample(x_pool, model.Q_values)
-        
-        # Forward pass
-        y_pred, pole_scores, pole_loss = model(x_batch)
-        
-        # Compute losses
-        main_loss = compute_tr_loss(y_pred, y_true)
-        tag_loss = compute_tag_loss(y_pred.tags, y_true.tags)
-        
-        # Total loss with adaptive λ_rej
-        total_loss = main_loss + λ_rej * rejection_rate + tag_loss + pole_loss
-        
-        # Backward with hybrid gradient
+
+        # Forward pass (optionally with pole detection)
+        outputs = []
+        for x in x_batch:
+            res = model.forward_with_pole_detection(x)
+            outputs.append(res['output'])
+
+        # Compute loss with adaptive penalties and optional tag loss
         with schedule.apply(epoch):
+            total_loss = policy.compute_batch_loss(outputs, y_true_batch)
             total_loss.backward()
-        
-        # Safe step
-        η = min(η_user, compute_safe_lr(batch))
+
+        # Optimizer step with safe LR if desired
+        η = min(η_user, compute_safe_lr(x_batch))
         optimizer.step(lr=η)
-        
-        # Update control
-        coverage = compute_coverage(y_pred)
-        λ_rej = controller.update(coverage)
-        
+
         # Diagnostics
-        log_metrics(coverage, q_min, pole_accuracy)
+        stats = policy.get_statistics()
+        log_metrics(stats, HybridGradientContext.get_statistics())
 ```
 
 ---
@@ -423,26 +500,42 @@ Pole-zero cancellation and stability:
 ```
 zeroproof/
 ├── core/
-│   ├── tr_scalar.py      # TR arithmetic operations
-│   ├── tr_ops.py          # Vectorized operations
-│   └── mode_isolation.py  # TR/Wheel mode separation
+│   ├── tr_scalar.py       # TRScalar type, tags (incl. BOTTOM)
+│   ├── tr_ops.py          # Transreal operations (+, −, ×, ÷, log, sqrt, pow)
+│   ├── reduction.py       # Reduction modes (STRICT, DROP_NULL)
+│   ├── precision_config.py# Precision/overflow behavior
+│   └── wheel_mode.py      # TR vs Wheel mode switching
 ├── autodiff/
-│   ├── tr_node.py         # Computation graph
-│   ├── gradients.py       # Mask-REAL/Saturating
-│   └── hybrid_schedule.py # Adaptive gradient modes
+│   ├── tr_node.py         # Computation graph + parameters
+│   ├── grad_mode.py       # Mask‑REAL/Saturating/Hybrid mode
+│   ├── tr_ops_grad.py     # Autodiff op bindings
+│   └── hybrid_gradient.py # Adaptive schedule + context (q_min, exploration)
 ├── layers/
 │   ├── tr_rational.py     # Basic rational layer
-│   ├── enhanced_rational.py # With pole detection
+│   ├── enhanced_rational.py # Pole detection integration (shared heads supported)
+│   ├── enhanced_pole_detection.py # Head, losses, regularizer
+│   ├── saturating_rational.py # Variant with saturating grads
+│   ├── tag_aware_rational.py  # Variant with tag supervision
+│   ├── pole_aware_rational.py # Variant focusing on poles
 │   └── tr_norm.py         # Epsilon-free normalization
 ├── training/
-│   ├── adaptive_lambda.py # Coverage control
-│   ├── tag_loss.py        # Classification loss
+│   ├── adaptive_loss.py   # Adaptive λ_rej policy + reduction
+│   ├── coverage.py        # Coverage trackers (batch/window/cum)
+│   ├── enhanced_coverage.py # Advanced coverage control
+│   ├── tag_loss.py        # Tag classification loss helpers
 │   ├── pole_supervision.py # Teacher strategies
-│   └── sampling.py        # Importance sampling
+│   ├── hybrid_trainer.py  # Hybrid training helpers
+│   └── trainer.py         # Training utilities
 └── utils/
-    ├── pole_metrics.py    # PLE, sign consistency
-    └── visualization.py   # Diagnostic plots
+    ├── pole_metrics.py    # PLE, sign consistency, residuals
+    ├── pole_visualization.py # Pole plots
+    ├── evaluation_api.py  # Integrated evaluator + logging
+    └── plotting.py        # Diagnostic plots
 ```
+
+### 10.2 Bridges and Interop
+- NumPy bridge with TRArray (values + tags) and IEEE↔TR conversions; utilities for masking, counting, clipping infinities.
+- Torch/JAX bridges enable gradual integration and experimentation.
 
 ### 10.2 Design Principles
 
@@ -480,7 +573,19 @@ Component contributions to performance:
 
 ---
 
-## Part XII: Future Directions
+## Part XII: Evaluation & Visualization
+
+An integrated evaluation API computes pole‑related metrics (PLE, sign consistency, asymptotic slope, residual consistency) with optional periodic plots and JSON logging.
+
+Usage sketch:
+```
+evaluator = IntegratedEvaluator(true_poles=optional_truth)
+metrics = evaluator.evaluate_model(model, x_values)
+```
+
+---
+
+## Part XIII: Future Directions
 
 ### 12.1 Theoretical Extensions
 

@@ -11,6 +11,7 @@ import numpy as np
 import math
 
 from ..core import TRScalar, TRTag, real
+from .bridge import to_real_scalar
 from ..autodiff import TRNode
 from ..autodiff.tr_ops_grad import tr_mul, tr_sub, tr_add, tr_div
 
@@ -209,14 +210,18 @@ def compute_asymptotic_slope_error(
     
     for i, (x, y, q) in enumerate(zip(x_values, y_values, Q_values)):
         if abs(q) < near_pole_threshold and abs(q) > 1e-10:
-            # Near pole but not exactly at it
-            tag = y.tag if hasattr(y, 'tag') else y.value.tag
-            
-            if tag == TRTag.REAL:
-                y_val = y.value if hasattr(y, 'value') else y.value.value
-                if isinstance(y_val, TRScalar):
-                    y_val = y_val.value
-                
+            # Coerce y to TRScalar semantics (robust to floats/np)
+            try:
+                y_tr = to_real_scalar(y)
+            except Exception:
+                # Best-effort: treat as REAL float
+                try:
+                    y_tr = real(float(y))
+                except Exception:
+                    continue
+
+            if y_tr.tag == TRTag.REAL:
+                y_val = y_tr.value
                 if abs(y_val) > 1e-10:
                     log_y.append(math.log(abs(y_val)))
                     neg_log_q.append(-math.log(abs(q)))
@@ -268,13 +273,19 @@ def compute_residual_consistency(
     for x, p, q, y in zip(x_values, P_values, Q_values, y_values):
         if abs(q) < near_pole_threshold:
             # Near pole - compute residual
-            tag = y.tag if hasattr(y, 'tag') else y.value.tag
-            
-            if tag == TRTag.REAL:
+            # Coerce y to TRScalar to handle numpy/float robustly
+            try:
+                y_tr = to_real_scalar(y)  # type: ignore[arg-type]
+            except Exception:
+                # Best-effort fallback: treat as REAL float
+                try:
+                    y_tr = real(float(y))
+                except Exception:
+                    continue
+
+            if y_tr.tag == TRTag.REAL:
                 # Extract values
-                y_val = y.value if hasattr(y, 'value') else y.value.value
-                if isinstance(y_val, TRScalar):
-                    y_val = y_val.value
+                y_val = y_tr.value
                 
                 p_val = p
                 if isinstance(p, TRNode):
@@ -296,7 +307,7 @@ def compute_residual_consistency(
 
 
 def count_singularities(
-    y_values: List[Union[TRNode, TRScalar]],
+    y_values: List[Union[TRNode, TRScalar, float, int, 'np.floating']],
     Q_values: Optional[List[float]] = None,
     q_threshold: float = 0.1
 ) -> Tuple[int, int]:
@@ -314,15 +325,44 @@ def count_singularities(
     # Count actual non-REAL outputs
     actual_count = 0
     for y in y_values:
-        tag = y.tag if hasattr(y, 'tag') else y.value.tag
+        # Handle TRNode / TRScalar
+        if hasattr(y, 'tag'):
+            tag = y.tag
+        elif hasattr(y, 'value') and hasattr(y.value, 'tag'):
+            tag = y.value.tag
+        else:
+            # Numeric path (float/int/np.floating)
+            try:
+                import numpy as np  # type: ignore
+                if np.isnan(y):
+                    tag = TRTag.PHI
+                elif np.isposinf(y):
+                    tag = TRTag.PINF
+                elif np.isneginf(y):
+                    tag = TRTag.NINF
+                else:
+                    tag = TRTag.REAL
+            except Exception:
+                # Fallback: treat as REAL
+                tag = TRTag.REAL
         if tag != TRTag.REAL:
             actual_count += 1
     
     # Count predicted singularities based on Q values
     predicted_count = 0
-    if Q_values:
-        for q in Q_values:
-            if abs(q) < q_threshold:
+    if Q_values is not None:
+        try:
+            import numpy as np  # type: ignore
+            iterable = Q_values.tolist() if hasattr(Q_values, 'tolist') else Q_values
+        except Exception:
+            iterable = Q_values
+        for q in iterable:
+            try:
+                val = float(q)
+            except Exception:
+                # If cannot convert, skip
+                continue
+            if abs(val) < q_threshold:
                 predicted_count += 1
     
     return actual_count, predicted_count
@@ -330,7 +370,7 @@ def count_singularities(
 
 def compute_coverage_by_distance(
     x_values: List[float],
-    y_values: List[Union[TRNode, TRScalar]],
+    y_values: List[Union[TRNode, TRScalar, float, int, 'np.floating']],
     true_poles: List[float],
     near_threshold: float = 0.1,
     mid_threshold: float = 0.5
@@ -362,6 +402,26 @@ def compute_coverage_by_distance(
     far_real = 0
     far_total = 0
     
+    def _get_tag(y) -> TRTag:
+        # TRNode or TRScalar path
+        if hasattr(y, 'tag'):
+            return y.tag  # type: ignore[attr-defined]
+        if hasattr(y, 'value') and hasattr(y.value, 'tag'):
+            return y.value.tag  # type: ignore[attr-defined]
+        # Numeric path
+        try:
+            import numpy as np  # type: ignore
+            yf = float(y)
+            if np.isnan(yf):
+                return TRTag.PHI
+            if np.isposinf(yf):
+                return TRTag.PINF
+            if np.isneginf(yf):
+                return TRTag.NINF
+            return TRTag.REAL
+        except Exception:
+            return TRTag.REAL
+
     for x, y in zip(x_values, y_values):
         # Find distance to nearest pole
         min_dist = min(abs(x - pole) for pole in true_poles)
@@ -369,17 +429,17 @@ def compute_coverage_by_distance(
         # Classify by distance
         if min_dist < near_threshold:
             near_total += 1
-            tag = y.tag if hasattr(y, 'tag') else y.value.tag
+            tag = _get_tag(y)
             if tag == TRTag.REAL:
                 near_real += 1
         elif min_dist < mid_threshold:
             mid_total += 1
-            tag = y.tag if hasattr(y, 'tag') else y.value.tag
+            tag = _get_tag(y)
             if tag == TRTag.REAL:
                 mid_real += 1
         else:
             far_total += 1
-            tag = y.tag if hasattr(y, 'tag') else y.value.tag
+            tag = _get_tag(y)
             if tag == TRTag.REAL:
                 far_real += 1
     
@@ -462,10 +522,10 @@ class PoleEvaluator:
     
     def evaluate(self,
                 x_values: List[float],
-                y_values: List[Union[TRNode, TRScalar]],
+                y_values: List[Union[TRNode, TRScalar, float, int, 'np.floating']],
                 Q_values: List[float],
                 P_values: Optional[List[Union[TRNode, float]]] = None,
-                predicted_poles: Optional[List[float]] = None) -> PoleMetrics:
+                predicted_poles: Optional[List[float]] = None) -> Dict[str, float]:
         """
         Perform comprehensive pole evaluation.
         
@@ -553,7 +613,7 @@ class PoleEvaluator:
         min_q = np.min(q_at_poles) if q_at_poles else 0.0
         
         # Create metrics object
-        metrics = PoleMetrics(
+        metrics_obj = PoleMetrics(
             ple=ple,
             ple_breakdown=ple_breakdown,
             sign_consistency=sign_consistency,
@@ -575,9 +635,12 @@ class PoleEvaluator:
         )
         
         # Store in history
-        self.evaluation_history.append(metrics)
+        self.evaluation_history.append(metrics_obj)
         
-        return metrics
+        # Return as plain dict for downstream code expecting mapping
+        from dataclasses import asdict
+        result: Dict[str, float] = asdict(metrics_obj)  # type: ignore[assignment]
+        return result
     
     def get_summary(self) -> Dict[str, float]:
         """

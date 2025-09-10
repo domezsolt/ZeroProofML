@@ -222,12 +222,34 @@ class AdaptiveLambda:
                     diff = pred - target
                     return TRNode.constant(real(0.5)) * diff * diff
         
+        # Special handling when target is non-REAL: encourage true singular behavior (no ε)
+        target_tag = y_target.value.tag if hasattr(y_target, 'value') else y_target.tag
+        if target_tag != TRTag.REAL:
+            gi = getattr(y, '_grad_info', None)
+            if gi is not None and getattr(gi, 'op_type', None).name == 'DIV' and gi.inputs:
+                num = gi.inputs[0]()
+                den = gi.inputs[1]()
+                if num is not None and den is not None:
+                    from ..autodiff import tr_abs, tr_add, tr_mul, tr_sub, tr_sign
+                    # Drive denominator exactly to zero at these samples
+                    q_pen = tr_abs(den)
+                    lam = TRNode.constant(real(max(self.lambda_rej, self.config.lambda_rej_min)))
+                    loss_q = tr_mul(lam, q_pen)
+                    # For ±∞ targets, align numerator sign
+                    if target_tag in (TRTag.PINF, TRTag.NINF):
+                        s_pred = tr_sign(num)
+                        s_tgt = TRNode.constant(real(1.0 if target_tag == TRTag.PINF else -1.0))
+                        sign_pen = tr_abs(tr_sub(s_pred, s_tgt))
+                        loss_q = tr_add(loss_q, tr_mul(lam, sign_pen))
+                    return loss_q
+            # If not a division node, fall back to rejection penalty
+            return TRNode.constant(real(max(self.lambda_rej, self.config.lambda_rej_min)))
+
+        # REAL target path: numeric loss on REAL preds; penalty for non-REAL preds
         if y.tag == TRTag.REAL:
-            # Normal loss for REAL outputs
             return loss_fn(y, y_target)
         else:
-            # Rejection penalty for non-REAL outputs
-            return TRNode.constant(real(self.lambda_rej))
+            return TRNode.constant(real(max(self.lambda_rej, self.config.lambda_rej_min)))
     
     def get_statistics(self) -> Dict[str, float]:
         """Get current statistics."""

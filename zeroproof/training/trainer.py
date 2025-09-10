@@ -99,7 +99,70 @@ class Optimizer:
                 for layer in model.layers:
                     if hasattr(layer, '_project_phi_l1'):
                         layer._project_phi_l1()
-        
+
+        # Enforce exact pole constraints requested by higher-level trainers (no ε)
+        try:
+            requests = getattr(self, '_enforce_requests', None)
+            if requests is None:
+                # Support requests attached to optimizer (set by higher-level trainers)
+                requests = getattr(self, 'optimizer', None)
+                requests = getattr(requests, '_enforce_requests', []) if requests is not None else []
+            if requests:
+                # Process and then clear
+                for req in requests:
+                    phi_list = req.get('phi')
+                    basis = req.get('basis')
+                    d_q = req.get('d_q')
+                    x = req.get('x')
+                    if not phi_list or basis is None or d_q is None or x is None:
+                        continue
+                    # Compute psi_k(x) for k=1..d_q
+                    x_node = TRNode.constant(real(float(x)))
+                    psi = basis(x_node, d_q)
+                    # Accumulate s = Σ φ_k * psi[k]
+                    s = 0.0
+                    denom = 0.0
+                    for k in range(1, d_q + 1):
+                        if k < len(psi) and (k - 1) < len(phi_list):
+                            psi_k = 0.0
+                            try:
+                                # psi[k] may be TRNode or TRScalar
+                                val = psi[k].value if hasattr(psi[k], 'value') else psi[k]
+                                psi_k = float(val.value if hasattr(val, 'value') else val)
+                            except Exception:
+                                psi_k = 0.0
+                            phi_k = phi_list[k - 1]
+                            try:
+                                phi_val = float(phi_k.value.value) if phi_k.value.tag == TRTag.REAL else 0.0
+                            except Exception:
+                                phi_val = 0.0
+                            s += phi_val * psi_k
+                            denom += psi_k * psi_k
+                    if denom == 0.0:
+                        continue
+                    # We want 1 + s_new = 0 ⇒ s_new = -1 ⇒ s + alpha*||psi||^2 = -1
+                    alpha = (-1.0 - s) / denom
+                    # Update φ_k ← φ_k + alpha * psi_k
+                    for k in range(1, d_q + 1):
+                        if k < len(psi) and (k - 1) < len(phi_list):
+                            try:
+                                val = psi[k].value if hasattr(psi[k], 'value') else psi[k]
+                                psi_k = float(val.value if hasattr(val, 'value') else val)
+                                phi_k = phi_list[k - 1]
+                                if hasattr(phi_k, '_value') and phi_k.value.tag == TRTag.REAL:
+                                    new_val = phi_k.value.value + alpha * psi_k
+                                    phi_k._value = real(float(new_val))
+                            except Exception:
+                                pass
+                # Clear after applying
+                # Clear requests on optimizer if present, else on self
+                if hasattr(self.optimizer, '_enforce_requests'):
+                    self.optimizer._enforce_requests = []  # type: ignore[attr-defined]
+                else:
+                    self._enforce_requests = []
+        except Exception:
+            pass
+
         self.step_count += 1
 
 

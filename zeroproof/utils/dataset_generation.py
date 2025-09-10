@@ -94,9 +94,13 @@ class SingularDatasetGenerator:
         n_regular = n_samples - n_singular
         
         # Generate singular samples (at and near singularities)
+        # Ensure a reasonable fraction are exact singularities
+        n_exact = 0
+        if force_exact_singularities:
+            n_exact = max(len(self.singularities), int(0.2 * n_singular))
         for i in range(n_singular):
-            if force_exact_singularities and i < len(self.singularities):
-                # Place sample exactly at singularity
+            if force_exact_singularities and i < n_exact:
+                # Place samples exactly at singularities in round-robin
                 sing = self.singularities[i % len(self.singularities)]
                 x = sing.location
                 metadata['exact_singular_indices'].append(i)
@@ -194,9 +198,9 @@ class SingularDatasetGenerator:
         if noise_level > 0:
             y += np.random.normal(0, noise_level)
         
-        # Clip extreme values (but not at singularities)
+        # Clip extreme values (but not at singularities). Preserve sign
         if abs(y) > 1e6:
-            y = np.sign(y) * 1e6
+            y = float(np.sign(y) * 1e6)
         
         return real(y)
     
