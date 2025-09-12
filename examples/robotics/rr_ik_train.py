@@ -26,7 +26,12 @@ from zeroproof.training import (
     Optimizer
 )
 from zeroproof.utils.metrics import AntiIllusionMetrics, PoleLocation
-from .rr_ik_dataset import RRDatasetGenerator, IKSample, RobotConfig
+# Support running both as a module (python -m examples.robotics.rr_ik_train)
+# and as a script (python examples/robotics/rr_ik_train.py)
+try:
+    from .rr_ik_dataset import RRDatasetGenerator, IKSample, RobotConfig
+except ImportError:  # Fallback when not executed as a package
+    from rr_ik_dataset import RRDatasetGenerator, IKSample, RobotConfig
 
 
 @dataclass
@@ -257,12 +262,12 @@ class IKTrainer:
         # ZeroProof enhanced training
         hybrid_config = HybridTrainingConfig(
             learning_rate=self.config.learning_rate,
-            epochs=self.config.epochs,
+            max_epochs=self.config.epochs,  # map local 'epochs' to base TrainingConfig field
             
             # Hybrid gradient schedule
-            use_hybrid_schedule=self.config.use_hybrid_schedule,
-            warmup_epochs=max(1, self.config.epochs // 5),
-            transition_epochs=max(1, self.config.epochs // 3),
+            use_hybrid_gradient=self.config.use_hybrid_schedule,
+            hybrid_warmup_epochs=max(1, self.config.epochs // 5),
+            hybrid_transition_epochs=max(1, self.config.epochs // 3),
             
             # Tag loss
             use_tag_loss=self.config.use_tag_loss,
@@ -332,8 +337,10 @@ class IKTrainer:
         
         start_time = time.time()
         
-        if self.config.model_type == "tr_rat" and self.trainer:
-            # Use ZeroProof trainer
+        # ZeroProof path supports both single-output (self.trainer) and
+        # multi-output (self.trainers) configurations
+        has_zeroproof_trainer = bool(getattr(self, 'trainer', None)) or bool(getattr(self, 'trainers', None))
+        if self.config.model_type == "tr_rat" and has_zeroproof_trainer:
             self._train_with_zeroproof(train_inputs, train_targets)
         else:
             # Use simple training loop

@@ -12,8 +12,15 @@ import os
 import numpy as np
 import time
 
-from rr_ik_dataset import RRDatasetGenerator, RobotConfig, RRKinematics
-from rr_ik_train import IKTrainer, TrainingConfig
+try:
+    from rr_ik_dataset import RRDatasetGenerator, RobotConfig, RRKinematics
+except ImportError:  # Fallback when executed via -m
+    from .rr_ik_dataset import RRDatasetGenerator, RobotConfig, RRKinematics
+# Support running both as a module and as a script
+try:
+    from rr_ik_train import IKTrainer, TrainingConfig
+except ImportError:  # Fallback when executed via -m
+    from .rr_ik_train import IKTrainer, TrainingConfig
 
 from zeroproof.core import real, TRTag
 from zeroproof.autodiff import GradientModeConfig, GradientMode

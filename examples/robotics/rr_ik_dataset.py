@@ -153,7 +153,11 @@ class RRKinematics:
             Manipulability index
         """
         J = self.jacobian(theta1, theta2)
-        return np.sqrt(np.linalg.det(J @ J.T))
+        val = np.linalg.det(J @ J.T)
+        # Numerical guard: due to round-off, val can be tiny negative; clamp to 0
+        if val < 0 and abs(val) < 1e-12:
+            val = 0.0
+        return float(np.sqrt(val))
     
     def distance_to_singularity(self, theta1: float, theta2: float) -> float:
         """
@@ -189,7 +193,8 @@ class RRKinematics:
             True if configuration is singular
         """
         det_J = abs(self.jacobian_determinant(theta1, theta2))
-        return det_J < threshold
+        # Ensure native Python bool (avoid numpy.bool_)
+        return bool(det_J < threshold)
     
     def damped_least_squares_ik(self, 
                                theta1: float, 
@@ -460,15 +465,36 @@ class RRDatasetGenerator:
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         
         if format == "json":
+            # Helper: convert numpy types to Python built-ins for JSON
+            def _to_builtin(obj):
+                try:
+                    import numpy as _np
+                except Exception:
+                    _np = None
+                
+                if _np is not None:
+                    if isinstance(obj, (_np.floating,)):
+                        return float(obj)
+                    if isinstance(obj, (_np.integer,)):
+                        return int(obj)
+                    if isinstance(obj, (_np.bool_,)):
+                        return bool(obj)
+                
+                if isinstance(obj, dict):
+                    return {k: _to_builtin(v) for k, v in obj.items()}
+                if isinstance(obj, (list, tuple)):
+                    return [_to_builtin(v) for v in obj]
+                return obj
+
             # Convert to JSON-serializable format
             data = {
-                'config': asdict(self.config),
-                'samples': [asdict(sample) for sample in self.samples],
-                'metadata': {
+                'config': _to_builtin(asdict(self.config)),
+                'samples': [_to_builtin(asdict(sample)) for sample in self.samples],
+                'metadata': _to_builtin({
                     'n_samples': len(self.samples),
-                    'n_singular': sum(1 for s in self.samples if s.is_singular),
+                    'n_singular': sum(1 for s in self.samples if bool(s.is_singular)),
                     'generator': 'RRDatasetGenerator'
-                }
+                })
             }
             
             with open(filename, 'w') as f:

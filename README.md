@@ -15,7 +15,7 @@
 
 **Transreal arithmetic for stable machine learning without epsilon hacks**
 
-[Documentation](https://zeroproof.readthedocs.io) | [Paper](https://arxiv.org/abs/xxxx.xxxxx) | [Examples](examples/)
+[Getting Started](docs/topics/00_getting_started.md) | [Docs Index](docs/index.md) | [Examples](examples/)
 
 </div>
 
@@ -37,6 +37,8 @@ ZeroProof is a Python library that implements **Transreal (TR) arithmetic** - a 
 
 ## Quick Start
 
+See also: docs/topics/00_getting_started.md for an end‑to‑end sketch.
+
 ```python
 import zeroproof as zp
 
@@ -51,9 +53,12 @@ result = x / y        # Returns zp.pinf() instead of raising error
 result2 = y / y       # Returns zp.phi() (0/0 is undefined)
 result3 = inf - inf   # Returns zp.phi() (∞ - ∞ is undefined)
 
-# Use in neural networks
-layer = zp.layers.TRRational(degree_p=3, degree_q=2)
-output = layer(input_tensor)  # Handles poles gracefully
+# Use in neural networks (layer forward)
+from zeroproof.layers import TRRational, ChebyshevBasis
+from zeroproof.autodiff.tr_node import TRNode
+x_node = TRNode.constant(zp.real(0.3))
+layer = zp.layers.TRRational(d_p=3, d_q=2, basis=ChebyshevBasis())
+y_node, tag = layer.forward(x_node)
 ```
 
 ## Installation
@@ -199,11 +204,13 @@ with zp.wheel_mode():
 Learn rational functions P(x)/Q(x) that can model poles:
 
 ```python
+from zeroproof.layers import ChebyshevBasis
+
 layer = zp.layers.TRRational(
-    degree_p=4,           # Numerator degree
-    degree_q=3,           # Denominator degree  
-    basis='chebyshev',    # Polynomial basis
-    lambda_rej=1.0,       # Penalty for non-REAL outputs
+    d_p=4,                 # Numerator degree
+    d_q=3,                 # Denominator degree
+    basis=ChebyshevBasis(),# Polynomial basis
+    lambda_rej=1.0,        # Penalty for non-REAL outputs
 )
 ```
 
@@ -232,46 +239,22 @@ ieee_value = zp.to_ieee(zp.phi())       # → NaN
 
 ## Examples
 
-### Learning Functions with Poles
-
-```python
-import zeroproof as zp
-import torch
-
-# Define a rational model that can learn poles
-model = zp.torch.TRRationalNet(
-    input_dim=1,
-    hidden_dims=[64, 32],
-    output_dim=1,
-    rational_degree=(3, 2),
-)
-
-# Train on data near poles - no special handling needed!
-optimizer = torch.optim.Adam(model.parameters())
-for x, y in data_loader:
-    pred = model(x)
-    loss = zp.losses.tr_mse(pred, y, lambda_rej=1.0)
-    loss.backward()
-    optimizer.step()
-```
-
-### Stable Optimization Near Singularities
-
-```python
-# Adaptive learning rate based on denominators
-scheduler = zp.optim.SafeLRScheduler(
-    optimizer,
-    monitor='q_min',  # Minimum |Q(x)| in batch
-    patience=10,
-)
-```
+Browse runnable scripts in `examples/`:
+- examples/complete_demo.py — end‑to‑end showcase
+- examples/hybrid_gradient_demo.py — Hybrid gradient schedule
+- examples/coverage_control_demo.py — adaptive coverage (λ_rej)
+- examples/layers_demo.py — layer basics (TR‑Rational, TR‑Norm)
 
 ## Documentation
 
-- [Getting Started Guide](https://zeroproof.readthedocs.io/en/latest/getting_started.html)
-- [Mathematical Theory](https://zeroproof.readthedocs.io/en/latest/theory.html)
-- [API Reference](https://zeroproof.readthedocs.io/en/latest/api.html)
-- [Examples Gallery](https://zeroproof.readthedocs.io/en/latest/examples.html)
+- Start here: docs/topics/00_getting_started.md
+- Topics index: docs/index.md
+- Concepts: docs/topics/01_overview.md, docs/topics/02_foundations.md, docs/topics/03_autodiff_modes.md
+- Layers: docs/topics/04_layers.md, docs/layers.md
+- Training: docs/topics/05_training_policies.md, docs/adaptive_loss_guide.md
+- Sampling: docs/topics/06_sampling_curriculum.md
+- Evaluation: docs/topics/07_evaluation_metrics.md
+- How‑To Checklists: docs/topics/08_howto_checklists.md
 
 ## Contributing
 

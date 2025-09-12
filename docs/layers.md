@@ -1,5 +1,7 @@
 # Transreal Neural Network Layers
 
+> See also: Topic 4 “Layers & Variants” (`docs/topics/04_layers.md`) for a curated overview and when to use each variant.
+
 ## Overview
 
 ZeroProof provides neural network layers that leverage transreal arithmetic to handle singularities gracefully. These layers never produce NaN or raise exceptions, instead using the TR tag system to track special values.

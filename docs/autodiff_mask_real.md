@@ -1,5 +1,7 @@
 # Transreal Autodifferentiation with Mask-REAL Rule
 
+> See also: Topic 3 “Autodiff Modes” (`docs/topics/03_autodiff_modes.md`) for Mask‑REAL vs Saturating vs Hybrid and practical setup.
+
 ## Overview
 
 The ZeroProof library implements automatic differentiation (autodiff) for transreal arithmetic with the **Mask-REAL rule**. This rule ensures that gradients remain well-defined and stable even when computations produce non-REAL values (infinities or indeterminate forms).

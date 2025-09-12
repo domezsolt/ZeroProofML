@@ -19,7 +19,7 @@ from dls_solver import DLSConfig, run_dls_reference
 
 # Import ZeroProofML for comparison
 from zeroproof.core import real, TRTag
-from zeroproof.autodiff import GradientModeConfig, GradientMode
+from zeroproof.autodiff import GradientModeConfig, GradientMode, TRNode
 from zeroproof.layers import FullyIntegratedRational, MonomialBasis
 from zeroproof.training import HybridTRTrainer, HybridTrainingConfig, Optimizer
 
@@ -60,7 +60,9 @@ def prepare_ik_data(samples: List[Dict]) -> Tuple[Tuple[List, List], Tuple[List,
 def run_zeroproof_baseline(train_data: Tuple[List, List],
                           test_data: Tuple[List, List],
                           enable_enhancements: bool = True,
-                          output_dir: str = "results") -> Dict[str, Any]:
+                          output_dir: str = "results",
+                          test_detJ: Optional[List[float]] = None,
+                          bucket_edges: Optional[List[float]] = None) -> Dict[str, Any]:
     """
     Run ZeroProofML baseline.
     
@@ -81,48 +83,53 @@ def run_zeroproof_baseline(train_data: Tuple[List, List],
     # Set gradient mode
     GradientModeConfig.set_mode(GradientMode.MASK_REAL)
     
-    # Create model
+    # Determine output dimension (targets per sample)
+    output_dim = len(train_targets[0]) if train_targets else 1
+
+    # Create one model per output to handle 2D targets
     basis = MonomialBasis()
+    models = []
+    trainers = []
     
     if enable_enhancements:
         # Full ZeroProofML with all enhancements
-        model = FullyIntegratedRational(
-            d_p=3, d_q=2, basis=basis,
-            enable_tag_head=True,
-            enable_pole_head=True,
-            track_Q_values=True
-        )
-        
-        config = HybridTrainingConfig(
-            learning_rate=0.01,
-            max_epochs=100,
-            use_hybrid_gradient=True,
-            use_tag_loss=True,
-            lambda_tag=0.05,
-            use_pole_head=True,
-            lambda_pole=0.1,
-            enable_anti_illusion=True,
-            lambda_residual=0.02
-        )
-        
-        trainer = HybridTRTrainer(
-            model=model,
-            optimizer=Optimizer(model.parameters(), learning_rate=0.01),
-            config=config
-        )
-        
+        for _ in range(output_dim):
+            model = FullyIntegratedRational(
+                d_p=3, d_q=2, basis=basis,
+                enable_tag_head=True,
+                enable_pole_head=True,
+                track_Q_values=True
+            )
+            trainer = HybridTRTrainer(
+                model=model,
+                optimizer=Optimizer(model.parameters(), learning_rate=0.01),
+                config=HybridTrainingConfig(
+                    learning_rate=0.01,
+                    max_epochs=100,
+                    use_hybrid_gradient=True,
+                    use_tag_loss=True,
+                    lambda_tag=0.05,
+                    use_pole_head=True,
+                    lambda_pole=0.1,
+                    enable_anti_illusion=True,
+                    lambda_residual=0.02
+                )
+            )
+            models.append(model)
+            trainers.append(trainer)
         print("ZeroProofML with full enhancements enabled")
-        
     else:
         # Basic TR-Rational without enhancements
         from zeroproof.layers import TRRational
-        
-        model = TRRational(d_p=3, d_q=2, basis=basis)
-        optimizer = Optimizer(model.parameters(), learning_rate=0.01)
-        
+        for _ in range(output_dim):
+            model = TRRational(d_p=3, d_q=2, basis=basis)
+            models.append(model)
+            trainers.append(None)  # Use simple optimizer per-step
         print("Basic TR-Rational without enhancements")
     
-    print(f"Model parameters: {len(model.parameters())}")
+    # Combined parameter count
+    n_parameters = sum(len(m.parameters()) for m in models)
+    print(f"Model parameters: {n_parameters}")
     
     # Training (simplified for baseline comparison)
     start_time = time.time()
@@ -132,33 +139,44 @@ def run_zeroproof_baseline(train_data: Tuple[List, List],
         epoch_loss = 0.0
         n_samples = 0
         
-        # Simple training loop
-        for inp, tgt in zip(train_inputs[:50], train_targets[:50]):  # Subset for speed
+        # Simple training loop (use full training set for parity)
+        for inp, tgt in zip(train_inputs, train_targets):
             # Convert to TRNodes
             tr_inputs = [TRNode.constant(real(x)) for x in inp]
             
-            # For multi-output, we'd need proper handling
-            # This is a simplified version
-            if hasattr(model, 'forward_fully_integrated'):
-                # Use first input as primary
-                result = model.forward_fully_integrated(tr_inputs[0])
-                y_pred = result['output']
-                tag = result['tag']
-            else:
-                y_pred, tag = model.forward(tr_inputs[0])
-            
-            # Simple loss for first target
-            if tag == TRTag.REAL and len(tgt) > 0:
-                target = TRNode.constant(real(tgt[0]))
-                loss = (y_pred - target) ** 2
-                loss.backward()
-                
-                if enable_enhancements:
-                    trainer.optimizer.step(model)
+            # Use first input as primary scalar for rational models
+            x = tr_inputs[0] if tr_inputs else TRNode.constant(real(0.0))
+
+            # Accumulate loss across outputs
+            sample_loss = TRNode.constant(real(0.0))
+            valid_outputs = 0
+
+            for j, (model_j) in enumerate(models):
+                if hasattr(model_j, 'forward_fully_integrated'):
+                    res = model_j.forward_fully_integrated(x)
+                    y_pred = res['output']
+                    tag = res['tag']
                 else:
-                    optimizer.step(model)
+                    y_pred, tag = model_j.forward(x)
                 
-                epoch_loss += loss.value.value
+                if tag == TRTag.REAL and j < len(tgt):
+                    target = TRNode.constant(real(tgt[j]))
+                    diff = (y_pred - target)
+                    sample_loss = sample_loss + diff * diff
+                    valid_outputs += 1
+            
+            if valid_outputs > 0:
+                # Backprop once per sample across outputs
+                sample_loss.backward()
+                # Step optimizers/trainers for each model
+                for j, model_j in enumerate(models):
+                    if enable_enhancements:
+                        trainers[j].optimizer.step(model_j)
+                    else:
+                        # Create a lightweight optimizer per step for basic (reuse learning rate)
+                        Optimizer(model_j.parameters(), learning_rate=0.01).step(model_j)
+                if sample_loss.tag == TRTag.REAL:
+                    epoch_loss += sample_loss.value.value / max(1, valid_outputs)
                 n_samples += 1
         
         if n_samples > 0:
@@ -171,25 +189,27 @@ def run_zeroproof_baseline(train_data: Tuple[List, List],
     training_time = time.time() - start_time
     
     # Evaluation
-    test_mse = 0.0
-    test_samples = 0
-    
-    for inp, tgt in zip(test_inputs[:20], test_targets[:20]):  # Subset for speed
+    test_errors = []
+    predictions = []
+    for inp, tgt in zip(test_inputs, test_targets):
         tr_inputs = [TRNode.constant(real(x)) for x in inp]
-        
-        if hasattr(model, 'forward_fully_integrated'):
-            result = model.forward_fully_integrated(tr_inputs[0])
-            y_pred = result['output']
-            tag = result['tag']
-        else:
-            y_pred, tag = model.forward(tr_inputs[0])
-        
-        if tag == TRTag.REAL and len(tgt) > 0:
-            error = (y_pred.value.value - tgt[0])**2
-            test_mse += error
-            test_samples += 1
+        x = tr_inputs[0] if tr_inputs else TRNode.constant(real(0.0))
+        pred_vec = []
+        for model_j in models:
+            if hasattr(model_j, 'forward_fully_integrated'):
+                res = model_j.forward_fully_integrated(x)
+                y_pred = res['output']
+                tag = res['tag']
+            else:
+                y_pred, tag = model_j.forward(x)
+            pred_val = y_pred.value.value if tag == TRTag.REAL else 0.0
+            pred_vec.append(pred_val)
+        predictions.append(pred_vec)
+        # MSE across outputs
+        mse = np.mean([(pv - tv)**2 for pv, tv in zip(pred_vec, tgt)])
+        test_errors.append(mse)
     
-    final_mse = test_mse / test_samples if test_samples > 0 else float('inf')
+    final_mse = float(np.mean(test_errors)) if test_errors else float('inf')
     
     results = {
         'model_type': 'ZeroProofML' if enable_enhancements else 'TR-Rational',
@@ -197,9 +217,26 @@ def run_zeroproof_baseline(train_data: Tuple[List, List],
         'training_time': training_time,
         'final_mse': final_mse,
         'training_losses': training_losses,
-        'n_parameters': len(model.parameters()),
-        'test_samples_evaluated': test_samples
+        'n_parameters': n_parameters,
+        'test_samples_evaluated': len(test_inputs),
+        'predictions': predictions
     }
+
+    # Optional: near-pole bucketed MSE if det(J) provided
+    if test_detJ is not None and len(test_detJ) == len(test_inputs):
+        edges = bucket_edges or [0.0, 1e-5, 1e-4, 1e-3, 1e-2, float('inf')]
+        buckets = {f"({edges[i]:.0e},{edges[i+1]:.0e}]": [] for i in range(len(edges)-1)}
+        for (mse, dj) in zip(test_errors, test_detJ):
+            for i in range(len(edges)-1):
+                lo, hi = edges[i], edges[i+1]
+                if (dj > lo) and (dj <= hi):
+                    buckets[f"({lo:.0e},{hi:.0e}]"] .append(mse)
+                    break
+        bucket_mse = {k: (float(np.mean(v)) if v else None) for k, v in buckets.items()}
+        results['near_pole_bucket_mse'] = {
+            'edges': edges,
+            'bucket_mse': bucket_mse
+        }
     
     # Save results
     os.makedirs(output_dir, exist_ok=True)
@@ -324,8 +361,12 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
     # 4. ZeroProofML (Basic)
     print("\n4. Running ZeroProofML (Basic)...")
     try:
+        # Derive det(J) for test split to compute near-pole metrics
+        n_train = int(0.8 * len(samples))
+        test_detj = [abs(s.get('det_J', 0.0)) for s in samples[n_train:]]
         zp_basic_results = run_zeroproof_baseline(
-            train_data, test_data, enable_enhancements=False, output_dir=f"{output_dir}/zeroproof_basic"
+            train_data, test_data, enable_enhancements=False, output_dir=f"{output_dir}/zeroproof_basic",
+            test_detJ=test_detj
         )
         all_results['ZeroProofML-Basic'] = zp_basic_results
         
@@ -348,8 +389,11 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
     # 5. ZeroProofML (Full)
     print("\n5. Running ZeroProofML (Full)...")
     try:
+        n_train = int(0.8 * len(samples))
+        test_detj = [abs(s.get('det_J', 0.0)) for s in samples[n_train:]]
         zp_full_results = run_zeroproof_baseline(
-            train_data, test_data, enable_enhancements=True, output_dir=f"{output_dir}/zeroproof_full"
+            train_data, test_data, enable_enhancements=True, output_dir=f"{output_dir}/zeroproof_full",
+            test_detJ=test_detj
         )
         all_results['ZeroProofML-Full'] = zp_full_results
         
