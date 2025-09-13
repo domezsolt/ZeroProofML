@@ -315,10 +315,12 @@ class RationalEpsTrainer:
             'numerical_issues': len(self.numerical_issues)
         }
     
-    def _evaluate_simple(self, inputs: List[List[float]], targets: List[List[float]]) -> Dict[str, float]:
+    def _evaluate_simple(self, inputs: List[List[float]], targets: List[List[float]]) -> Dict[str, Any]:
         """Simple evaluation without tracking numerical issues."""
         total_mse = 0.0
         n_valid = 0
+        per_sample_mse: List[float] = []
+        predictions: List[List[float]] = []
         
         for inp, tgt in zip(inputs, targets):
             tr_inputs = [TRNode.constant(real(x)) for x in inp]
@@ -326,22 +328,28 @@ class RationalEpsTrainer:
             try:
                 outputs = self.model.forward_with_eps_regularization(tr_inputs[0])
                 
-                # Compute MSE for valid outputs
+                # Compute MSE for valid outputs and collect predictions
                 mse = 0.0
                 valid_outputs = 0
+                pred_vec: List[float] = []
                 
                 for output, target in zip(outputs, tgt):
                     if (output.tag == TRTag.REAL and 
                         not np.isnan(output.value.value) and 
                         not np.isinf(output.value.value)):
                         
-                        error = (output.value.value - target)**2
+                        val = float(output.value.value)
+                        pred_vec.append(val)
+                        error = (val - target)**2
                         mse += error
                         valid_outputs += 1
                 
                 if valid_outputs > 0:
-                    total_mse += mse / valid_outputs
+                    avg = mse / valid_outputs
+                    total_mse += avg
                     n_valid += 1
+                    per_sample_mse.append(avg)
+                    predictions.append(pred_vec)
             
             except:
                 continue
@@ -351,7 +359,9 @@ class RationalEpsTrainer:
         return {
             'mse': avg_mse,
             'n_valid': n_valid,
-            'success_rate': n_valid / len(inputs) if inputs else 0.0
+            'success_rate': n_valid / len(inputs) if inputs else 0.0,
+            'per_sample_mse': per_sample_mse,
+            'predictions': predictions,
         }
 
 
@@ -472,7 +482,8 @@ def run_rational_eps_baseline(train_data: Tuple[List, List],
                              test_data: Tuple[List, List],
                              epsilon: Optional[float] = None,
                              config: Optional[RationalEpsConfig] = None,
-                             output_dir: str = "results") -> Dict[str, Any]:
+                             output_dir: str = "results",
+                             seed: Optional[int] = None) -> Dict[str, Any]:
     """
     Run rational+ε baseline with specific epsilon.
     
@@ -536,7 +547,8 @@ def run_rational_eps_baseline(train_data: Tuple[List, List],
             'nan_count': training_results['total_nan_count'],
             'inf_count': training_results['total_inf_count'],
             'numerical_issues': training_results['numerical_issues']
-        }
+        },
+        'seed': seed
     }
     
     # Save results

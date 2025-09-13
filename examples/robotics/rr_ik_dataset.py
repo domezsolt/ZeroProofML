@@ -15,10 +15,14 @@ import json
 import os
 from typing import Tuple, List, Dict, Optional
 from dataclasses import dataclass, asdict
+from zeroproof.utils.serialization import to_builtin
+from zeroproof.utils.env import collect_env_info
 
 from zeroproof.core import real, TRTag
 from zeroproof.autodiff import TRNode
 from zeroproof.utils.metrics import PoleLocation
+from zeroproof.utils.config import DEFAULT_BUCKET_EDGES
+from zeroproof.utils.seeding import set_global_seed
 
 
 @dataclass
@@ -284,7 +288,9 @@ class RRDatasetGenerator:
     def sample_configurations(self, 
                             n_samples: int,
                             singular_ratio: float = 0.3,
-                            singularity_threshold: float = 1e-3) -> List[Tuple[float, float]]:
+                            singularity_threshold: float = 1e-3,
+                            force_exact_singularities: bool = False,
+                            min_detj_regular: Optional[float] = None) -> List[Tuple[float, float]]:
         """
         Sample joint configurations with controlled singularity ratio.
         
@@ -303,9 +309,16 @@ class RRDatasetGenerator:
         n_regular = n_samples - n_singular
         
         # Sample near singularities (θ2 ≈ 0 or θ2 ≈ π)
-        for _ in range(n_singular):
+        exact_inserted = 0
+        if force_exact_singularities and n_singular >= 2:
+            # Ensure at least one exact config on each singular line
+            theta1_a = np.random.uniform(*self.config.joint_limits[0])
+            theta1_b = np.random.uniform(*self.config.joint_limits[0])
+            configurations.append((theta1_a, 0.0))
+            configurations.append((theta1_b, np.pi))
+            exact_inserted = 2
+        for _ in range(max(0, n_singular - exact_inserted)):
             theta1 = np.random.uniform(*self.config.joint_limits[0])
-            
             # Choose between θ2 ≈ 0 or θ2 ≈ π
             if np.random.random() < 0.5:
                 # Near θ2 = 0
@@ -313,21 +326,27 @@ class RRDatasetGenerator:
             else:
                 # Near θ2 = π
                 theta2 = np.random.normal(np.pi, singularity_threshold)
-            
             # Clamp to joint limits
             theta2 = np.clip(theta2, *self.config.joint_limits[1])
             configurations.append((theta1, theta2))
         
         # Sample regular configurations
         for _ in range(n_regular):
-            theta1 = np.random.uniform(*self.config.joint_limits[0])
-            theta2 = np.random.uniform(*self.config.joint_limits[1])
-            
-            # Reject if too close to singularity
-            if self.robot.is_singular(theta1, theta2, singularity_threshold * 2):
-                # Resample
-                theta2 = np.random.uniform(0.1, np.pi - 0.1)
-            
+            attempts = 0
+            while True:
+                attempts += 1
+                theta1 = np.random.uniform(*self.config.joint_limits[0])
+                theta2 = np.random.uniform(*self.config.joint_limits[1])
+                # Reject if too close to singularity
+                if self.robot.is_singular(theta1, theta2, singularity_threshold * 2):
+                    if attempts < 100:
+                        continue
+                # Enforce minimal |detJ| for regular samples if requested
+                if min_detj_regular is not None:
+                    if abs(self.robot.jacobian_determinant(theta1, theta2)) < float(min_detj_regular):
+                        if attempts < 100:
+                            continue
+                break
             configurations.append((theta1, theta2))
         
         return configurations
@@ -335,7 +354,8 @@ class RRDatasetGenerator:
     def generate_ik_samples(self,
                            configurations: List[Tuple[float, float]],
                            displacement_scale: float = 0.1,
-                           damping_factor: float = 0.01) -> List[IKSample]:
+                           damping_factor: float = 0.01,
+                           vectorized: bool = True) -> List[IKSample]:
         """
         Generate IK samples from joint configurations.
         
@@ -347,29 +367,104 @@ class RRDatasetGenerator:
         Returns:
             List of IK samples
         """
-        samples = []
-        
+        # Vectorized fast path
+        if vectorized and configurations:
+            L1, L2 = self.config.L1, self.config.L2
+            thetas = np.array(configurations, dtype=float)
+            theta1 = thetas[:, 0]
+            theta2 = thetas[:, 1]
+
+            # Forward kinematics (current pose)
+            c1, s1 = np.cos(theta1), np.sin(theta1)
+            c12, s12 = np.cos(theta1 + theta2), np.sin(theta1 + theta2)
+            x_ee = L1 * c1 + L2 * c12
+            y_ee = L1 * s1 + L2 * s12
+
+            # Random target displacements
+            rng = np.random.default_rng()
+            dx = rng.normal(0.0, displacement_scale, size=len(theta1))
+            dy = rng.normal(0.0, displacement_scale, size=len(theta2))
+
+            # Jacobian components
+            j11 = -L1 * s1 - L2 * s12
+            j12 = -L2 * s12
+            j21 = L1 * c1 + L2 * c12
+            j22 = L2 * c12
+
+            # JJT components and DLS inverse blocks
+            a = j11*j11 + j12*j12
+            b = j11*j21 + j12*j22
+            d = j21*j21 + j22*j22
+            lam2 = damping_factor ** 2
+            a_l = a + lam2
+            d_l = d + lam2
+            detA = a_l * d_l - b * b
+            eps = 1e-12
+            detA_safe = np.where(np.abs(detA) < eps, np.sign(detA) * eps + (detA == 0)*eps, detA)
+            inv00 = d_l / detA_safe
+            inv01 = -b / detA_safe
+            inv10 = -b / detA_safe
+            inv11 = a_l / detA_safe
+
+            # u = inv * e, e = [dx, dy]
+            ux = inv00 * dx + inv01 * dy
+            uy = inv10 * dx + inv11 * dy
+
+            # dtheta = J^T * u
+            dtheta1 = j11 * ux + j21 * uy
+            dtheta2 = j12 * ux + j22 * uy
+
+            # Jacobian-derived properties
+            det_J = L1 * L2 * np.sin(theta2)
+            # Manipulability sqrt(det(J J^T)) = sqrt(a*d - b^2)
+            man_sq = a * d - b * b
+            man_sq = np.where(man_sq < 0.0, np.where(np.abs(man_sq) < 1e-12, 0.0, man_sq), man_sq)
+            manipulability = np.sqrt(man_sq)
+            # Distance to pole lines θ2=0 or π
+            dist_to_zero = np.abs(theta2)
+            dist_to_pi = np.minimum(np.abs(theta2 - np.pi), np.abs(theta2 + np.pi))
+            dist_to_sing = np.minimum(dist_to_zero, dist_to_pi)
+            # is_singular heuristic (use default threshold)
+            is_singular = np.abs(det_J) < 1e-3
+
+            # Condition number per-sample (fallback to loop)
+            cond_list = []
+            for j11i, j12i, j21i, j22i in zip(j11, j12, j21, j22):
+                Ji = np.array([[j11i, j12i], [j21i, j22i]], dtype=float)
+                try:
+                    cond_list.append(float(np.linalg.cond(Ji)))
+                except Exception:
+                    cond_list.append(float('inf'))
+
+            samples: List[IKSample] = []
+            for i in range(len(theta1)):
+                samples.append(IKSample(
+                    dx=float(dx[i]), dy=float(dy[i]),
+                    theta1=float(theta1[i]), theta2=float(theta2[i]),
+                    dtheta1=float(dtheta1[i]), dtheta2=float(dtheta2[i]),
+                    det_J=float(det_J[i]), cond_J=float(cond_list[i]),
+                    is_singular=bool(is_singular[i]),
+                    x_ee=float(x_ee[i]), y_ee=float(y_ee[i]),
+                    manipulability=float(manipulability[i]),
+                    distance_to_singularity=float(dist_to_sing[i])
+                ))
+            return samples
+
+        # Fallback scalar path
+        samples: List[IKSample] = []
         for theta1, theta2 in configurations:
-            # Current end-effector position
             x_ee, y_ee = self.robot.forward_kinematics(theta1, theta2)
-            
-            # Random desired displacement
             dx = np.random.normal(0, displacement_scale)
             dy = np.random.normal(0, displacement_scale)
-            
-            # Compute IK solution using DLS
             dtheta1, dtheta2 = self.robot.damped_least_squares_ik(
                 theta1, theta2, dx, dy, damping_factor
             )
-            
-            # Compute Jacobian properties
             det_J = self.robot.jacobian_determinant(theta1, theta2)
             cond_J = self.robot.jacobian_condition_number(theta1, theta2)
             manipulability = self.robot.manipulability_index(theta1, theta2)
             dist_to_sing = self.robot.distance_to_singularity(theta1, theta2)
             is_singular = self.robot.is_singular(theta1, theta2)
-            
-            sample = IKSample(
+            samples.append(IKSample(
                 dx=dx, dy=dy,
                 theta1=theta1, theta2=theta2,
                 dtheta1=dtheta1, dtheta2=dtheta2,
@@ -378,10 +473,7 @@ class RRDatasetGenerator:
                 x_ee=x_ee, y_ee=y_ee,
                 manipulability=manipulability,
                 distance_to_singularity=dist_to_sing
-            )
-            
-            samples.append(sample)
-        
+            ))
         return samples
     
     def generate_dataset(self,
@@ -389,7 +481,9 @@ class RRDatasetGenerator:
                         singular_ratio: float = 0.3,
                         displacement_scale: float = 0.1,
                         singularity_threshold: float = 1e-3,
-                        damping_factor: float = 0.01) -> List[IKSample]:
+                        damping_factor: float = 0.01,
+                        force_exact_singularities: bool = False,
+                        min_detj_regular: Optional[float] = None) -> List[IKSample]:
         """
         Generate complete IK dataset.
         
@@ -409,7 +503,11 @@ class RRDatasetGenerator:
         
         # Sample configurations
         configurations = self.sample_configurations(
-            n_samples, singular_ratio, singularity_threshold
+            n_samples,
+            singular_ratio,
+            singularity_threshold,
+            force_exact_singularities=force_exact_singularities,
+            min_detj_regular=min_detj_regular,
         )
         
         # Generate IK samples
@@ -425,6 +523,37 @@ class RRDatasetGenerator:
         print(f"Singular samples: {n_singular} ({n_singular/len(samples):.1%})")
         
         return samples
+
+    @staticmethod
+    def stratify_split(samples: List[IKSample],
+                       train_ratio: float = 0.8,
+                       edges: List[float] = None) -> Dict[str, List[IKSample]]:
+        """Stratify train/test by |det(J)| buckets.
+
+        Args:
+            samples: Full sample list
+            train_ratio: Fraction assigned to train within each bucket
+            edges: Bucket edges [0, 1e-5, 1e-4, 1e-3, 1e-2, inf]
+        Returns:
+            Dict with 'train' and 'test' lists
+        """
+        edges = edges or DEFAULT_BUCKET_EDGES
+        buckets: List[List[IKSample]] = [[] for _ in range(len(edges)-1)]
+        for s in samples:
+            dj = abs(s.det_J)
+            for i in range(len(edges)-1):
+                lo, hi = edges[i], edges[i+1]
+                if (dj >= lo if i == 0 else dj > lo) and dj <= hi:
+                    buckets[i].append(s)
+                    break
+        train: List[IKSample] = []
+        test: List[IKSample] = []
+        for b in buckets:
+            n = len(b)
+            k = int(round(train_ratio * n))
+            train.extend(b[:k])
+            test.extend(b[k:])
+        return {'train': train, 'test': test}
     
     def get_pole_locations(self) -> List[PoleLocation]:
         """
@@ -465,35 +594,16 @@ class RRDatasetGenerator:
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         
         if format == "json":
-            # Helper: convert numpy types to Python built-ins for JSON
-            def _to_builtin(obj):
-                try:
-                    import numpy as _np
-                except Exception:
-                    _np = None
-                
-                if _np is not None:
-                    if isinstance(obj, (_np.floating,)):
-                        return float(obj)
-                    if isinstance(obj, (_np.integer,)):
-                        return int(obj)
-                    if isinstance(obj, (_np.bool_,)):
-                        return bool(obj)
-                
-                if isinstance(obj, dict):
-                    return {k: _to_builtin(v) for k, v in obj.items()}
-                if isinstance(obj, (list, tuple)):
-                    return [_to_builtin(v) for v in obj]
-                return obj
-
-            # Convert to JSON-serializable format
+            # Convert to JSON-serializable format (centralized helper)
             data = {
-                'config': _to_builtin(asdict(self.config)),
-                'samples': [_to_builtin(asdict(sample)) for sample in self.samples],
-                'metadata': _to_builtin({
+                'config': to_builtin(asdict(self.config)),
+                'samples': [to_builtin(asdict(sample)) for sample in self.samples],
+                'metadata': to_builtin({
                     'n_samples': len(self.samples),
                     'n_singular': sum(1 for s in self.samples if bool(s.is_singular)),
-                    'generator': 'RRDatasetGenerator'
+                    'generator': 'RRDatasetGenerator',
+                    'schema_version': '1.0',
+                    'env': collect_env_info(),
                 })
             }
             
@@ -539,6 +649,11 @@ class RRDatasetGenerator:
                 samples.append(sample)
             
             generator.samples = samples
+            # Attach metadata if present
+            try:
+                generator.metadata = data.get('metadata', {})
+            except Exception:
+                generator.metadata = {}
             return generator
         
         else:
@@ -559,6 +674,20 @@ def main():
                        help='Threshold for singularity detection')
     parser.add_argument('--damping_factor', type=float, default=0.01,
                        help='DLS damping factor')
+    parser.add_argument('--seed', type=int, default=None,
+                       help='Global seed for reproducibility')
+    parser.add_argument('--stratify_by_detj', action='store_true',
+                       help='Stratify train/test by |det(J)| buckets')
+    parser.add_argument('--train_ratio', type=float, default=0.8,
+                       help='Train split ratio within each bucket')
+    parser.add_argument('--force_exact_singularities', action='store_true',
+                       help='Include exact singular configurations (θ2=0, π) among singular samples')
+    parser.add_argument('--min_detj', type=float, default=None,
+                       help='Minimum |det(J)| for regular samples (reject until above)')
+    parser.add_argument('--singular_ratio_split', type=str, default=None,
+                       help='Train:Test singular ratio when stratifying (e.g., 0.35:0.45)')
+    parser.add_argument('--ensure_buckets_nonzero', action='store_true',
+                       help='Ensure B0–B3 buckets have non-zero counts in both splits by augmenting near-pole samples')
     parser.add_argument('--output', type=str, default='data/rr_ik_dataset.json',
                        help='Output filename')
     parser.add_argument('--format', type=str, choices=['json', 'npz'], default='json',
@@ -570,21 +699,161 @@ def main():
     
     args = parser.parse_args()
     
+    # Seeding
+    set_global_seed(args.seed)
+
     # Create robot configuration
     config = RobotConfig(L1=args.L1, L2=args.L2)
     
     # Generate dataset
     generator = RRDatasetGenerator(config)
-    samples = generator.generate_dataset(
-        n_samples=args.n_samples,
-        singular_ratio=args.singular_ratio,
-        displacement_scale=args.displacement_scale,
-        singularity_threshold=args.singularity_threshold,
-        damping_factor=args.damping_factor
-    )
+    samples: List[IKSample]
+    custom_split_used = False
+    if args.stratify_by_detj and args.singular_ratio_split:
+        # Parse split-specific singular ratios
+        try:
+            sr_train_str, sr_test_str = args.singular_ratio_split.split(":")
+            sr_train = float(sr_train_str)
+            sr_test = float(sr_test_str)
+            sr_train = max(0.0, min(1.0, sr_train))
+            sr_test = max(0.0, min(1.0, sr_test))
+        except Exception:
+            raise SystemExit("Invalid --singular_ratio_split format. Expected e.g. 0.35:0.45")
+
+        # Compute split sizes
+        n_train = int(round(args.train_ratio * args.n_samples))
+        n_test = args.n_samples - n_train
+
+        # Sample configs and generate per split
+        train_cfg = generator.sample_configurations(
+            n_train,
+            singular_ratio=sr_train,
+            singularity_threshold=args.singularity_threshold,
+            force_exact_singularities=args.force_exact_singularities,
+            min_detj_regular=args.min_detj,
+        )
+        test_cfg = generator.sample_configurations(
+            n_test,
+            singular_ratio=sr_test,
+            singularity_threshold=args.singularity_threshold,
+            force_exact_singularities=args.force_exact_singularities,
+            min_detj_regular=args.min_detj,
+        )
+        train_samples = generator.generate_ik_samples(train_cfg, args.displacement_scale, args.damping_factor)
+        test_samples = generator.generate_ik_samples(test_cfg, args.displacement_scale, args.damping_factor)
+        samples = train_samples + test_samples
+        generator.samples = samples
+        custom_split_used = True
+    else:
+        samples = generator.generate_dataset(
+            n_samples=args.n_samples,
+            singular_ratio=args.singular_ratio,
+            displacement_scale=args.displacement_scale,
+            singularity_threshold=args.singularity_threshold,
+            damping_factor=args.damping_factor,
+            force_exact_singularities=args.force_exact_singularities,
+            min_detj_regular=args.min_detj
+        )
     
-    # Save dataset
+    # If requested, stratify into train/test by |det(J)|
+    # Bucket edges: override from CLI if provided
+    def _parse_edges(vals):
+        out = []
+        for v in vals:
+            s = str(v)
+            if s.lower() in ('inf', '+inf'):
+                out.append(float('inf'))
+            else:
+                out.append(float(s))
+        return out
+    bucket_edges = DEFAULT_BUCKET_EDGES if not args.bucket_edges else _parse_edges(args.bucket_edges)
+    split_info = None
+    if args.stratify_by_detj:
+        if custom_split_used:
+            n_train = int(round(args.train_ratio * args.n_samples))
+            split = {'train': generator.samples[:n_train], 'test': generator.samples[n_train:]}
+        else:
+            split = RRDatasetGenerator.stratify_split(samples, train_ratio=args.train_ratio, edges=bucket_edges)
+        split_info = {
+            'train_bucket_counts': {},
+            'test_bucket_counts': {},
+        }
+        # Compute counts
+        def _bucket_counts(subset: List[IKSample]):
+            counts = [0]*(len(bucket_edges)-1)
+            for s in subset:
+                dj = abs(s.det_J)
+                for i in range(len(bucket_edges)-1):
+                    lo, hi = bucket_edges[i], bucket_edges[i+1]
+                    if (dj >= lo if i == 0 else dj > lo) and dj <= hi:
+                        counts[i] += 1
+                        break
+            return counts
+        split_info['train_bucket_counts'] = _bucket_counts(split['train'])
+        split_info['test_bucket_counts'] = _bucket_counts(split['test'])
+
+        # Optionally augment to ensure B0–B3 non-zero counts in both splits
+        if args.ensure_buckets_nonzero:
+            def augment(subset: List[IKSample], counts: List[int]) -> List[IKSample]:
+                missing = [i for i, c in enumerate(counts[:4]) if c == 0]
+                if not missing:
+                    return subset
+                augmented = subset[:]
+                attempts = 0
+                max_attempts = 200
+                rng = np.random.default_rng()
+                while missing and attempts < max_attempts:
+                    attempts += 1
+                    b = missing[0]
+                    lo, hi = bucket_edges[b], bucket_edges[b+1]
+                    if b == 0:
+                        theta2 = 0.0 if rng.random() < 0.5 else float(np.pi)
+                    else:
+                        target = float(rng.uniform(lo, hi))
+                        theta2 = target if rng.random() < 0.5 else float(np.pi - target)
+                    theta1 = float(rng.uniform(*generator.config.joint_limits[0]))
+                    new_s = generator.generate_ik_samples([(theta1, theta2)], args.displacement_scale, args.damping_factor)[0]
+                    augmented.append(new_s)
+                    # Update counts
+                    dj = abs(new_s.det_J)
+                    for i in range(len(bucket_edges)-1):
+                        lo2, hi2 = bucket_edges[i], bucket_edges[i+1]
+                        if (dj >= lo2 if i == 0 else dj > lo2) and dj <= hi2:
+                            counts[i] += 1
+                            break
+                    missing = [i for i, c in enumerate(counts[:4]) if c == 0]
+                return augmented
+
+            split['train'] = augment(split['train'], split_info['train_bucket_counts'])
+            split['test'] = augment(split['test'], split_info['test_bucket_counts'])
+            # Recompute counts
+            split_info['train_bucket_counts'] = _bucket_counts(split['train'])
+            split_info['test_bucket_counts'] = _bucket_counts(split['test'])
+            # Update samples ordering
+            generator.samples = split['train'] + split['test']
+        # Overwrite generator.samples to contain combined in saved order (train then test)
+        generator.samples = split['train'] + split['test']
+
+    # Save dataset (with added metadata if stratified)
     generator.save_dataset(args.output, args.format)
+    if args.output.endswith('.json') and split_info is not None:
+        # Append split metadata to JSON file
+        try:
+            with open(args.output, 'r') as f:
+                data = json.load(f)
+            data['metadata']['bucket_edges'] = bucket_edges
+            data['metadata']['stratified_by_detj'] = True
+            data['metadata']['train_ratio'] = args.train_ratio
+            data['metadata']['train_bucket_counts'] = split_info['train_bucket_counts']
+            data['metadata']['test_bucket_counts'] = split_info['test_bucket_counts']
+            if args.singular_ratio_split:
+                data['metadata']['singular_ratio_split'] = args.singular_ratio_split
+            data['metadata']['ensured_buckets_nonzero'] = bool(args.ensure_buckets_nonzero)
+            data['metadata']['seed'] = args.seed
+            with open(args.output, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            pass
     
     # Print summary
     print(f"\nDataset Summary:")
@@ -593,6 +862,16 @@ def main():
     print(f"Average |det(J)|: {np.mean([abs(s.det_J) for s in samples]):.6f}")
     print(f"Min |det(J)|: {np.min([abs(s.det_J) for s in samples]):.6f}")
     print(f"Max condition number: {np.max([s.cond_J for s in samples if not np.isinf(s.cond_J)]):.2f}")
+    if split_info is not None:
+        print("\nBucket edges:", bucket_edges)
+    parser.add_argument('--bucket-edges', nargs='+', default=None,
+                       help='Custom |det(J)| bucket edges, e.g., 0 1e-5 1e-4 1e-3 1e-2 inf')
+        print("Train bucket counts:", split_info['train_bucket_counts'])
+        print("Test bucket counts: ", split_info['test_bucket_counts'])
+        # Warn if any near-pole buckets are empty
+        for name, counts in (('Train', split_info['train_bucket_counts']), ('Test', split_info['test_bucket_counts'])):
+            if any(c == 0 for c in counts[:4]):
+                print(f"Warning: {name} split has empty near-pole buckets B0–B3. Consider --ensure_buckets_nonzero or adjust sampling.")
 
 
 if __name__ == "__main__":

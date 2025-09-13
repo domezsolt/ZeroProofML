@@ -517,6 +517,27 @@ class CoverageEnforcementPolicy:
             "intervention_count": self.intervention_count
         }
 
+    def get_statistics(self) -> Dict[str, Any]:
+        """Return summary statistics for enforcement behavior."""
+        last_lambda = self.lambda_history[-1] if self.lambda_history else None
+        # Provide a compact tail of histories to avoid bloating JSON
+        tail = 50
+        lambda_tail = self.lambda_history[-tail:] if len(self.lambda_history) > tail else self.lambda_history
+        coverage_tail = self.coverage_history[-tail:] if len(self.coverage_history) > tail else self.coverage_history
+        return {
+            "target_coverage": self.target_coverage,
+            "near_pole_target": self.near_pole_target,
+            "dead_band": self.dead_band,
+            "increase_rate": self.increase_rate,
+            "decrease_rate": self.decrease_rate,
+            "min_lambda": self.min_lambda,
+            "max_lambda": self.max_lambda,
+            "last_lambda": last_lambda,
+            "intervention_count": self.intervention_count,
+            "lambda_history_tail": lambda_tail,
+            "coverage_history_tail": coverage_tail,
+        }
+
 
 class NearPoleSampler:
     """

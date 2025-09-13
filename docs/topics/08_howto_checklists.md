@@ -46,9 +46,14 @@ Concise, repeatable steps for common ZeroProof workflows.
 
 Follow these steps to reproduce the RR inverse kinematics example near singularities (θ2≈0 or π) and compare with baselines.
 
-1) Environment
+1) Environment (PEP‑668 friendly)
 - Python 3.9+ with NumPy installed. Matplotlib optional (for plots in demos).
-- From the repo root, optional dev install: `pip install -e .`
+- Create and activate an isolated venv (PEP‑668 safe):
+  - POSIX: `python -m venv .venv && . .venv/bin/activate`
+  - Windows: `py -m venv .venv && .venv\\Scripts\\activate`
+  - Or with uv: `uv venv && . .venv/bin/activate`
+- Install package in editable mode: `pip install -e .`
+- Optional: install dev deps you need for tests: `pip install pytest`
 
 2) Quick sanity check (prints kinematics and a tiny training comparison)
 ```bash
@@ -56,17 +61,24 @@ python examples/robotics/demo_rr_ik.py
 ```
 - Shows det(J) and singularity checks; runs a small training comparison.
 
-3) Generate a dataset (JSON)
+3) Generate a dataset (JSON) with near‑pole coverage and buckets
 ```bash
 python examples/robotics/rr_ik_dataset.py \
-  --n_samples 2000 \
+  --n_samples 20000 \
   --singular_ratio 0.35 \
   --displacement_scale 0.1 \
   --singularity_threshold 1e-3 \
+  --stratify_by_detj --train_ratio 0.8 \
+  --force_exact_singularities \
+  --min_detj 1e-6 \
+  --ensure_buckets_nonzero \
+  --seed 123 \
   --output data/rr_ik_dataset.json
 ```
 - Output: `data/rr_ik_dataset.json` (directory created if missing)
-- Prints summary stats (counts, |det(J)|, condition number max)
+- Prints summary stats and per‑bucket counts for |det(J)|.
+- Buckets (by |det(J)|): B0 [0,1e−5], B1 (1e−5,1e−4], B2 (1e−4,1e−3], B3 (1e−3,1e−2], B4 (1e−2, inf)
+- JSON contains `metadata.bucket_edges`, `train_bucket_counts`, `test_bucket_counts`.
 
 4) Train TR‑Rational model (ZeroProof)
 ```bash
@@ -81,6 +93,19 @@ python examples/robotics/rr_ik_train.py \
 - Default enables: hybrid schedule, tag loss, pole head, residual consistency, coverage enforcement.
 - Output JSON: `runs/ik_experiment/results_tr_rat.json`
 - Console prints final test MSE and training summary.
+
+Optional — supervise pole head with analytic teacher and log PLE each epoch:
+```bash
+python examples/robotics/rr_ik_train.py \
+  --dataset data/rr_ik_dataset.json \
+  --model tr_rat \
+  --epochs 80 \
+  --learning_rate 1e-2 \
+  --degree_p 3 --degree_q 2 \
+  --supervise-pole-head --teacher_pole_threshold 0.1 \
+  --output_dir runs/ik_experiment
+```
+- Adds `training_summary.pole_head_loss_history`, `training_summary.ple_history`, and `training_summary.final_ple`.
 
 5) Train baselines on the same dataset
 - MLP:
@@ -105,14 +130,25 @@ python examples/robotics/rr_ik_train.py \
 ```
 - Outputs: `results_mlp.json`, `results_rat_eps.json` in the same output dir.
 
-6) Compare results
-- Inspect final test MSE from console or open the JSON result files.
-- For deeper comparisons (including DLS reference and plots), consider:
+6) Compare results (parity across baselines)
+- All methods run on identical splits, same loss, and same buckets. Bucketed MSE is included in JSON under `near_pole_bucket_mse` (edges, bucket_mse, bucket_counts).
+- Pole metrics (2D) are included under `pole_metrics` (ple, sign_consistency, slope_error, residual_consistency).
+- DLS outputs per‑sample records with error and status.
+For a complete apples‑to‑apples quick run:
 ```bash
-python examples/baselines/compare_all.py
+python experiments/robotics/run_all.py \
+  --dataset data/rr_ik_dataset.json \
+  --profile quick \
+  --models tr_basic tr_full rational_eps mlp dls \
+  --output_dir results/robotics/quick_run
 ```
+- Saves `comprehensive_comparison.json` with bucketed metrics and a compact console table.
+
+7) Quick profile vs full profile
+- Quick: fewer epochs (MLP/Rat:10, ZP:20), DLS uses a vectorized single‑step path for timing; great for iteration.
+- Full: more epochs and full DLS iterations; use `--profile full` or per‑model epoch overrides.
 
 Tips
 - Increase `--n_samples` for more robust metrics; reduce for quicker runs.
 - Use `--no_hybrid`, `--no_tag_loss`, etc., to ablate TR features in tr_rat runs.
-- Results are non‑deterministic unless you set global seeds; see spec repro checklist in `complete_v2.md`.
+- Set seeds for reproducibility; dataset/experiments accept `--seed`. Internally, `zeroproof/utils/seeding.py::set_global_seed` is used.

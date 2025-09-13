@@ -31,6 +31,9 @@ from .pole_aware_rational import (
     PoleAwareRational,
     FullyIntegratedRational,
 )
+from .multi_input_rational import (
+    TRMultiInputRational,
+)
 from .enhanced_pole_detection import (
     EnhancedPoleConfig,
     EnhancedPoleDetectionHead,
@@ -74,6 +77,9 @@ __all__ = [
     # Pole-aware layers
     "PoleAwareRational",
     "FullyIntegratedRational",
+    
+    # Multi-input rational model
+    "TRMultiInputRational",
     
     # Enhanced pole detection
     "EnhancedPoleConfig",

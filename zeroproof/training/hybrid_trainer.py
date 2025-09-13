@@ -200,6 +200,47 @@ class HybridTRTrainer(TRTrainer):
         self.pole_metrics_history = []
         self.tag_statistics = []
         self.gradient_mode_history = []
+
+        # Persistent per-head and frontend optimizers if model exposes heads/layers
+        self.head_optimizers = None
+        self.frontend_optimizer = None
+        try:
+            if hasattr(self.model, 'heads') and isinstance(self.model.heads, list) and self.model.heads:
+                from typing import List as _List
+                self.head_optimizers = [
+                    Optimizer(h.parameters(), learning_rate=self.optimizer.learning_rate)
+                    for h in self.model.heads
+                ]
+                if hasattr(self.model, 'layers') and isinstance(self.model.layers, list):
+                    frontend_params = []  # type: _List[TRNode]
+                    for lyr in self.model.layers:
+                        if hasattr(lyr, 'parameters'):
+                            frontend_params.extend(lyr.parameters())
+                    if frontend_params:
+                        self.frontend_optimizer = Optimizer(frontend_params, learning_rate=self.optimizer.learning_rate)
+        except Exception:
+            self.head_optimizers = None
+            self.frontend_optimizer = None
+
+    def zero_grad_all(self) -> None:
+        if self.head_optimizers is not None:
+            for opt in self.head_optimizers:
+                opt.zero_grad()
+            if self.frontend_optimizer is not None:
+                self.frontend_optimizer.zero_grad()
+        else:
+            self.optimizer.zero_grad()
+
+    def step_all(self) -> None:
+        if self.head_optimizers is not None and hasattr(self.model, 'heads'):
+            # Step heads
+            for opt, head in zip(self.head_optimizers, self.model.heads):
+                opt.step(head)
+            # Step frontend
+            if self.frontend_optimizer is not None:
+                self.frontend_optimizer.step(self.model)
+        else:
+            self.optimizer.step(self.model)
         
         # Initialize domain-specific pole detector if using teacher signals
         self.pole_detector = None
@@ -732,10 +773,12 @@ class HybridTRTrainer(TRTrainer):
             batch_loss = batch_loss + reg_loss
         
         # Backward pass
+        # Zero grads on all persistent optimizers
+        self.zero_grad_all()
         batch_loss.backward()
         
-        # Optimizer step
-        self.optimizer.step(self.model)
+        # Optimizer step (supports per-head + frontend)
+        self.step_all()
         
         # Collect metrics
         metrics = {
@@ -756,6 +799,71 @@ class HybridTRTrainer(TRTrainer):
             metrics['lambda_rej'] = self.loss_policy.adaptive_lambda.get_penalty()
         
         return metrics
+
+    def _train_batch_multi(self,
+                           batch_inputs: List[List[TRNode]],
+                           batch_targets: List[List[float]]) -> Dict[str, float]:
+        """Mini-batch training for multi-input, multi-output models.
+
+        Aggregates loss across samples and outputs, performs a single
+        backward pass and a single optimizer step using persistent
+        per-head/front-end optimizers when available.
+
+        Args:
+            batch_inputs: List of input vectors (each a list of TRNodes)
+            batch_targets: List of target vectors (floats)
+
+        Returns:
+            Dict with 'loss' and 'optim_ms' timing.
+        """
+        t0 = time.time()
+        self.zero_grad_all()
+
+        total_loss = TRNode.constant(real(0.0))
+        valid_samples = 0
+
+        for tr_inp, tr_tgt in zip(batch_inputs, batch_targets):
+            try:
+                # Forward: model returns List[(TRNode, TRTag)]
+                outs = self.model.forward(tr_inp)
+            except TypeError:
+                # Fallback: treat as single-input model
+                y, tag = self.model.forward(tr_inp[0])
+                outs = [(y, tag)]
+
+            # Per-sample averaged loss over REAL outputs
+            sample_loss = TRNode.constant(real(0.0))
+            valid = 0
+            for j, (out, tag) in enumerate(outs):
+                target_val = tr_tgt[j] if j < len(tr_tgt) else 0.0
+                if tag == TRTag.REAL:
+                    diff = out - TRNode.constant(real(float(target_val)))
+                    sample_loss = sample_loss + diff * diff
+                    valid += 1
+            if valid == 0:
+                continue
+            sample_loss = sample_loss / TRNode.constant(real(float(valid)))
+            total_loss = total_loss + sample_loss
+            valid_samples += 1
+
+        if valid_samples == 0:
+            return {'loss': float('inf'), 'optim_ms': 0.0}
+
+        # Mean loss across samples
+        total_loss = total_loss / TRNode.constant(real(float(valid_samples)))
+
+        # Add regularization if available
+        if hasattr(self.model, 'regularization_loss'):
+            reg = self.model.regularization_loss()
+            total_loss = total_loss + reg
+
+        # Backward and step
+        total_loss.backward()
+        self.step_all()
+
+        t1 = time.time()
+        loss_val = total_loss.value.value if total_loss.value.tag == TRTag.REAL else float('inf')
+        return {'loss': loss_val, 'optim_ms': (t1 - t0) * 1000.0}
     
     def _compute_tag_loss(self, 
                          predictions: List[TRNode],

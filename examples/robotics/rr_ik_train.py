@@ -10,6 +10,7 @@ import json
 import os
 import time
 import numpy as np
+import math
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 
@@ -18,7 +19,8 @@ from zeroproof.autodiff import TRNode, GradientModeConfig, GradientMode
 from zeroproof.layers import (
     MonomialBasis,
     TRRational,
-    FullyIntegratedRational
+    FullyIntegratedRational,
+    TRMultiInputRational,
 )
 from zeroproof.training import (
     HybridTRTrainer,
@@ -26,6 +28,9 @@ from zeroproof.training import (
     Optimizer
 )
 from zeroproof.utils.metrics import AntiIllusionMetrics, PoleLocation
+from zeroproof.metrics.pole_2d import compute_ple_to_lines, compute_pole_metrics_2d
+from zeroproof.training.pole_detection import binary_cross_entropy
+from zeroproof.utils.seeding import set_global_seed
 # Support running both as a module (python -m examples.robotics.rr_ik_train)
 # and as a script (python examples/robotics/rr_ik_train.py)
 try:
@@ -62,6 +67,10 @@ class TrainingConfig:
     lambda_pole: float = 0.1
     lambda_residual: float = 0.02
     
+    # Teacher supervision for pole head
+    supervise_pole_head: bool = False
+    teacher_pole_threshold: float = 0.1
+    
     # Coverage control
     enforce_coverage: bool = True
     min_coverage: float = 0.7
@@ -69,6 +78,11 @@ class TrainingConfig:
     # Evaluation
     evaluate_ple: bool = True
     track_convergence: bool = True
+    # Logging cadence (epochs)
+    log_every: int = 1
+    # Performance toggles passed into HybridTrainingConfig
+    no_structured_logging: bool = False
+    no_plots: bool = False
 
 
 class MLPBaseline:
@@ -197,6 +211,9 @@ class IKTrainer:
         self.model = None
         self.trainer = None
         self.training_history = []
+        self.bench_history = []  # per-epoch bench metrics
+        self.pole_optimizer = None
+        self.ple_history = []
         
     def create_model(self, input_dim: int, output_dim: int):
         """Create model based on configuration."""
@@ -214,8 +231,21 @@ class IKTrainer:
             
         elif self.config.model_type == "tr_rat":
             basis = MonomialBasis()
-            
-            if output_dim == 1:
+            # If problem is multi-output (2D joint deltas), use multi-input TR model
+            if output_dim > 1:
+                # Small TR-MLP front end that consumes full input vector
+                hidden = max(4, int(self.config.hidden_dim)) if hasattr(self.config, 'hidden_dim') else 8
+                self.model = TRMultiInputRational(
+                    input_dim=input_dim,
+                    n_outputs=output_dim,
+                    d_p=self.config.degree_p,
+                    d_q=self.config.degree_q,
+                    basis=basis,
+                    hidden_dims=[hidden],
+                    shared_Q=True,
+                    enable_pole_head=self.config.use_pole_head,
+                )
+            else:
                 # Single output rational
                 if (self.config.use_tag_loss or self.config.use_pole_head or 
                     self.config.enable_anti_illusion):
@@ -233,18 +263,6 @@ class IKTrainer:
                         d_q=self.config.degree_q,
                         basis=basis
                     )
-            else:
-                # Multi-output - create separate rationals
-                self.model = [
-                    FullyIntegratedRational(
-                        d_p=self.config.degree_p,
-                        d_q=self.config.degree_q,
-                        basis=basis,
-                        enable_tag_head=self.config.use_tag_loss,
-                        enable_pole_head=self.config.use_pole_head,
-                        track_Q_values=True
-                    ) for _ in range(output_dim)
-                ]
         
         else:
             raise ValueError(f"Unknown model type: {self.config.model_type}")
@@ -283,7 +301,10 @@ class IKTrainer:
             
             # Coverage control
             enforce_coverage=self.config.enforce_coverage,
-            min_coverage=self.config.min_coverage
+            min_coverage=self.config.min_coverage,
+            log_interval=self.config.log_every,
+            enable_structured_logging=not getattr(self.config, 'no_structured_logging', False),
+            save_plots=not getattr(self.config, 'no_plots', False)
         )
         
         # Handle multi-output case
@@ -303,6 +324,16 @@ class IKTrainer:
                 optimizer=Optimizer(self.model.parameters(), learning_rate=self.config.learning_rate),
                 config=hybrid_config
             )
+        
+        # Initialize a dedicated optimizer for the simple pole head, if requested
+        if (self.config.model_type == "tr_rat"
+            and self.config.use_pole_head
+            and self.config.supervise_pole_head
+            and hasattr(self.model, 'pole_parameters')
+            and callable(getattr(self.model, 'pole_parameters'))):
+            pole_params = self.model.pole_parameters()
+            if pole_params:
+                self.pole_optimizer = Optimizer(pole_params, learning_rate=self.config.learning_rate)
     
     def prepare_data(self, samples: List[IKSample]) -> Tuple[List, List]:
         """Prepare training data from IK samples."""
@@ -331,6 +362,10 @@ class IKTrainer:
         
         # Prepare data
         train_inputs, train_targets = self.prepare_data(train_samples)
+        self.val_inputs = None
+        self.val_targets = None
+        if val_samples is not None:
+            self.val_inputs, self.val_targets = self.prepare_data(val_samples)
         
         # Set gradient mode
         GradientModeConfig.set_mode(GradientMode.MASK_REAL)
@@ -358,52 +393,116 @@ class IKTrainer:
         """Train using ZeroProof enhanced trainer."""
         for epoch in range(self.config.epochs):
             epoch_metrics = []
-            
+            total_data_ms = 0.0
+            total_optim_ms = 0.0
+            n_batches = 0
+
             # Mini-batch training
             for i in range(0, len(inputs), self.config.batch_size):
                 batch_inputs = inputs[i:i+self.config.batch_size]
                 batch_targets = targets[i:i+self.config.batch_size]
                 
                 # Convert to TRNodes
+                t_data0 = time.time()
                 tr_inputs = []
-                tr_targets = []
+                float_targets = []
                 
                 for inp, tgt in zip(batch_inputs, batch_targets):
                     # Multi-input case - create list of TRNodes
                     tr_inp = [TRNode.constant(real(x)) for x in inp]
-                    tr_tgt = [real(y) for y in tgt]
-                    
+                    # Keep targets as floats for mini-batch path
+                    tr_tgt = [float(y) for y in tgt]
+
                     tr_inputs.append(tr_inp)
-                    tr_targets.append(tr_tgt)
-                
-                # Train batch (simplified - would need proper batching)
-                for tr_inp, tr_tgt in zip(tr_inputs, tr_targets):
-                    if isinstance(self.model, list):
-                        # Multi-output case
+                    float_targets.append(tr_tgt)
+
+                data_ms = (time.time() - t_data0) * 1000.0
+                total_data_ms += data_ms
+                n_batches += 1
+
+                # Train batch (mini-batch path for composite model)
+                if isinstance(self.model, list):
+                    # Fallback to existing per-head path for list models
+                    for tr_inp, tr_tgt in zip(tr_inputs, float_targets):
                         total_loss = 0.0
                         for j, (model, trainer) in enumerate(zip(self.model, self.trainers)):
-                            # Single input for each model
                             x = tr_inp[0] if len(tr_inp) > 0 else TRNode.constant(real(0.0))
-                            y_target = tr_tgt[j] if j < len(tr_tgt) else real(0.0)
-                            
-                            # Simple training step
+                            y_target = tr_tgt[j] if j < len(tr_tgt) else 0.0
                             y_pred, tag = model.forward(x)
                             if tag == TRTag.REAL:
-                                loss = (y_pred - TRNode.constant(y_target)) ** 2
+                                loss = (y_pred - TRNode.constant(real(y_target))) ** 2
                                 loss.backward()
                                 trainer.optimizer.step(model)
                                 total_loss += loss.value.value
-                        
                         epoch_metrics.append(total_loss / len(self.model))
-                    else:
-                        # Single output case - would need proper implementation
-                        pass
+                else:
+                    # Optional pole-head supervision using analytic teacher from theta2.
+                    # Uses |sin(theta2)| threshold as an analytic label for proximity to theta2∈{0,π}.
+                    if (self.config.use_pole_head and self.config.supervise_pole_head
+                        and getattr(self.model, 'enable_pole_head', False)
+                        and getattr(self, 'pole_optimizer', None) is not None):
+                        batch_pole_losses = []
+                        for tr_inp in tr_inputs:
+                            theta2 = float(tr_inp[1].value.value) if hasattr(tr_inp[1], 'value') else 0.0
+                            label = 1.0 if abs(math.sin(theta2)) < float(self.config.teacher_pole_threshold) else 0.0
+                            score = self.model.forward_pole_head(tr_inp)
+                            if score is not None:
+                                loss_node = binary_cross_entropy(score, label)
+                                batch_pole_losses.append(loss_node)
+                        if batch_pole_losses:
+                            total = batch_pole_losses[0]
+                            for ln in batch_pole_losses[1:]:
+                                total = total + ln
+                            pole_loss = total / TRNode.constant(real(float(len(batch_pole_losses))))
+                            self.pole_optimizer.zero_grad()
+                            pole_loss.backward()
+                            self.pole_optimizer.step(self.model)
+                            if not hasattr(self, 'pole_head_loss_history'):
+                                self.pole_head_loss_history = []
+                            self.pole_head_loss_history.append(pole_loss.value.value if pole_loss.value.tag == TRTag.REAL else 0.0)
+
+                    result = self.trainer._train_batch_multi(tr_inputs, float_targets)
+                    total_optim_ms += result.get('optim_ms', 0.0)
+                    epoch_metrics.append(result.get('loss', float('inf')))
             
             # Log progress
-            if epoch % 10 == 0 and epoch_metrics:
+            if epoch_metrics:
                 avg_loss = sum(epoch_metrics) / len(epoch_metrics)
-                print(f"Epoch {epoch}: Loss = {avg_loss:.6f}")
+                avg_data = total_data_ms / max(1, n_batches)
+                avg_optim = total_optim_ms / max(1, n_batches)
+                avg_step = avg_data + avg_optim
                 self.training_history.append(avg_loss)
+                self.bench_history.append({
+                    'epoch': epoch,
+                    'avg_step_ms': avg_step,
+                    'data_ms': avg_data,
+                    'optim_ms': avg_optim,
+                    'batches': n_batches,
+                })
+                # Optional: evaluate PLE on validation set each epoch
+                if self.config.evaluate_ple and getattr(self, 'val_inputs', None) is not None:
+                    try:
+                        ple = self._compute_ple_on_data(self.val_inputs)
+                        self.ple_history.append(ple)
+                    except Exception:
+                        pass
+                # Logging cadence: every epoch for now; could be gated by config
+                print(f"Epoch {epoch}/{self.config.epochs - 1}: Loss = {avg_loss:.6f}  "
+                      f"Bench: avg_step_ms={avg_step:.1f}, data_ms={avg_data:.1f}, optim_ms={avg_optim:.1f}, batches={n_batches}")
+
+    def _compute_ple_on_data(self, inputs: List[List[float]]) -> float:
+        """Compute PLE against θ2∈{0,π} lines for provided inputs using current model."""
+        preds: List[List[float]] = []
+        for inp in inputs:
+            tr_inp = [TRNode.constant(real(x)) for x in inp]
+            try:
+                outs = self.model.forward(tr_inp)  # Expect List[(TRNode, TRTag)]
+                pred_vec = [out.value.value if tag == TRTag.REAL else 0.0 for (out, tag) in outs]
+            except TypeError:
+                y, tag = self.model.forward(tr_inp[0])
+                pred_vec = [y.value.value if tag == TRTag.REAL else 0.0]
+            preds.append(pred_vec)
+        return compute_ple_to_lines(inputs, preds)
     
     def _train_baseline(self, inputs: List, targets: List):
         """Train baseline models."""
@@ -470,10 +569,14 @@ class IKTrainer:
                     else:
                         outputs.append(0.0)
             else:
-                # Single model case
-                model_outputs = self.model.forward(tr_inp)
-                outputs = [out.value.value if out.tag == TRTag.REAL else 0.0 
-                          for out in model_outputs]
+                # Single composite model (e.g., TRMultiInputRational) or single-output rational
+                try:
+                    model_outputs = self.model.forward(tr_inp)  # Expect List[(TRNode, TRTag)]
+                    outputs = [out.value.value if tag == TRTag.REAL else 0.0 for (out, tag) in model_outputs]
+                except TypeError:
+                    # Fallback: scalar forward
+                    y, tag = self.model.forward(tr_inp[0])
+                    outputs = [y.value.value if tag == TRTag.REAL else 0.0]
             
             # Compute MSE
             mse = sum((pred - true)**2 for pred, true in zip(outputs, tgt))
@@ -496,8 +599,14 @@ class IKTrainer:
             'model_type': self.config.model_type,
             'config': self.config.__dict__,
             'training_history': self.training_history,
-            'n_parameters': len(self.model.parameters()) if hasattr(self.model, 'parameters') else 0
+            'n_parameters': len(self.model.parameters()) if hasattr(self.model, 'parameters') else 0,
+            'bench_history': self.bench_history,
         }
+        if hasattr(self, 'pole_head_loss_history'):
+            summary['pole_head_loss_history'] = self.pole_head_loss_history
+        if self.ple_history:
+            summary['ple_history'] = self.ple_history
+            summary['final_ple'] = self.ple_history[-1]
         
         if hasattr(self, 'trainer') and self.trainer:
             trainer_summary = self.trainer.get_training_summary()
@@ -506,7 +615,7 @@ class IKTrainer:
         return summary
 
 
-def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str):
+def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str, seed: Optional[int] = None):
     """Run complete training experiment."""
     print(f"=== Running IK Training Experiment ===")
     print(f"Model: {config.model_type}")
@@ -516,11 +625,15 @@ def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str):
     # Load dataset
     generator = RRDatasetGenerator.load_dataset(dataset_file)
     samples = generator.samples
+    metadata = getattr(generator, 'metadata', {})
     
     print(f"Loaded {len(samples)} samples")
     
     # Train/test split
-    n_train = int(0.8 * len(samples))
+    if metadata.get('stratified_by_detj') and 'train_bucket_counts' in metadata:
+        n_train = int(sum(metadata.get('train_bucket_counts', [])))
+    else:
+        n_train = int(0.8 * len(samples))
     train_samples = samples[:n_train]
     test_samples = samples[n_train:]
     
@@ -538,11 +651,20 @@ def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str):
     
     # Evaluate
     test_metrics = trainer.evaluate(test_samples)
+    # Compute pole metrics on test set for convenience (profile-gated)
+    pole_metrics = {}
+    if getattr(config, 'evaluate_ple', True):
+        try:
+            test_inputs, _ = trainer.prepare_data(test_samples)
+            pole_metrics = compute_pole_metrics_2d(test_inputs, test_metrics.get('predictions', []))
+        except Exception:
+            pole_metrics = {}
     print(f"Final test MSE: {test_metrics['mse']:.6f}")
     
     # Save results
     os.makedirs(output_dir, exist_ok=True)
     
+    from zeroproof.utils.env import collect_env_info
     results = {
         'config': config.__dict__,
         'dataset_info': {
@@ -552,12 +674,29 @@ def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str):
             'n_test': len(test_samples)
         },
         'training_summary': trainer.get_training_summary(),
-        'test_metrics': test_metrics
+        'test_metrics': test_metrics,
+        'pole_metrics': pole_metrics,
+        'seed': seed,
+        'loss_name': 'mse_mean',
+        'env': collect_env_info(),
     }
+
+    # Guardrail: warn if hybrid did not switch (near_pole_ratio too low)
+    try:
+        tz = results.get('training_summary', {}).get('zeroproof_metrics', {})
+        hist = tz.get('final_metrics', [])
+        last = hist[-1] if isinstance(hist, list) and hist else {}
+        npr = last.get('near_pole_ratio', None)
+        if isinstance(npr, (int, float)) and npr < 0.05:
+            print("[Guardrail] near_pole_ratio is below 0.05. Consider increasing --singular_ratio "
+                  "in dataset generation or lowering --min_detj to ensure sufficient near-pole coverage.")
+    except Exception:
+        pass
     
     results_file = os.path.join(output_dir, f"results_{config.model_type}.json")
+    from zeroproof.utils.serialization import to_builtin
     with open(results_file, 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(to_builtin(results), f, indent=2)
     
     print(f"Results saved to {results_file}")
     
@@ -574,6 +713,16 @@ def main():
                        default='tr_rat', help='Model type')
     parser.add_argument('--output_dir', type=str, default='runs/ik_experiment',
                        help='Output directory')
+    parser.add_argument('--seed', type=int, default=None,
+                       help='Global seed for reproducibility')
+    parser.add_argument('--profile', type=str, choices=['quick', 'full'], default=None,
+                       help='Profile to apply suggested defaults for speed or thoroughness')
+    parser.add_argument('--log_every', type=int, default=1,
+                       help='Log cadence in epochs (currently per-epoch summaries)')
+    parser.add_argument('--no_structured_logging', action='store_true',
+                       help='Disable structured logging inside Hybrid trainer for performance')
+    parser.add_argument('--no_plots', action='store_true',
+                       help='Disable plot generation inside Hybrid trainer for performance')
     
     # Model parameters
     parser.add_argument('--hidden_dim', type=int, default=32,
@@ -604,6 +753,10 @@ def main():
                        help='Disable anti-illusion metrics')
     parser.add_argument('--no_coverage', action='store_true',
                        help='Disable coverage enforcement')
+    parser.add_argument('--supervise-pole-head', action='store_true',
+                       help='Use analytic det(J) teacher to supervise pole head')
+    parser.add_argument('--teacher_pole_threshold', type=float, default=0.1,
+                       help='Threshold on |sin(theta2)| for near-pole labels (default: 0.1)')
     
     # Loss weights
     parser.add_argument('--lambda_tag', type=float, default=0.05,
@@ -624,19 +777,55 @@ def main():
         learning_rate=args.learning_rate,
         epochs=args.epochs,
         batch_size=args.batch_size,
+        no_structured_logging=args.no_structured_logging,
+        no_plots=args.no_plots,
         use_hybrid_schedule=not args.no_hybrid,
         use_tag_loss=not args.no_tag_loss,
         use_pole_head=not args.no_pole_head,
         use_residual_loss=not args.no_residual_loss,
         enable_anti_illusion=not args.no_anti_illusion,
         enforce_coverage=not args.no_coverage,
+        supervise_pole_head=args.supervise_pole_head,
+        teacher_pole_threshold=args.teacher_pole_threshold,
         lambda_tag=args.lambda_tag,
         lambda_pole=args.lambda_pole,
         lambda_residual=args.lambda_residual
     )
+
+    # Apply profile defaults (Section 7)
+    if args.profile == 'quick':
+        # Epochs
+        if args.epochs == parser.get_default('epochs'):
+            config.epochs = 20
+        # Batch size
+        if args.batch_size == parser.get_default('batch_size'):
+            config.batch_size = 1024
+        # Logging cadence
+        config.log_every = 200
+        # Metrics toggles
+        config.evaluate_ple = False
+        config.enable_anti_illusion = False
+    elif args.profile == 'full':
+        # Epochs
+        if args.epochs == parser.get_default('epochs'):
+            config.epochs = 100
+        # Batch size
+        if args.batch_size == parser.get_default('batch_size'):
+            config.batch_size = 2048
+        # Logging cadence
+        config.log_every = 50
+        # Ensure full features enabled unless explicitly disabled
+        config.use_hybrid_schedule = True and config.use_hybrid_schedule
+        config.use_tag_loss = True and config.use_tag_loss
+        config.use_pole_head = True and config.use_pole_head
+        config.enable_anti_illusion = True and config.enable_anti_illusion
+        config.evaluate_ple = True
     
+    # Seed
+    set_global_seed(args.seed)
+
     # Run experiment
-    results = run_experiment(args.dataset, config, args.output_dir)
+    results = run_experiment(args.dataset, config, args.output_dir, seed=args.seed)
     
     print("Experiment completed successfully!")
 

@@ -207,7 +207,8 @@ class DLSSolver:
     
     def evaluate_on_dataset(self, 
                             samples: List[Dict[str, float]],
-                            robot_params: Dict[str, float] = None) -> Dict[str, Any]:
+                            robot_params: Dict[str, float] = None,
+                            vectorized: bool = True) -> Dict[str, Any]:
         """
         Evaluate DLS solver on a dataset.
         
@@ -227,13 +228,131 @@ class DLSSolver:
             'iterations': [],
             'success_rate': 0.0,
             'damping_stats': [],
-            'condition_numbers': []
+            'condition_numbers': [],
+            'per_sample': [],  # Detailed per-sample records
         }
         
         successful_solves = 0
         
         print(f"Evaluating DLS solver on {len(samples)} samples...")
-        
+
+        # Optional fast path: single-step vectorized DLS when max_iterations==1
+        if vectorized and self.config.max_iterations == 1 and len(samples) > 0:
+            t0 = time.time()
+            L1 = robot_params['L1']
+            L2 = robot_params['L2']
+            theta1 = np.array([float(s['theta1']) for s in samples])
+            theta2 = np.array([float(s['theta2']) for s in samples])
+            dx = np.array([float(s['dx']) for s in samples])
+            dy = np.array([float(s['dy']) for s in samples])
+
+            s1, c1 = np.sin(theta1), np.cos(theta1)
+            s12, c12 = np.sin(theta1 + theta2), np.cos(theta1 + theta2)
+
+            # Current position
+            x_cur = L1 * c1 + L2 * c12
+            y_cur = L1 * s1 + L2 * s12
+            ex = (x_cur + dx) - x_cur
+            ey = (y_cur + dy) - y_cur
+
+            # Jacobian components
+            j11 = -L1 * s1 - L2 * s12
+            j12 = -L2 * s12
+            j21 = L1 * c1 + L2 * c12
+            j22 = L2 * c12
+
+            # JJT = J * J^T components
+            a = j11*j11 + j12*j12  # (0,0)
+            b = j11*j21 + j12*j22  # (0,1) and (1,0)
+            d = j21*j21 + j22*j22  # (1,1)
+            lam2 = (self.config.damping_factor ** 2)
+            a_l = a + lam2
+            d_l = d + lam2
+
+            # Inverse of 2x2 [[a_l, b],[b, d_l]]
+            detA = a_l * d_l - b * b
+            # Guard small determinants
+            eps = 1e-12
+            detA_safe = np.where(np.abs(detA) < eps, np.sign(detA) * eps + (detA == 0)*eps, detA)
+            inv00 = d_l / detA_safe
+            inv01 = -b / detA_safe
+            inv10 = -b / detA_safe
+            inv11 = a_l / detA_safe
+
+            # u = inv * e
+            ux = inv00 * ex + inv01 * ey
+            uy = inv10 * ex + inv11 * ey
+
+            # dtheta = J^T * u
+            dt1 = j11 * ux + j21 * uy
+            dt2 = j12 * ux + j22 * uy
+
+            # Residual r = J * dtheta - e
+            rx = j11 * dt1 + j12 * dt2 - ex
+            ry = j21 * dt1 + j22 * dt2 - ey
+            res = np.sqrt(rx*rx + ry*ry)
+
+            # Success based on tolerance
+            success_mask = res < self.config.tolerance
+            solve_time = time.time() - t0
+
+            # Condition numbers of initial J
+            # For speed, approximate with ratio of singular values via explicit SVD per-sample in small batches
+            conds = []
+            batch = 1024
+            for start in range(0, len(samples), batch):
+                end = min(len(samples), start + batch)
+                J_stack = np.stack([
+                    np.stack([j11[start:end], j12[start:end]], axis=1),
+                    np.stack([j21[start:end], j22[start:end]], axis=1)
+                ], axis=1)  # shape [B,2,2]
+                # Compute cond per-sample
+                for Ji in J_stack:
+                    try:
+                        conds.append(float(np.linalg.cond(Ji)))
+                    except Exception:
+                        conds.append(float('inf'))
+
+            # Fill results
+            results['solve_times'] = [solve_time] * len(samples)
+            results['final_errors'] = [float(e) for e in res]
+            results['iterations'] = [1] * len(samples)
+            results['condition_numbers'] = conds
+            successful_solves = int(np.sum(success_mask))
+
+            # per-sample records
+            per = []
+            for i, s in enumerate(samples):
+                detj = abs(float(s.get('det_J', L1 * L2 * np.sin(theta2[i]))))
+                status = 'success' if bool(success_mask[i]) else 'iterations_cap'
+                if not np.isfinite(res[i]) or not np.isfinite(detA[i]):
+                    status = 'numerical_error'
+                per.append({
+                    'idx': i,
+                    'detj': detj,
+                    'err': float(res[i]),
+                    'iterations': 1,
+                    'solve_time': float(solve_time) / max(1, len(samples)),
+                    'status': status,
+                })
+            results['per_sample'] = per
+
+            # Compute summary stats
+            results['success_rate'] = successful_solves / float(len(samples))
+            results['average_solve_time'] = float(solve_time) / float(len(samples))
+            results['average_error'] = float(np.mean(res))
+            results['average_iterations'] = 1.0
+            results['max_condition_number'] = float(np.max([c for c in conds if not np.isinf(c)])) if conds else float('inf')
+
+            # Update performance stats
+            self.performance_stats['total_solves'] = len(samples)
+            self.performance_stats['successful_solves'] = successful_solves
+            self.performance_stats['average_iterations'] = results['average_iterations']
+            self.performance_stats['average_error'] = results['average_error']
+
+            return results
+
+        # Fallback: iterative per-sample evaluation
         for i, sample in enumerate(samples):
             # Initial configuration
             initial_config = np.array([sample['theta1'], sample['theta2']])
@@ -268,6 +387,22 @@ class DLSSolver:
             J = self.jacobian_rr_robot(sample['theta1'], sample['theta2'], L1, L2)
             cond_num = np.linalg.cond(J)
             results['condition_numbers'].append(cond_num)
+
+            # Per-sample record
+            detj = abs(float(sample.get('det_J', L1 * L2 * np.sin(sample['theta2']))))
+            status = 'success' if solve_info['success'] else (
+                'iterations_cap' if solve_info.get('iterations', 0) >= self.config.max_iterations else 'failure'
+            )
+            if solve_info.get('numerical_issues'):
+                status = 'numerical_error'
+            results['per_sample'].append({
+                'idx': i,
+                'detj': detj,
+                'err': float(solve_info['final_error']),
+                'iterations': int(solve_info.get('iterations', 0)),
+                'solve_time': float(solve_time),
+                'status': status,
+            })
             
             if i % 50 == 0:
                 print(f"  Processed {i+1}/{len(samples)} samples...")
@@ -291,7 +426,8 @@ class DLSSolver:
 def run_dls_reference(samples: List[Dict[str, float]],
                      config: Optional[DLSConfig] = None,
                      robot_params: Dict[str, float] = None,
-                     output_dir: str = "results") -> Dict[str, Any]:
+                     output_dir: str = "results",
+                     seed: Optional[int] = None) -> Dict[str, Any]:
     """
     Run DLS reference solver evaluation.
     
@@ -329,6 +465,7 @@ def run_dls_reference(samples: List[Dict[str, float]],
     results['robot_params'] = robot_params
     results['total_evaluation_time'] = total_time
     results['performance_stats'] = solver.performance_stats
+    results['seed'] = seed
     
     # Print summary
     print(f"\nDLS Solver Results:")

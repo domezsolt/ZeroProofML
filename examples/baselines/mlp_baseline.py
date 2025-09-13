@@ -361,10 +361,11 @@ class MLPTrainer:
         }
 
 
-def run_mlp_baseline(train_data: Tuple[List, List],
+def run_mlp_baseline(train_data: Tuple[List, List], 
                     test_data: Tuple[List, List],
                     config: Optional[MLPConfig] = None,
-                    output_dir: str = "results") -> Dict[str, Any]:
+                    output_dir: str = "results",
+                    seed: Optional[int] = None) -> Dict[str, Any]:
     """
     Run complete MLP baseline experiment.
     
@@ -411,7 +412,8 @@ def run_mlp_baseline(train_data: Tuple[List, List],
         'training_results': training_results,
         'test_metrics': test_metrics,
         'n_parameters': len(model.parameters()),
-        'training_time': training_results['training_time']
+        'training_time': training_results['training_time'],
+        'seed': seed
     }
     
     # Save results
