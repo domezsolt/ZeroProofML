@@ -21,6 +21,10 @@ This overview orients you to ZeroProof’s goals, how it differs from convention
 - Saturating gradients (optional): Bounded gradients near poles without ε, for continuous alternatives.
 - Coverage control: Adaptive λ_rej maintains target REAL/non-REAL ratios in training.
 - Pole learning: Layers and metrics explicitly detect, supervise, and localize poles.
+ - Stratified evaluation: Near‑pole analysis via |det(J)| buckets (B0–B4) with per‑bucket MSE and 2D pole metrics (PLE, sign consistency, slope error, residual consistency).
+ - Comparator parity: Unified driver runs MLP, ε‑rational, TR basic/full, and DLS on identical splits; quick profile performs stratified subsampling and aligns DLS to the same test subset.
+ - Bench transparency: Hybrid trainer records per‑epoch timings (avg_step_ms, data_time_ms, optim_time_ms, batches) in training summaries.
+ - Reproducibility: Global seeding across Python/NumPy/PyTorch; dataset JSON embeds bucket metadata and seed.
 
 ## Design Principles
 
@@ -43,6 +47,7 @@ This overview orients you to ZeroProof’s goals, how it differs from convention
 - Bridges and interop: `docs/bridge_summary.md` and `docs/bridge_extended.md`.
 - Precision and float64 enforcement: `docs/float64_enforcement.md`.
 - Adaptive loss & coverage: `docs/adaptive_loss_guide.md` and summaries in `docs/adaptive_loss_summary.md`.
+ - Robotics how‑tos & parity runner: `docs/topics/08_howto_checklists.md` (dataset flags, quick/full profiles, comparator driver, and bench metrics).
 
 ## Glossary
 

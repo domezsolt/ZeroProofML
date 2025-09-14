@@ -71,6 +71,7 @@ python examples/robotics/rr_ik_dataset.py \
   --stratify_by_detj --train_ratio 0.8 \
   --force_exact_singularities \
   --min_detj 1e-6 \
+  --bucket-edges 0 1e-5 1e-4 1e-3 1e-2 inf \
   --ensure_buckets_nonzero \
   --seed 123 \
   --output data/rr_ik_dataset.json
@@ -78,7 +79,9 @@ python examples/robotics/rr_ik_dataset.py \
 - Output: `data/rr_ik_dataset.json` (directory created if missing)
 - Prints summary stats and per‑bucket counts for |det(J)|.
 - Buckets (by |det(J)|): B0 [0,1e−5], B1 (1e−5,1e−4], B2 (1e−4,1e−3], B3 (1e−3,1e−2], B4 (1e−2, inf)
-- JSON contains `metadata.bucket_edges`, `train_bucket_counts`, `test_bucket_counts`.
+- JSON contains `metadata.bucket_edges`, `train_bucket_counts`, `test_bucket_counts`, and when stratified also
+  `stratified_by_detj`, `train_ratio`, and `ensured_buckets_nonzero`. If you pass split‑specific singular ratios
+  (`--singular_ratio_split a:b`) they are recorded as well. A `seed` field is saved for reproducibility.
 
 4) Train TR‑Rational model (ZeroProof)
 ```bash
@@ -140,13 +143,21 @@ python experiments/robotics/run_all.py \
   --dataset data/rr_ik_dataset.json \
   --profile quick \
   --models tr_basic tr_full rational_eps mlp dls \
+  --max_train 2000 --max_test 500 \
   --output_dir results/robotics/quick_run
 ```
 - Saves `comprehensive_comparison.json` with bucketed metrics and a compact console table.
+ - In quick mode, the comparator creates a stratified test subset by |det(J)|≈|sin(theta2)| ensuring B0–B3 have
+   non‑zero counts when available, recomputes bucket MSE on the subset, and aligns DLS to the same subset.
 
 7) Quick profile vs full profile
-- Quick: fewer epochs (MLP/Rat:10, ZP:20), DLS uses a vectorized single‑step path for timing; great for iteration.
+- Quick: fewer epochs (default MLP≈2, Rat≈5, ZeroProof≈5), stratified subsampling (`--max_train/--max_test`), and DLS uses a
+  single‑step vectorized path on the same test subset. Great for iteration.
 - Full: more epochs and full DLS iterations; use `--profile full` or per‑model epoch overrides.
+
+Bench metrics (per‑epoch)
+- Hybrid trainer prints and records per‑epoch timings: `avg_step_ms`, `data_time_ms`, `optim_time_ms`, and `batches`.
+- These are returned in training summaries under `bench_history` (and surfaced in higher‑level training outputs).
 
 Tips
 - Increase `--n_samples` for more robust metrics; reduce for quicker runs.

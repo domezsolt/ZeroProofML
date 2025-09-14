@@ -83,6 +83,12 @@ The ZeroProof library has been fully implemented according to the `complete_v2.m
 - Parallel processing support
 - Benchmarking tools
 
+### Parity & Bench Transparency
+- Comparator parity driver for robotics IK (`experiments/robotics/run_all.py`) with quick/full profiles
+  - Quick: stratified test subset by |det(J)|≈|sin θ2|; DLS aligned to the same subset; reduced epochs
+  - Full: full dataset; DLS full iterations
+- Training bench metrics recorded per epoch (Hybrid trainer): `avg_step_ms`, `data_time_ms`, `optim_time_ms`, `batches` (see `bench_history` in training summaries)
+
 ## Project Structure
 
 ```

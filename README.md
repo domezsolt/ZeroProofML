@@ -245,6 +245,36 @@ Browse runnable scripts in `examples/`:
 - examples/coverage_control_demo.py — adaptive coverage (λ_rej)
 - examples/layers_demo.py — layer basics (TR‑Rational, TR‑Norm)
 
+### Robotics IK (RR arm) — Parity Runner
+
+Generate a dataset with bucket metadata and run all baselines on identical splits. Quick mode stratifies the test subset by |det(J)|≈|sin θ2| and aligns DLS to the same subset.
+
+```bash
+# Dataset
+python examples/robotics/rr_ik_dataset.py \
+  --n_samples 20000 \
+  --singular_ratio 0.35 \
+  --displacement_scale 0.1 \
+  --singularity_threshold 1e-3 \
+  --stratify_by_detj --train_ratio 0.8 \
+  --force_exact_singularities \
+  --min_detj 1e-6 \
+  --bucket-edges 0 1e-5 1e-4 1e-3 1e-2 inf \
+  --ensure_buckets_nonzero \
+  --seed 123 \
+  --output data/rr_ik_dataset.json
+
+# Parity runner (quick)
+python experiments/robotics/run_all.py \
+  --dataset data/rr_ik_dataset.json \
+  --profile quick \
+  --models tr_basic tr_full rational_eps mlp dls \
+  --max_train 2000 --max_test 500 \
+  --output_dir results/robotics/quick_run
+```
+
+Outputs include bucketed MSE (with counts) and 2D pole metrics; a compact console table and comprehensive JSON are saved under the chosen output directory.
+
 ## Documentation
 
 - Start here: docs/topics/00_getting_started.md
@@ -255,6 +285,18 @@ Browse runnable scripts in `examples/`:
 - Sampling: docs/topics/06_sampling_curriculum.md
 - Evaluation: docs/topics/07_evaluation_metrics.md
 - How‑To Checklists: docs/topics/08_howto_checklists.md
+
+## Reproducibility & Bench Metrics
+
+- Set global seeds (Python/NumPy/PyTorch) with `zeroproof.utils.seeding.set_global_seed(seed)`.
+- Robotics datasets save `metadata.seed` and bucket metadata (`bucket_edges`, `train_bucket_counts`, `test_bucket_counts`).
+- Hybrid training records per‑epoch timings: `avg_step_ms`, `data_time_ms`, `optim_time_ms`, `batches` (see `bench_history` in training summaries). Logging cadence is controlled by `log_interval` (CLI `--log_every`).
+
+## Gradient Checking (Utilities)
+
+- Use `zeroproof.autodiff.grad_funcs.check_gradient(func, x)` for finite‑difference checks on REAL paths.
+- `tr_grad` and `tr_value_and_grad` lift scalar functions into gradient evaluators.
+- See tests under `tests/unit/test_tr_autodiff.py` and the robotics gradcheck at `tests/unit/test_robotics_gradcheck.py`.
 
 ## Contributing
 

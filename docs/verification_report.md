@@ -156,3 +156,26 @@ The implementation correctly follows the core specification with some gaps:
 - Advanced profiling and benchmarking
 
 The implementation is production-ready for the core transreal arithmetic system with autodiff, but lacks some optional features mentioned in the specification.
+
+## Evaluation & Benchmarks (Robotics IK)
+
+- Bucketed near‑pole analysis
+  - Evaluate per‑bucket MSE by |det(J)| bins (B0–B4) and report bucket counts
+  - Ensures coverage of near‑pole regions and apples‑to‑apples comparisons
+- 2D pole metrics
+  - PLE (Pole Localization Error) vs analytic θ2∈{0,π}
+  - Sign consistency across θ2‑crossing paths
+  - Slope error from log‖Δθ‖ vs log|sin θ2| near poles
+  - Residual consistency via forward kinematics
+- Quick vs full parity profiles
+  - Quick: stratified test subset by |det(J)|≈|sin θ2|; DLS aligned to the same subset
+  - Full: full dataset; DLS with full iterations
+- Bench transparency
+  - Per‑epoch timings recorded in training summaries: avg_step_ms, data_time_ms, optim_time_ms, batches (bench_history)
+
+## Updates Since Initial Report
+
+- Saturating gradients and Hybrid schedules are implemented (`grad_mode.py`, `hybrid_gradient.py`), with schedule‑driven δ and near‑pole exploration.
+- Adaptive loss policy with coverage tracking is implemented (`training/adaptive_loss.py`, `training/coverage.py`).
+- Float64 guidance and precision control are documented (`docs/float64_enforcement.md`); default Python floats apply unless otherwise configured.
+- Reduction modes are used in TR‑Norm statistics; general reductions remain an area for future work.

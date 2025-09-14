@@ -128,6 +128,12 @@ val, grad = val_and_grad(x)
 # val is REAL 16, grad is REAL 8
 ```
 
+## Gradient Checking Utilities
+- For finite‑difference checks on TR functions, use `zeroproof/autodiff/grad_funcs.py`:
+  - `check_gradient(func, x, eps=1e-5)` computes analytical vs numerical grad and relative error on REAL paths.
+  - `tr_grad` and `tr_value_and_grad` lift scalar functions into gradient evaluators for quick tests.
+- See tests under `tests/unit/test_tr_autodiff.py` and the robotics multi‑input gradcheck at `tests/unit/test_robotics_gradcheck.py` for usage patterns.
+
 ## Practical Guidance
 - Default to Mask‑REAL for safety; enable Hybrid for tasks requiring pole learning.
 - Start with small warmup_epochs and moderate δ range (e.g., 1e‑2 → 1e‑6).

@@ -50,6 +50,7 @@ print(stats["current_coverage"], policy.lambda_rej)
 ## Trainer Utilities
 - Generic Trainer and HybridTrainer orchestrate epochs, schedule updates, and metric logging.
 - Code: `zeroproof/training/trainer.py:1`, `zeroproof/training/hybrid_trainer.py:1`.
+ - Bench metrics (per‑epoch): Hybrid trainer prints and records `avg_step_ms`, `data_time_ms`, `optim_time_ms`, and `batches`. These are returned in training summaries under `bench_history`. Logging cadence is controlled by `log_interval` (CLI `--log_every` in robotics examples).
 
 ## Practical Tips
 - Start with target_coverage ~0.9–0.98; too high can slow learning early.

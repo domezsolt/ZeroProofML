@@ -298,6 +298,18 @@ print(f"Mean time: {result.mean_time:.4f}s")
 print(f"Ops/sec: {result.operations_per_second:,.0f}")
 ```
 
+### Training Bench Metrics
+
+Hybrid training records per‑epoch timing metrics that help you pinpoint bottlenecks without custom instrumentation.
+
+- Metrics per epoch:
+  - `avg_step_ms`: average time per batch (ms)
+  - `data_time_ms`: average time spent on data preparation per batch (ms)
+  - `optim_time_ms`: average optimizer/step time per batch (ms)
+  - `batches`: number of batches in the epoch
+- Access: present in training summaries as `bench_history` when using `HybridTRTrainer` (and surfaced by higher‑level drivers).
+- Logging cadence: controlled by `log_interval` in trainer config (robotics example exposes `--log_every`).
+
 ### Comparing Implementations
 
 ```python

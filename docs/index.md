@@ -50,6 +50,7 @@ Welcome to the ZeroProof documentation. This guide combines conceptual foundatio
 - Examples
   - Browse runnable scripts in `examples/`
   - Highlights: `examples/basic_usage.py`, `examples/complete_demo.py`, `examples/optimization_demo.py`
+  - Robotics IK parity runner: `experiments/robotics/run_all.py` (quick/full profiles; stratified test subset; DLS aligned)
 
 - Testing & Validation
   - Property and unit tests: `tests/`

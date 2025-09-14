@@ -53,6 +53,15 @@ x_pole = TRNode.constant(real(1.0))  # If Q(1) = 0
 y_pole, tag_pole = layer.forward(x_pole)  # tag_pole may be PINF/NINF/PHI
 ```
 
+### Multi‑Input / Multi‑Output Variants
+
+For vector inputs and multi‑output predictions with shared pole structure, see Topic 4 “Layers & Variants” (`docs/topics/04_layers.md`):
+
+- `TRRationalMulti`: multiple outputs with optional shared denominator `Q`.
+- `TRMultiInputRational`: lightweight TR‑MLP front end (R^D→K features) feeding TR‑Rational heads; supports shared `Q` and an optional pole head.
+
+These variants expose vector forward helpers and a structured result (`forward_fully_integrated`) including tags and optional `Q` diagnostics. Refer to `zeroproof/layers/multi_input_rational.py` for details and a 4D→2D robotics usage example.
+
 ### Basis Functions
 
 The library provides several basis function options:

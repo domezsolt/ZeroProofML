@@ -56,11 +56,49 @@ When you need more control or explicit pole learning:
 - EnhancedPoleDetectionHead and regularizer components for custom assemblies.
   - Code: `zeroproof/layers/enhanced_pole_detection.py:1`.
 
+## Multi‑Input / Multi‑Output Rationals
+
+Some tasks (e.g., robotics IK) take vector inputs and produce multi‑dimensional outputs while sharing pole structure.
+
+- TRRationalMulti: Multiple outputs with a shared denominator Q (optional) and separate numerators.
+  - Use when outputs share the same pole locations (shared_Q=True).
+  - Code: `zeroproof/layers/tr_rational.py:408` (`class TRRationalMulti`).
+
+- TRMultiInputRational: Small TR‑MLP front end (R^D→K features) feeding TR‑Rational heads for multi‑output.
+  - Forward (vector): `forward([TRNode|float]*input_dim) -> List[(TRNode, TRTag)]` (len = n_outputs).
+  - Structured forward: `forward_fully_integrated(...) -> {outputs, tags, Q_abs_list?, pole_score?}`.
+  - Supports enabling a simple pole head; provides `regularization_loss()` across heads.
+  - Code: `zeroproof/layers/multi_input_rational.py:1`.
+
+Usage (4D→2D)
+```python
+from zeroproof.layers import TRMultiInputRational, MonomialBasis
+
+model = TRMultiInputRational(
+    input_dim=4,
+    n_outputs=2,
+    d_p=3,
+    d_q=2,
+    basis=MonomialBasis(),
+    hidden_dims=[8],
+    shared_Q=True,
+    enable_pole_head=False,
+)
+
+# Vector forward (floats or TRNodes)
+outs = model.forward([0.1, -0.2, 0.05, -0.05])  # [(TRNode, TRTag), (TRNode, TRTag)]
+```
+
+When to use which
+- Prefer TRRationalMulti when outputs share Q and the input is scalar or already projected.
+- Prefer TRMultiInputRational when inputs are vectors and you want a lightweight front end with shared Q across heads.
+
 ## Practical Patterns
 - Start simple: TRRational + Chebyshev basis; monitor tag distribution and q_min.
 - For pole learning: switch to HybridTRRational with a gentle schedule; enable Q tracking to tune δ.
 - Add a pole head when you have labels/weak‑labels for singularities; combine with coverage control in training.
 - For normalization without ε: use TRNorm or TRLayerNorm to avoid tuning eps.
+ - Benchmark training: Hybrid trainer prints and records per‑epoch timings — `avg_step_ms`, `data_time_ms`, `optim_time_ms`, `batches` — returned in training summaries under `bench_history`. Adjust logging cadence via `log_interval` (CLI `--log_every`).
 
 ## Interactions with Autodiff
 - All layers use lifted TR ops (`tr_ops_grad`) and integrate with `TRNode`.

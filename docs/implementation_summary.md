@@ -29,6 +29,12 @@
   - Optional L1 projection for stability
   - Minimum |Q(x)| tracking
 
+## Training Orchestration ✓
+- `Trainer` and `HybridTRTrainer` coordinate epochs, coverage control, and hybrid gradient schedules
+- Logging cadence controlled via `log_interval`; robotics examples expose `--log_every`
+- Per‑epoch bench metrics recorded in training summaries under `bench_history`:
+  - `avg_step_ms`, `data_time_ms`, `optim_time_ms`, and `batches`
+
 ## TR-Norm (Epsilon-Free Normalization) ✓
 - `TRNorm`: Batch normalization without epsilon
 - `TRLayerNorm`: Layer normalization without epsilon

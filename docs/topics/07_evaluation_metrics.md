@@ -42,6 +42,19 @@ Outputs
 - Optional plots (saved to `plot_dir`), periodic by `plot_frequency`.
 - Log file `evaluation_log.json` with timestamped entries.
 
+## Robotics IK (2D) Metrics & Buckets
+
+For the RR‑arm (θ2 singularities at {0, π}), use the 2D helpers and bucketed MSE by |det(J)|≈|sin θ2| to quantify near‑pole behavior.
+
+- 2D metrics helper: `zeroproof/metrics/pole_2d.py`
+  - `compute_ple_to_lines(test_inputs, predictions)`: PLE vs θ2∈{0, π}
+  - `compute_pole_metrics_2d(test_inputs, predictions)`: bundle of PLE, sign consistency, slope error, residual consistency
+- Bucketed test MSE by |det(J)| bins (B0–B4): include both MSE and counts per bucket
+  - Edges (default): [0, 1e‑5, 1e‑4, 1e‑3, 1e‑2, inf]
+  - Recommended: ensure B0–B3 have non‑zero counts for robust near‑pole evaluation
+- Comparator driver outputs both bucketed MSE and 2D pole metrics in JSON
+  - Quick profile stratifies the test subset by |det(J)| and aligns DLS to the same subset for parity
+
 ## Coverage and Tag Distribution
 - Use coverage trackers during training to monitor REAL vs non‑REAL; break down near‑pole coverage using Hybrid stats.
 - Code: `zeroproof/training/coverage.py:1` and Hybrid context in `autodiff/hybrid_gradient.py:1`.

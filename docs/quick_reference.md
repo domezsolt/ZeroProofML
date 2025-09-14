@@ -234,9 +234,45 @@ def robust_mean(values):
     
     if count > 0:
         return zp.tr_div(total, zp.real(count))
-    else:
-        return zp.phi()  # No valid values
+  else:
+      return zp.phi()  # No valid values
 ```
+
+## Robotics CLI (RR IK)
+
+### Dataset Generator
+```bash
+python examples/robotics/rr_ik_dataset.py \
+  --n_samples 20000 \
+  --singular_ratio 0.35 \
+  --displacement_scale 0.1 \
+  --singularity_threshold 1e-3 \
+  --stratify_by_detj --train_ratio 0.8 \
+  --force_exact_singularities \
+  --min_detj 1e-6 \
+  --bucket-edges 0 1e-5 1e-4 1e-3 1e-2 inf \
+  --ensure_buckets_nonzero \
+  --seed 123 \
+  --output data/rr_ik_dataset.json
+```
+- JSON metadata: `bucket_edges`, `train_bucket_counts`, `test_bucket_counts`, and when stratified: `stratified_by_detj`, `train_ratio`, `ensured_buckets_nonzero`, optional `singular_ratio_split`, and `seed`.
+
+### Comparator Driver (Parity Runner)
+```bash
+python experiments/robotics/run_all.py \
+  --dataset data/rr_ik_dataset.json \
+  --profile quick|full \
+  --models tr_basic tr_full rational_eps mlp dls \
+  --max_train 2000 --max_test 500 \
+  --seed 123 \
+  --output_dir results/robotics/run
+```
+- Quick mode: stratifies the test subset by |det(J)|≈|sin(theta2)| to ensure B0–B3 presence when available, recomputes bucket MSE on the subset, and aligns DLS to evaluate on the same subset.
+- Outputs: `comprehensive_comparison.json` with per-bucket MSE and counts, plus per-method JSON summaries.
+
+### Bench Metrics (Per-Epoch)
+- Hybrid trainer prints and stores: `avg_step_ms`, `data_time_ms`, `optim_time_ms`, and `batches`.
+- Available in training summaries under `bench_history`.
 
 ### Optimization Pipeline
 ```python

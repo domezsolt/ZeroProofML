@@ -81,6 +81,21 @@ Full showcase (heavier, integrates many features):
 
 Tip: If a script plots figures, install matplotlib: `pip install matplotlib`.
 
+## Reproducibility
+
+Set a single seed across Python/NumPy/PyTorch and record it in outputs where applicable.
+
+```python
+from zeroproof.utils.seeding import set_global_seed
+
+set_global_seed(123)
+# Your code here
+```
+
+Notes
+- The robotics dataset generator writes `metadata.seed` and bucket metadata (`bucket_edges`, `train_bucket_counts`, `test_bucket_counts`) into the JSON when stratified.
+- The parity runner accepts `--seed` and uses it consistently; quick mode reports the same bucket edges/counts.
+
 ## Evaluate Poles
 
 ```python
