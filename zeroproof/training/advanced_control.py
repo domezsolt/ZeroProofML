@@ -597,6 +597,8 @@ def create_advanced_controller(control_type: str = "hybrid",
     curriculum_config = None
     
     if control_type in ["pi", "hybrid"]:
+        # Ensure a small positive floor for λ_rej so control never fully turns off,
+        # which helps prevent pathological 100% coverage in late epochs.
         pi_config = PIControllerConfig(
             target_coverage=target_coverage,
             kp=kwargs.get('kp', 1.0),
@@ -604,6 +606,7 @@ def create_advanced_controller(control_type: str = "hybrid",
             kd=kwargs.get('kd', 0.0),
             dead_band=kwargs.get('dead_band', 0.02),
             adaptive_gains=kwargs.get('adaptive_gains', True),
+            output_min=kwargs.get('output_min', 0.02),
         )
     
     if control_type in ["curriculum", "hybrid"]:

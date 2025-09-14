@@ -696,6 +696,8 @@ def main():
                        help='Length of first link')
     parser.add_argument('--L2', type=float, default=1.0,
                        help='Length of second link')
+    parser.add_argument('--bucket-edges', nargs='+', default=None,
+                       help='Custom |det(J)| bucket edges, e.g., 0 1e-5 1e-4 1e-3 1e-2 inf')
     
     args = parser.parse_args()
     
@@ -864,8 +866,6 @@ def main():
     print(f"Max condition number: {np.max([s.cond_J for s in samples if not np.isinf(s.cond_J)]):.2f}")
     if split_info is not None:
         print("\nBucket edges:", bucket_edges)
-    parser.add_argument('--bucket-edges', nargs='+', default=None,
-                       help='Custom |det(J)| bucket edges, e.g., 0 1e-5 1e-4 1e-3 1e-2 inf')
         print("Train bucket counts:", split_info['train_bucket_counts'])
         print("Test bucket counts: ", split_info['test_bucket_counts'])
         # Warn if any near-pole buckets are empty

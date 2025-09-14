@@ -12,11 +12,12 @@ import time
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 import hashlib
+import math
 
 # Import all baseline implementations
-from mlp_baseline import MLPConfig, MLPBaseline, MLPTrainer, run_mlp_baseline
-from rational_eps_baseline import RationalEpsConfig, run_rational_eps_baseline, grid_search_epsilon
-from dls_solver import DLSConfig, run_dls_reference
+from .mlp_baseline import MLPConfig, MLPBaseline, MLPTrainer, run_mlp_baseline
+from .rational_eps_baseline import RationalEpsConfig, run_rational_eps_baseline, grid_search_epsilon
+from .dls_solver import DLSConfig, run_dls_reference
 
 # Import ZeroProofML for comparison
 from zeroproof.core import real, TRTag
@@ -248,8 +249,80 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
     samples = data['samples']
     print(f"Loaded {len(samples)} samples")
     
-    # Prepare data
-    train_data, test_data = prepare_ik_data(samples)
+    # Prepare data with explicit indices to support stratified subsampling
+    inputs = []
+    targets = []
+    for s in samples:
+        inputs.append([s['theta1'], s['theta2'], s['dx'], s['dy']])
+        targets.append([s['dtheta1'], s['dtheta2']])
+    n_train_full = int(0.8 * len(inputs))
+    train_idx = list(range(n_train_full))
+    test_idx = list(range(n_train_full, len(inputs)))
+
+    # Pull quick overrides if any (for potential subsampling)
+    overrides = globals().get('_COMPARATOR_OVERRIDES', {})
+    quick = bool(overrides.get('quick', False))
+
+    # Optional stratified subsample for quick runs to speed up baselines and keep B0–B3 non-empty
+    if quick:
+        max_train = int(overrides.get('max_train', 2000))
+        max_test = int(overrides.get('max_test', 500))
+        edges = DEFAULT_BUCKET_EDGES
+
+        # Helper: assign indices to buckets by |sin(theta2)|
+        def bucketize(idx_list):
+            buckets = {i: [] for i in range(len(edges) - 1)}
+            for i in idx_list:
+                th2 = float(samples[i]['theta2'])
+                dj = abs(math.sin(th2))
+                for b in range(len(edges) - 1):
+                    lo, hi = edges[b], edges[b+1]
+                    if (dj >= lo if b == 0 else dj > lo) and dj <= hi:
+                        buckets[b].append(i)
+                        break
+            return buckets
+
+        # Stratified selection for test to ensure B0–B3 presence where available
+        tb = bucketize(test_idx)
+        selected_test = []
+        # Preselect one from B0–B3 if available
+        for b in range(min(4, len(edges) - 1)):
+            if tb.get(b):
+                selected_test.append(tb[b][0])
+                tb[b] = tb[b][1:]
+        # Fill remaining in round-robin across buckets, preserving order
+        rr_order = [b for b in range(len(edges) - 1) if tb.get(b)]
+        ptrs = {b: 0 for b in rr_order}
+        while len(selected_test) < min(max_test, len(test_idx)) and rr_order:
+            new_rr = []
+            for b in rr_order:
+                blist = tb.get(b, [])
+                p = ptrs[b]
+                if p < len(blist):
+                    selected_test.append(blist[p])
+                    ptrs[b] = p + 1
+                    if ptrs[b] < len(blist):
+                        new_rr.append(b)
+                if len(selected_test) >= min(max_test, len(test_idx)):
+                    break
+            rr_order = new_rr
+            if not rr_order:
+                break
+        # Fallback: if still short, append remaining test_idx in order
+        if len(selected_test) < min(max_test, len(test_idx)):
+            remaining = [i for i in test_idx if i not in selected_test]
+            selected_test.extend(remaining[: (min(max_test, len(test_idx)) - len(selected_test))])
+
+        # Train subsample: take first max_train for speed (could also stratify similarly)
+        selected_train = train_idx[: min(max_train, len(train_idx))]
+
+        train_idx = selected_train
+        test_idx = selected_test
+
+    # Build final train/test data from indices
+    train_data = ([inputs[i] for i in train_idx], [targets[i] for i in train_idx])
+    test_data = ([inputs[i] for i in test_idx], [targets[i] for i in test_idx])
+
     print(f"Train samples: {len(train_data[0])}")
     print(f"Test samples: {len(test_data[0])}")
     
@@ -263,8 +336,12 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
     
     # Precompute dataset hash and test |det(J)| for bucket metrics
     bucket_edges = DEFAULT_BUCKET_EDGES
-    n_train = int(0.8 * len(samples))
-    test_detj = [abs(s.get('det_J', 0.0)) for s in samples[n_train:]]
+    # Compute |det(J)| for the test subset (|sin(theta2)| for RR robot)
+    test_inputs_for_edges = test_data[0]
+    if test_inputs_for_edges:
+        test_detj = [abs(math.sin(float(x[1]))) for x in test_inputs_for_edges]
+    else:
+        test_detj = []
     # Dataset hash for parity
     try:
         with open(dataset_file, 'rb') as _fb:
@@ -400,7 +477,9 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
             raise RuntimeError('skipped')
         dls_config = DLSConfig(damping_factor=0.01,
                                max_iterations=(1 if quick else 100))
-        dls_results = run_dls_reference(samples, dls_config, output_dir=f"{output_dir}/dls", seed=seed)
+        # Align DLS evaluation set to the quick test subset when in quick mode
+        dls_eval_samples = samples if not quick else [samples[i] for i in test_idx]
+        dls_results = run_dls_reference(dls_eval_samples, dls_config, output_dir=f"{output_dir}/dls", seed=seed)
         # Add bucketed MSE using final_errors
         dls_mse_list = dls_results.get('final_errors', [])
         dls_bucket_mse, dls_bucket_counts = compute_bucket_mse(dls_mse_list, bucket_edges, test_detj)
@@ -468,7 +547,7 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
             'Avg_Epoch_Time': zp_basic_results['training_time'] / max(1, zp_basic_results.get('epochs', 100)),
             'Success_Rate': 1.0,
             'Notes': 'TR-Rational only',
-            'NearPoleCountsB0_B3': [zp_basic_results['near_pole_bucket_mse']['bucket_counts'].get(f"({bucket_edges[i]:.0e},{bucket_edges[i+1]:.0e}]", 0) for i in range(4)],
+            'NearPoleCountsB0_B3': [zpb_counts.get(f"({bucket_edges[i]:.0e},{bucket_edges[i+1]:.0e}]", 0) for i in range(4)],
         })
         
         print(f"✓ ZeroProofML-Basic: MSE={zp_basic_results['final_mse']:.6f}")
@@ -507,7 +586,7 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
             'Avg_Epoch_Time': zp_full_results['training_time'] / max(1, zp_full_results.get('epochs', 100)),
             'Success_Rate': 1.0,
             'Notes': 'All enhancements',
-            'NearPoleCountsB0_B3': [zp_full_results['near_pole_bucket_mse']['bucket_counts'].get(f"({bucket_edges[i]:.0e},{bucket_edges[i+1]:.0e}]", 0) for i in range(4)],
+            'NearPoleCountsB0_B3': [zpf_counts.get(f"({bucket_edges[i]:.0e},{bucket_edges[i+1]:.0e}]", 0) for i in range(4)],
         })
         
         print(f"✓ ZeroProofML-Full: MSE={zp_full_results['final_mse']:.6f}")

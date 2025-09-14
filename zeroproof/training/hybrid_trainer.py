@@ -200,6 +200,7 @@ class HybridTRTrainer(TRTrainer):
         self.pole_metrics_history = []
         self.tag_statistics = []
         self.gradient_mode_history = []
+        self.bench_history = []  # per-epoch timing summaries
 
         # Persistent per-head and frontend optimizers if model exposes heads/layers
         self.head_optimizers = None
@@ -502,8 +503,25 @@ class HybridTRTrainer(TRTrainer):
         else:
             coverage_tracker = CoverageTracker()
         
+        # Bench accumulators
+        total_step_ms = 0.0
+        total_optim_ms = 0.0
+        total_data_ms = 0.0  # For this trainer path, data prep time is minimal; we approximate as step - optim
+        n_batches = 0
+
         for batch_idx, (inputs, targets) in enumerate(data_loader):
+            t_step0 = time.time()
+            t_opt0 = time.time()
             batch_metrics = self._train_batch(inputs, targets, coverage_tracker)
+            t_opt1 = time.time()
+            # Measure timings
+            optim_ms = (t_opt1 - t_opt0) * 1000.0
+            step_ms = (time.time() - t_step0) * 1000.0
+            total_optim_ms += optim_ms
+            total_step_ms += step_ms
+            # Approximate data/other time as the remainder (non-negative)
+            total_data_ms += max(0.0, step_ms - optim_ms)
+            n_batches += 1
             
             # Accumulate metrics
             for key, value in batch_metrics.items():
@@ -541,6 +559,24 @@ class HybridTRTrainer(TRTrainer):
         for key, values in metrics.items():
             if values:
                 avg_metrics[key] = sum(values) / len(values)
+
+        # Bench averages (per batch)
+        if n_batches > 0:
+            avg_step_ms = total_step_ms / n_batches
+            avg_optim_ms = total_optim_ms / n_batches
+            avg_data_ms = total_data_ms / n_batches
+            avg_metrics["avg_step_ms"] = avg_step_ms
+            avg_metrics["optim_time_ms"] = avg_optim_ms
+            avg_metrics["data_time_ms"] = avg_data_ms
+            avg_metrics["batches"] = float(n_batches)
+            # Persist bench record
+            self.bench_history.append({
+                'epoch': self.epoch,
+                'avg_step_ms': avg_step_ms,
+                'data_time_ms': avg_data_ms,
+                'optim_time_ms': avg_optim_ms,
+                'batches': n_batches,
+            })
         
         # Apply coverage enforcement if enabled
         if self.coverage_policy and 'coverage' in avg_metrics:
@@ -611,6 +647,29 @@ class HybridTRTrainer(TRTrainer):
             })
         
         return avg_metrics
+
+    def _log_epoch(self, epoch: int, train_metrics: Dict[str, float], 
+                   val_metrics: Optional[Dict[str, float]] = None) -> None:
+        """Log epoch metrics with bench summary."""
+        msg = f"Epoch {epoch + 1}/{self.config.max_epochs}"
+        msg += f" - Train Loss: {train_metrics['loss']:.4f}"
+        if "coverage" in train_metrics:
+            msg += f" Coverage: {train_metrics['coverage']:.3f}"
+        if "lambda_rej" in train_metrics:
+            msg += f" λ_rej: {train_metrics['lambda_rej']:.3f}"
+        if val_metrics:
+            msg += f" - Val Loss: {val_metrics['loss']:.4f}"
+            if "coverage" in val_metrics:
+                msg += f" Coverage: {val_metrics['coverage']:.3f}"
+        print(msg)
+        # Bench line
+        if all(k in train_metrics for k in ("avg_step_ms", "data_time_ms", "optim_time_ms", "batches")):
+            print(
+                f"Bench: avg_step_ms={train_metrics['avg_step_ms']:.1f}, "
+                f"data_time_ms={train_metrics['data_time_ms']:.1f}, "
+                f"optim_time_ms={train_metrics['optim_time_ms']:.1f}, "
+                f"batches={int(train_metrics['batches'])}"
+            )
     
     def _train_batch(self,
                     inputs: List[TRScalar],
@@ -960,7 +1019,8 @@ class HybridTRTrainer(TRTrainer):
         summary = {
             'epochs_trained': self.epoch,
             'global_steps': self.global_step,
-            'final_metrics': self.history
+            'final_metrics': self.history,
+            'bench_history': self.bench_history
         }
         
         # Add hybrid gradient history

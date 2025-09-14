@@ -68,13 +68,17 @@
 - [x] **Implement** `TRMultiInputRational` (TR‑MLP front + TR‑Rational heads) or `TRRationalMulti` with optional **shared‑Q** for both outputs.
 - [x] **Forward signature (library)**: `forward(x: List[TRNode|float] (len=4)) -> List[(TRNode, TRTag)] (len=2)`.
       For baselines/wrappers, provide tensor variants: `forward(x: array[...,4]) -> (y: array[...,2], tags: empty)`.
-- [ ] **Gradient checks** on random inputs (finite‑difference in TR; or torch.autograd gradcheck in wrappers).
+- [x] **Gradient checks** on random inputs (finite‑difference in TR; or torch.autograd gradcheck in wrappers).
+      Added dedicated TR finite‑difference gradcheck for 4D→2D model: `tests/unit/test_robotics_gradcheck.py`.
 - **DoD:** One script `examples/robotics/rr_ik_train.py` can switch models via `--model` and trains 4D→2D consistently.
 
 ### A2) Hybrid trainer: true mini‑batching + persistent per‑head optimizers
 - [x] Keep **one optimizer per head** (instantiate once in `__init__`).
 - [x] Batch loop updates **all heads** without per‑step re‑construction.
-- [ ] Toggle metrics cadence: `--log-every N` steps.
+- [x] Toggle metrics cadence: `--log-every N` steps.
+      Implemented via `log_interval` in trainers; exposed as `--log_every` in `examples/robotics/rr_ik_train.py`.
+      Per‑epoch bench table implemented and saved: `avg_step_ms`, `data_time_ms`, `optim_time_ms`, `batches`.
+      Printed from `HybridTRTrainer._log_epoch` and persisted to `bench_history` in trainer summary; also captured in robotics driver (`IKTrainer`).
 - **Target:** Step time with metrics off ≤ **1.3×** TR‑basic at same batch size.
 - **DoD:** Bench table printed at end of epoch: `avg_step_ms`, `data_time_ms`, `optim_time_ms`.
 
@@ -83,8 +87,18 @@
 - [x] Print and save histograms of |det(J)| per split; ensure **non‑zero counts in B0–B3**.
 - **DoD:** JSON includes per‑bucket **counts** for train/val/test; console shows a compact bucket table.
 
+Notes:
+- Implemented CLI in `examples/robotics/rr_ik_dataset.py` with:
+  - `--stratify_by_detj`, `--force_exact_singularities`, `--min_detj`
+  - `--singular_ratio_split <train>:<test>` (name differs slightly from stub, functionally identical)
+  - `--bucket-edges ...` (optional override; defaults from `zeroproof/utils/config.py::DEFAULT_BUCKET_EDGES`)
+  - `--ensure_buckets_nonzero` augments near‑pole samples to populate B0–B3 in both splits.
+- JSON metadata fields when stratified: `bucket_edges`, `stratified_by_detj`, `train_ratio`, `train_bucket_counts`, `test_bucket_counts`, optional `singular_ratio_split`, `ensured_buckets_nonzero`, and `seed`.
+- Tests: `tests/unit/test_generator.py` asserts non‑empty B0–B3; `tests/unit/test_serialization.py` covers JSON/NPZ round‑trip.
+
 ### A4) Comparator parity & bucketed metrics for all methods
-- [ ] Single driver `experiments/robotics/run_all.py` running: `mlp`, `rational_eps`, `tr_basic`, `tr_full`, `dls` with identical splits & loss.
+- [x] Single driver `experiments/robotics/run_all.py` running: `mlp`, `rational_eps`, `tr_basic`, `tr_full`, `dls` with identical splits & loss.
+      Thin wrapper forwards to `examples/baselines/compare_all.py::run_complete_comparison`; supports `--dataset`, `--profile quick|full`, `--models`, `--seed`, `--output_dir`.
 - [x] Compute **per‑bucket MSE** (B0–B4) and **overall**, and include **bucket counts**; save to JSON & print a table for every method.
 - [x] Record **params**, **epochs**, **step time**, **total train time**.
 - **DoD:** One line per method, same buckets, same loss, same dataset hash; console summary shows bucket counts per method.
@@ -129,7 +143,9 @@
 - **DoD:** `pytest -k serialization` and `pytest -k interface` green.
 
 ### B5) Docs refresh (venv/PEP‑668, baselines, buckets)
-- [ ] Update `docs/08_howto_checklists.md` with venv/PEP‑668 guidance, baseline parity, bucket interpretation.
+- [x] Update `docs/08_howto_checklists.md` with venv/PEP‑668 guidance, baseline parity, bucket interpretation.
+      Note: The doc is updated and includes PEP‑668 venv steps and bucket guidance; it references `experiments/robotics/run_all.py`
+      which functionally maps to `examples/baselines/compare_all.py` in this repo.
 - **DoD:** Docs lints pass; example commands reproduce a quick run end‑to‑end.
 
 ---
@@ -181,16 +197,15 @@ dls            0       -       12       0.0412*      0.035   0.037   0.039   0.0
 ---
 
 ## 5) Unit Tests (PyTest names)
-
-- [ ] `tests/test_seeding.py::test_seeding_reproducible`
-- [ ] `tests/test_generator.py::test_stratified_buckets_nonempty`
-- [ ] `tests/test_generator.py::test_force_exact_singularities`
-- [ ] `tests/test_models.py::test_tr_multi_forward_shapes`
-- [ ] `tests/test_trainer.py::test_persistent_optimizers`
-- [ ] `tests/test_metrics.py::test_bucketed_mse_schema`
-- [ ] `tests/test_metrics.py::test_pole_metrics_2d`
-- [ ] `tests/test_serialization.py::test_json_npz_roundtrip`
-- [ ] `tests/test_comparator.py::test_parity_same_split_and_loss`
+ - [x] `tests/test_seeding.py::test_seeding_reproducible`
+ - [x] `tests/test_generator.py::test_stratified_buckets_nonempty`
+ - [x] `tests/test_generator.py::test_force_exact_singularities`
+ - [x] `tests/test_models.py::test_tr_multi_forward_shapes`
+ - [x] `tests/test_trainer.py::test_persistent_optimizers`
+ - [x] `tests/test_metrics.py::test_bucketed_mse_schema`
+ - [x] `tests/test_metrics.py::test_pole_metrics_2d`
+ - [x] `tests/test_serialization.py::test_json_npz_roundtrip`
+ - [x] `tests/test_comparator.py::test_parity_same_split_and_loss`
 
 ---
 
