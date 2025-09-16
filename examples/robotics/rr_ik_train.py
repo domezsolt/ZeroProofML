@@ -392,6 +392,30 @@ class IKTrainer:
     def _train_with_zeroproof(self, inputs: List, targets: List):
         """Train using ZeroProof enhanced trainer."""
         for epoch in range(self.config.epochs):
+            # Engage hybrid schedule (if configured) to set gradient mode and exploration
+            try:
+                if hasattr(self, 'trainer') and getattr(self.trainer, 'hybrid_schedule', None):
+                    from zeroproof.autodiff.hybrid_gradient import HybridGradientContext
+                    # Update epoch in context
+                    HybridGradientContext.update_epoch(epoch)
+                    # Decide mode based on current delta
+                    delta = self.trainer.hybrid_schedule.get_delta(epoch)
+                    if delta is None:
+                        GradientModeConfig.set_mode(GradientMode.MASK_REAL)
+                    else:
+                        GradientModeConfig.set_mode(GradientMode.HYBRID)
+                        # Set local threshold for near-pole decisions if available
+                        try:
+                            GradientModeConfig.set_local_threshold(delta)
+                        except Exception:
+                            pass
+                    # Set exploration regions for this epoch
+                    regions = self.trainer.hybrid_schedule.get_exploration_regions(epoch)
+                    if regions:
+                        HybridGradientContext.set_exploration_regions(regions)
+            except Exception:
+                # Fall back silently if hybrid components are unavailable
+                pass
             epoch_metrics = []
             total_data_ms = 0.0
             total_optim_ms = 0.0
