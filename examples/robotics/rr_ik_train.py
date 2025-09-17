@@ -83,6 +83,10 @@ class TrainingConfig:
     # Performance toggles passed into HybridTrainingConfig
     no_structured_logging: bool = False
     no_plots: bool = False
+    
+    # Baseline-specific knobs
+    epsilon: Optional[float] = None  # For Rational+ε (P/(Q+ε)) baseline
+    clip_grad: Optional[float] = None  # Global-norm gradient clipping for baselines
 
 
 class MLPBaseline:
@@ -172,27 +176,33 @@ class RationalEpsBaseline:
             rational = TRRational(degree_p, degree_q, basis)
             self.rationals.append(rational)
     
+    def _forward_one_with_eps(self, rational: TRRational, x_node: TRNode) -> TRNode:
+        """Compute y = P(x)/(Q(x)+ε) using θ, φ and the model basis."""
+        # Build basis up to max degree
+        max_degree = max(len(rational.theta), len(rational.phi) + 1)
+        psi = rational.basis(x_node, max_degree)
+
+        # P(x) = Σ_k θ_k ψ_k(x)
+        P = TRNode.constant(real(0.0))
+        for k, theta_k in enumerate(rational.theta):
+            if k < len(psi):
+                P = P + theta_k * psi[k]
+
+        # Q(x) = 1 + Σ_k φ_k ψ_{k}(x); add ε shift
+        Q = TRNode.constant(real(1.0 + float(self.eps)))
+        for k, phi_k in enumerate(rational.phi):
+            idx = k + 1
+            if idx < len(psi):
+                Q = Q + phi_k * psi[idx]
+
+        return P / Q
+
     def forward(self, x: List[TRNode]) -> List[TRNode]:
-        """Forward pass with epsilon regularization."""
-        if len(x) != 1:
-            # For multi-input, use first input or combine
-            x_input = x[0]
-        else:
-            x_input = x[0]
-        
+        """Forward pass with explicit epsilon regularization (P/(Q+ε))."""
+        x_input = x[0] if x else TRNode.constant(real(0.0))
         outputs = []
         for rational in self.rationals:
-            # Standard rational computation
-            y, tag = rational.forward(x_input)
-            
-            # Apply epsilon regularization by modifying denominator
-            # This is a simplified version - in practice would modify Q directly
-            if tag != TRTag.REAL:
-                # Use epsilon-regularized fallback
-                outputs.append(TRNode.constant(real(0.0)))
-            else:
-                outputs.append(y)
-        
+            outputs.append(self._forward_one_with_eps(rational, x_input))
         return outputs
     
     def parameters(self) -> List[TRNode]:
@@ -224,9 +234,10 @@ class IKTrainer:
             )
             
         elif self.config.model_type == "rat_eps":
+            eps = self.config.epsilon if isinstance(self.config.epsilon, (int, float)) and self.config.epsilon is not None else 1e-4
             self.model = RationalEpsBaseline(
                 input_dim, output_dim,
-                self.config.degree_p, self.config.degree_q
+                self.config.degree_p, self.config.degree_q, eps=float(eps)
             )
             
         elif self.config.model_type == "tr_rat":
@@ -560,7 +571,8 @@ class IKTrainer:
                     
                     batch_loss += loss.value.value if loss.tag == TRTag.REAL else 0.0
                 
-                # Optimizer step
+                # Optimizer step with optional gradient clipping
+                self._apply_gradient_clipping()
                 self.optimizer.step(self.model)
                 
                 epoch_loss += batch_loss
@@ -571,6 +583,43 @@ class IKTrainer:
                 avg_loss = epoch_loss / n_batches
                 print(f"Epoch {epoch}: Loss = {avg_loss:.6f}")
                 self.training_history.append(avg_loss)
+
+    def _apply_gradient_clipping(self) -> None:
+        """Apply global-norm gradient clipping if configured (baselines)."""
+        c = getattr(self.config, 'clip_grad', None)
+        if c is None or not isinstance(c, (int, float)) or c <= 0:
+            return
+        if not hasattr(self.model, 'parameters'):
+            return
+        params = list(self.model.parameters())
+        if not params:
+            return
+        import math as _math
+        total_sq = 0.0
+        for p in params:
+            try:
+                g = p.gradient
+                if g is None or g.tag != TRTag.REAL:
+                    continue
+                val = float(getattr(g, 'value', 0.0))
+                if _math.isfinite(val):
+                    total_sq += val * val
+            except Exception:
+                continue
+        norm = total_sq ** 0.5
+        if norm <= 0.0 or norm <= float(c):
+            return
+        scale = float(c) / (norm + 1e-12)
+        for p in params:
+            try:
+                g = p.gradient
+                if g is None or g.tag != TRTag.REAL:
+                    continue
+                new_val = float(g.value) * scale
+                # Replace stored gradient with scaled value
+                p._gradient = real(new_val)
+            except Exception:
+                continue
     
     def evaluate(self, test_samples: List[IKSample]) -> Dict[str, float]:
         """Evaluate model on test data."""
@@ -582,25 +631,53 @@ class IKTrainer:
         
         for inp, tgt in zip(test_inputs, test_targets):
             tr_inp = [TRNode.constant(real(x)) for x in inp]
-            
-            if isinstance(self.model, list):
-                # Multi-output case
-                outputs = []
-                for model in self.model:
-                    y, tag = model.forward(tr_inp[0])
-                    if tag == TRTag.REAL:
-                        outputs.append(y.value.value)
+
+            def _to_float_list(obj) -> List[float]:
+                # Accept list of (TRNode, TRTag) or list of TRNode
+                floats: List[float] = []
+                if isinstance(obj, list) and obj:
+                    first = obj[0]
+                    # Case 1: list of tuples
+                    if isinstance(first, tuple) and len(first) == 2:
+                        for (out, tag) in obj:
+                            try:
+                                floats.append(float(out.value.value) if tag == TRTag.REAL else 0.0)
+                            except Exception:
+                                floats.append(0.0)
                     else:
-                        outputs.append(0.0)
+                        # Assume list of TRNode
+                        for out in obj:
+                            try:
+                                tag = getattr(out, 'tag', None)
+                                if tag == TRTag.REAL:
+                                    floats.append(float(out.value.value))
+                                else:
+                                    floats.append(0.0)
+                            except Exception:
+                                floats.append(0.0)
+                return floats
+
+            if isinstance(self.model, list):
+                # Rare path: list of single-output rationals
+                outs = []
+                for model in self.model:
+                    try:
+                        y, tag = model.forward(tr_inp[0])
+                        outs.append((y, tag))
+                    except Exception:
+                        y = model.forward(tr_inp[0])
+                        outs.append((y, getattr(y, 'tag', TRTag.REAL)))
+                outputs = _to_float_list(outs)
             else:
-                # Single composite model (e.g., TRMultiInputRational) or single-output rational
                 try:
-                    model_outputs = self.model.forward(tr_inp)  # Expect List[(TRNode, TRTag)]
-                    outputs = [out.value.value if tag == TRTag.REAL else 0.0 for (out, tag) in model_outputs]
+                    model_outputs = self.model.forward(tr_inp)
                 except TypeError:
-                    # Fallback: scalar forward
-                    y, tag = self.model.forward(tr_inp[0])
-                    outputs = [y.value.value if tag == TRTag.REAL else 0.0]
+                    # Some models expect scalar input
+                    model_outputs = self.model.forward(tr_inp[0])
+                # Normalize to list
+                if not isinstance(model_outputs, list):
+                    model_outputs = [model_outputs]
+                outputs = _to_float_list(model_outputs)
             
             # Compute MSE
             mse = sum((pred - true)**2 for pred, true in zip(outputs, tgt))
@@ -763,6 +840,10 @@ def main():
                        help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=32,
                        help='Batch size')
+    parser.add_argument('--epsilon', type=float, default=None,
+                       help='Epsilon for Rational+ε (P/(Q+ε)); applies to --model rat_eps')
+    parser.add_argument('--clip_grad', type=float, default=None,
+                       help='Global-norm gradient clipping (e.g., 1.0) for baselines')
     
     # ZeroProof features
     parser.add_argument('--no_hybrid', action='store_true',
@@ -813,7 +894,9 @@ def main():
         teacher_pole_threshold=args.teacher_pole_threshold,
         lambda_tag=args.lambda_tag,
         lambda_pole=args.lambda_pole,
-        lambda_residual=args.lambda_residual
+        lambda_residual=args.lambda_residual,
+        epsilon=args.epsilon,
+        clip_grad=args.clip_grad,
     )
 
     # Apply profile defaults (Section 7)
