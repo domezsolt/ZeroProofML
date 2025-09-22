@@ -1,0 +1,213 @@
+%% ZeroProofML — Theoretical Foundations (Merged Version v2 with Rebuttal Addenda)
+%% This file consolidates the full theory section and integrates positioning/scope/rebuttal edits.
+
+% ==========================
+% 0. Notation & Domain
+% ==========================
+\section*{Preliminaries}
+\label{sec:prelim}
+We use the transreal domain \(\mathbb{T}=\mathbb{R}\cup\{+\infty,-\infty,\bot\}\) with tags \(\{\mathrm{REAL},\mathrm{INF},\mathrm{NULL}\}\). Values are pairs \((v,\tau)\) with \(v\in\overline{\mathbb{R}}=\mathbb{R}\cup\{\pm\infty\}\). Arithmetic on \(\mathbb{T}\) follows explicit tag rules (addition/multiplication/division, integer powers, and guarded \(\sqrt{\cdot}\)).
+
+% ==========================
+% 0+. Positioning & Practicality
+% ==========================
+\section*{Positioning \& Practicality}
+\label{sec:positioning}
+TR totalization targets models with explicit singular structure (e.g., rational layers \(P/Q\), guarded roots/logs, Jacobian-based control). It is \emph{not} intended to replace standard deep models when singularities are not the failure mode. Use TR when deterministic, analyzable behavior near poles is required; otherwise classical components suffice.
+
+% ==========================
+% 1. Scope of Totality (Prop. 2 refined)
+% ==========================
+\section*{Scope of Totality}
+\label{sec:totality}
+\begin{definition}[Admissible class \(\mathcal{F}_{\!\mathrm{TR}}\)]\label{def:FTR}
+The least class of total maps \(f:\mathbb{T}^n\to\mathbb{T}\) that contains constants and projections and is closed under TR-totalized \(+,\,-,\,\times,\,/\), integer powers, guarded \(\sqrt{\cdot}\), composition, and tupling. Optionally includes a chosen finite set of transcendental primitives (e.g., \(\log\)) when equipped with explicit TR-totalization policies (branch/guard/tag rules).
+\end{definition}
+\begin{proposition}[Totality within \(\mathcal{F}_{\!\mathrm{TR}}\)]\label{prop:totality}
+Every \(f\in\mathcal{F}_{\!\mathrm{TR}}\) is total on \(\mathbb{T}^n\). If inputs are REAL and the classical \(f_{\mathrm{cl}}\) is defined, then \(\operatorname{tag}(f(x))=\mathrm{REAL}\) and \(\operatorname{val}(f(x))=f_{\mathrm{cl}}(\operatorname{val}(x))\); at poles/indeterminate forms, non-REAL tags are returned per the primitive rules.
+\end{proposition}
+\begin{remark}[Transcendentals]
+Claims of totality are limited to \(\mathcal{F}_{\!\mathrm{TR}}\). Primitives beyond \(\log\) and \(\sqrt{\cdot}\) are out of scope unless explicitly totalized.
+\end{remark}
+
+% ==========================
+% 1+. Scope & Composability
+% ==========================
+\section*{Scope \& Composability}
+\label{sec:scope-composability}
+\paragraph{Standard components.} ReLU is total and TR-consistent. For \texttt{sigmoid}/\texttt{tanh}/\texttt{softmax}/\texttt{layernorm} we provide: (i) TR-policy variants (explicit guards for \texttt{exp/log/div}), or (ii) rational/Pad\'e surrogates with uniform error on compact training ranges. Mixed stacks preserve TR guarantees on the rational backbone and classical behavior elsewhere.
+\paragraph{When TR helps.} Poles/constraints/control/analytic layers \(\Rightarrow\) TR; ordinary MLP/CNN without divisions \(\Rightarrow\) classical.
+
+% ==========================
+% 2. IEEE ↔ TR Bridge
+% ==========================
+\section*{IEEE–TR Bridge}
+\label{sec:ieee-tr-bridge}
+Define \(\Phi:\mathsf{IEEE}\to\mathbb{T}\) (total) and \(\Psi:\mathbb{T}_{\mathrm{REAL/INF}}\to\mathsf{IEEE}\) (round-to-nearest-even; undefined on \(\bot\)). Mapping table: finite $\mapsto (v,\mathrm{REAL})$; $\pm0\mapsto (0,\mathrm{REAL})$ with recorded IEEE zero sign; $\pm\infty\mapsto (\pm\infty,\mathrm{INF})$; NaN $\mapsto (\ast,\mathrm{NULL})$.
+\begin{lemma}[Partial homomorphism]
+If IEEE evaluates $x\circ y$ (\(\circ\in\{+,\,-,\,\times,\,/\}\)) without NaN, then $\Phi(x)\circ_{\mathbb{T}}\Phi(y)=\Phi(x\circ y)$. Divisions by $\pm0$ match signs.
+\end{lemma}
+\paragraph{Signed zeros.} We retain the IEEE zero sign in a latent flag used only when directional limits matter (e.g., $1/\pm0$).
+\paragraph{Export.} $\Psi(v,\mathrm{REAL})=\operatorname{round}(v)$; $\Psi(\pm\infty,\mathrm{INF})=\pm\infty$; $\Psi(\bot)$ undefined (or map to NaN by explicit policy). The bridge is a faithful embedding on non-NaN cases and a conservative \emph{extension} elsewhere.
+
+% ==========================
+% 3. Autodiff: Mask-REAL
+% ==========================
+\section*{Autodiff with Tags: Mask-REAL}
+\label{sec:autodiff}
+Let nodes be \(z_k=F_k(z_{i_1},\dots,z_{i_m})\) with \(F_k\in\mathcal{F}_{\!\mathrm{TR}}\). Each primitive has a REAL-mask predicate \(\chi_k\in\{0,1\}\) that is 1 iff all inputs and the evaluation are REAL-tagged.
+\begin{definition}[Mask-REAL gradient]\label{def:mask-real}
+Backprop uses gates: $\bar z_i {+}{=} \chi_k\,\bar z_k\,\partial_{z_i}F_k\vert_{\mathrm{REAL}}$ along edge $z_i\to z_k$. When $\chi_k=0$, either drop the term or use a bounded surrogate $S_k$ (Remark~\ref{rem:sat}).
+\end{definition}
+\begin{lemma}[REAL-path equivalence]\label{lem:real}
+If all nodes are REAL on an open set $U$ and $f_{\mathrm{cl}}$ is $C^1$ on $U$, then Mask-REAL equals the classical gradient on $U$.
+\end{lemma}
+\begin{lemma}[Chain rule with tag gating]\label{lem:chain}
+For $f=g\circ h$, $\nabla f_{\mathrm{MR}}(x)=J_g(h(x))M_g(x)J_h(x)M_h(x)$ where $M_\bullet$ are diagonal masks of local $\chi_k$.
+\end{lemma}
+\begin{proposition}[Bounded update under saturation]\label{prop:bounded-update}
+Assume: (i) loss Lipschitz with constant $L_\ell$; (ii) REAL derivatives bounded by $B_k$ or surrogates $S_k$ with norm $\le G_{\max}$; (iii) step size $\eta\le\eta_{\max}$. Then $\|\Delta\theta\|\le \eta\,C$ with $C$ depending on $L_\ell$, depth, and $\{B_k\},G_{\max}$. In particular, choosing $\eta_{\max}=c/(L_\ell\,\Pi_k\max\{B_k,G_{\max}\})$ ensures $\|\Delta\theta\|\le c$.
+\end{proposition}
+\begin{remark}[Saturation]\label{rem:sat}
+Use a smooth saturator $\sigma(a)=a/\sqrt{1+(a/G_{\max})^2}$ to keep bounded gradients when $\chi_k=0$.
+\end{remark}
+
+% ==========================
+% 4. Hybrid Switching Criteria
+% ==========================
+\section*{Hybrid Switching: Mask-REAL $\leftrightarrow$ Saturated}
+\label{sec:hybrid}
+Let $\Gamma$ denote pole hypersurfaces. Diagnostics: distance $d(x)=\operatorname{dist}(x,\Gamma)$ and local sensitivity $g_k=\|\nabla_z F_k\|$ on REAL values. Choose thresholds $0<\delta_{\mathrm{on}}<\delta_{\mathrm{off}}$ and $0<g_{\mathrm{on}}<g_{\mathrm{off}}$.
+\paragraph{Aggregator choice.} Max/min in the triggers may be replaced by robust quantiles (e.g., 90th percentiles of $d$ and $g$) or any Lipschitz aggregator without affecting the finite-switching and descent guarantees.
+\begin{definition}[Hysteretic hybrid]
+Mode $m_t\in\{\mathrm{MR},\mathrm{SAT}\}$. Switch to SAT if $d_t\le\delta_{\mathrm{on}}$ or $\max_k g_k\ge g_{\mathrm{on}}$; switch to MR if $d_t\ge\delta_{\mathrm{off}}$ and $\max_k g_k\le g_{\mathrm{off}}$; otherwise keep $m_t$.
+\end{definition}
+\begin{lemma}[No chattering]
+With hysteresis ($\delta_{\mathrm{off}}>\delta_{\mathrm{on}}$, $g_{\mathrm{off}}>g_{\mathrm{on}}$) and continuous trajectories between steps, the number of switches on a compact interval is finite.
+\end{lemma}
+\begin{proposition}[Bounded updates under hybrid]
+For $\eta\le c/(L_\ell\,\Pi_k\max\{B_k,G_{\max}\})$, we have $\|\Delta\theta\|\le c$ regardless of switching times.
+\end{proposition}
+
+% ==========================
+% 4+. Sufficient Conditions for Finite Switching
+% ==========================
+\section*{Sufficient Conditions for Finite Switching}
+\label{sec:finite-switching}
+\begin{theorem}[Finite/zero-density switching]
+Assume (i) hysteresis margins $\delta_{\mathrm{off}}>\delta_{\mathrm{on}}$, $g_{\mathrm{off}}>g_{\mathrm{on}}$; (ii) batch-safe steps $\eta_t\le 1/\widehat L_{\mathcal{B}_t}$; (iii) bounded inputs in a compact set and coverage quotas preventing persistent dwelling in $\Gamma_{\delta_{\mathrm{on}}}$. Then with probability 1 the number of mode switches on any finite horizon is finite (or has zero density), and convergence theorems in Sec.~\ref{sec:global-convergence} apply.
+\end{theorem}
+\begin{proof}[Proof sketch]
+Hysteresis yields nonzero travel distance between triggers; batch-safe steps bound state increments; the coverage controller reduces revisit frequency to the guard band. Hybrid-systems arguments imply finite switching on compact intervals.
+\end{proof}
+
+% ==========================
+% 5. Coverage Controller
+% ==========================
+\section*{Coverage Controller}
+\label{sec:coverage}
+Bucket by pole proximity: $B_0=\{d\ge\Delta_2\}$, $B_1=\{\Delta_1\le d<\Delta_2\}$, $B_2=\{d<\Delta_1\}$.
+\paragraph{Distance estimator.} We estimate $d(x)$ via $|Q(x)|/\|\nabla Q(x)\|_{*}$ (or basis-aware surrogates); any consistent positive estimator suffices. Constrained ERM:
+\begin{align}
+\min_{\theta}\ &\mathbb{E}[\ell(f(x;\theta),y)]\quad\text{s.t.}\quad \pi_1\ge\alpha_1,\ \pi_2\ge\alpha_2,\ \rho_{\mathrm{flip}}\le\rho_{\max}.
+\end{align}
+Lagrangian with hinge surrogates: $\mathcal{L}+\lambda_1[\alpha_1-\hat\pi_1]_++\lambda_2[\alpha_2-\hat\pi_2]_++\mu[\hat\rho_{\mathrm{flip}}-\rho_{\max}]_+$. Dual ascent on $(\lambda,\mu)$ yields an interpretable controller increasing pressure when quotas are violated. Standard primal–dual arguments give monotone decrease (up to $\mathcal{O}(\eta)$) and bounded constraint residuals under bounded variance.
+
+% ==========================
+% 6. Batch-Safe Learning Rate
+% ==========================
+\section*{Batch-Safe Learning Rate}
+\label{sec:batch-safe}
+Let $A_i=\|\nabla_\theta f(x^{(i)};\theta)\|$ and \(\beta_\ell\) be the loss smoothness. Then the batch objective is $L_\mathcal{B}$-smooth with
+$L_\mathcal{B}\le \tfrac{\beta_\ell}{m}\sum_i A_i^2 \le \tfrac{\beta_\ell}{m}\sum_i (A_i^{\max})^2 =: \widehat L_\mathcal{B}$. Hence GD with $\eta\le 1/\widehat L_\mathcal{B}$ satisfies the standard descent lemma. A quantile-robust alternative uses $L_\mathcal{B}^{(q)}=\beta_\ell\,(A^{(q)})^2$. Combine with Prop.~\ref{prop:bounded-update} via $\eta_t=\min\{\alpha/\widehat L_{\mathcal{B},t},\ c/(L_\ell\prod_k \max\{B_k,G_{\max}\})\}$.
+
+% ==========================
+% X. Second-Order Derivatives & Momentum
+% ==========================
+\section*{Second-Order Derivatives and Momentum Stability}
+\label{sec:second-order-momentum}
+\paragraph{Assumptions.} Work on a tag-stable REAL region $U$ (no pole crossings), or use bounded saturated surrogates $S_k$ when $\chi_k=0$. On $U$, $f_{\mathrm{cl}}\in C^2$; primitives have bounded first/second derivatives; surrogates are bounded by $G_{\max}$ (and optionally Lipschitz).
+\paragraph{Hessian on REAL regions.} If $\chi_k\equiv 1$ on $U$, then $\nabla^2 f_{\mathrm{MR}}(x)=\nabla^2 f_{\mathrm{cl}}(x)$ for all $x\in U$.
+\paragraph{Across guard bands.} With masks $M(x)$, $\nabla^2 f_{\mathrm{MR}}(x)=M\,\nabla^2 f_{\mathrm{cl}}(x)\,M + (\nabla M)\ast(\nabla f_{\mathrm{cl}})$. Use piecewise-constant $M$ or bounded surrogates; operator norms are bounded by local second-derivative bounds and $G_{\max}$.
+\begin{proposition}[Bounded curvature with saturation]\label{prop:bounded-hessian}
+If $\|\nabla F_k\|\le B_k$, $\|\nabla^2 F_k\|\le H_k$ on REAL inputs, and surrogates satisfy $\|S_k\|\le G_{\max}$, $\|\nabla S_k\|\le H_{\max}$, then on any batch $\|\nabla^2 \mathcal{L}\|\le C_H := C_0\big( \sum_{\text{paths}} \prod_{k\in \text{path}} c_k \big)$ with $c_k\in\{B_k^2+H_k,\ G_{\max}^2+H_{\max}\}$.
+\end{proposition}
+\paragraph{Gauss--Newton \& Fisher.} On REAL regions MR $\equiv$ classical; in SAT regions, bounded surrogates keep curvature finite.
+\subsection*{Momentum and Adam}
+\paragraph{Heavy-ball/Polyak.} $v_{t+1}=\beta_1 v_t+\nabla\mathcal{L}_\mathcal{B}(\theta_t)$, $\theta_{t+1}=\theta_t-\eta v_{t+1}$. Safe region: $\eta \le 2(1-\beta_1)/\widehat L_\mathcal{B}$.
+\paragraph{Nesterov.} Same bound under smoothness; restart on tag-flip spikes.
+\paragraph{Adam/RMSProp.} With bias-corrected moments and bounded gradients, effective per-coordinate step $\eta_{t,i}^{\mathrm{eff}}\lesssim \eta/\sqrt{\hat L_{\mathcal{B},i}}$. A sufficient batch-safe condition is $\eta\le (1-\beta_1)\,/(\sqrt{1-\beta_2}\,\widehat L_\mathcal{B})$.
+
+% ==========================
+% 7. Identifiability (Prop. 5 extended)
+% ==========================
+\section*{Identifiability}
+\label{sec:ident}
+Rational layer $r=P/Q$ with parameters $(p,q)$. Invariances: scaling $(cP)/(cQ)$ and common factors. Impose leading-1 on $Q$ and coprimeness $\gcd(P,Q)=1$.
+\begin{proposition}[Identifiability a.e.]\label{prop:ident-prop}
+Assume (A1) leading-1 on $Q$, (A2) $\gcd(P,Q)=1$, (A3) data support $S$ has nonempty interior in the REAL region. If $r(\cdot;\theta_1)=r(\cdot;\theta_2)$ a.e. on $S$ (and tag patterns agree), then $\theta_1=\theta_2$, up to a null exceptional set of parameters.
+\end{proposition}
+Sketch: If $P_1/Q_1=P_2/Q_2$ on a set with an accumulation point away from poles, then $P_1Q_2-P_2Q_1\equiv0$. With $\gcd$ and leading-1, this implies equality of coefficients. Locally (tag-stable neighborhood; full-rank design), the empirical risk is strictly convex on the constraint manifold, yielding an isolated minimizer.
+\paragraph{Identifiability under manifold support.}\label{sec:ident-manifold}
+If the data support lies on a lower-dimensional manifold, identifiability holds \emph{modulo} factors that vanish on the manifold. Coprime regularization via the Sylvester smallest singular value or resultant barriers discourages near-common-factor regimes.
+
+% ==========================
+% 8. Numerical Precision & Tag Robustness
+% ==========================
+\section*{Numerical Precision and Tag Robustness}
+\label{sec:precision-tags}
+\paragraph{Policy note (training vs evaluation).} Guard-band thresholds $\tau_Q,\tau_P=\Theta(u)$ are part of the \emph{training-time} tag policy: they classify REAL/INF/NULL deterministically near poles and trigger hybrid switching. They do not alter TR algebra; they govern tags and mode selection. Evaluation may use identical or stricter thresholds (policy-dependent).
+
+Floating-point perturbations can flip tags near $\Gamma=\{Q=0\}$. Define a guard band with thresholds $\tau_Q,\tau_P=\Theta(u)$ scaled by local sensitivities (e.g., $\|\nabla Q\|$, $\|\nabla P\|$). Classifier: REAL if $|Q|\ge\tau_Q$; INF if $|Q|<\tau_Q$ and $|P|\ge\tau_P$; NULL if both below thresholds. Use hysteresis ($\tau^{\rm on}<\tau^{\rm off}$); retain signed zero to preserve directional limits. Batch statistics $\pi_{\rm band}$ and $\rho_{\rm flip}$ feed the coverage controller.
+
+% ==========================
+% 8+. Reproducibility as Policy-Determinism
+% ==========================
+\section*{Reproducibility as Policy-Determinism}
+\label{sec:policy-determinism}
+Given a declared policy (ULP bands $\tau_{Q/P}$, rounding mode, signed-zero retention, deterministic reduction trees), tag classification is deterministic across runs and devices up to the stated ULP band. Outside guard bands misclassification cannot occur by Lemmas in Sec.~\ref{sec:precision-tags}; inside, hysteresis enforces finite flips and stable behavior.
+
+% ==========================
+% Z. Robustness to Floating-Point Errors (System-Level)
+% ==========================
+\section*{Robustness to Floating-Point Errors}
+\label{sec:fp-robustness}
+\paragraph{Overflow/Underflow.} TR tags absorb overflow as $\pm\infty$ (INF) with sign consistency; guard bands mitigate subnormal noise.\par
+\paragraph{Mixed precision.} Keep denominators/tags in master precision; safe downcast only when $|Q|\ge \tau_Q^{\mathrm{off}}$; prefer stochastic rounding for accumulators.\par
+\paragraph{Stable reductions.} Use compensated or pairwise reductions and a deterministic reduction tree for order invariance.\par
+\paragraph{Cross-hardware.} Declare a device-agnostic ULP band for tag decisions and use deterministic kernels.\par
+\paragraph{Error propagation.} For $r=P/Q$, $|\Delta r|\lesssim (|\Delta P|+|r|\,|\Delta Q|)/|Q|$, motivating guard bands and hybrid switching.\par
+\paragraph{Layer contracts.} Publish $(B_k,H_k,G_{\max},H_{\max})$ to tie into batch-safe LR and curvature bounds.
+
+% ==========================
+% Y. Global Stability & Convergence
+% ==========================
+\section*{Global Stability and Convergence}
+\label{sec:global-convergence}
+\paragraph{Standing assumptions.} (A1) Loss $\ell(\hat y,y)$ is bounded below, $\beta_\ell$-smooth and $L_\ell$-Lipschitz. (A2) Primitives in $\mathcal{F}_{\!\mathrm{TR}}$; on REAL regions they are $C^1$/$C^2$. (A3) Hybrid policy and guard bands ensure finite switching and bounded gradients. (A4) Steps obey a diminishing or batch-safe constant rule (Sec.~\ref{sec:batch-safe}).\par
+\subsection*{Deterministic GD} For $\eta_t\le 1/\widehat L_{\mathcal{B}_t}$: $\mathcal{L}_{t+1}\le \mathcal{L}_t-\tfrac{\eta_t}{2}\|\nabla\mathcal{L}_t\|^2$, persisting across MR$\leftrightarrow$SAT switches by bounded gradients (Prop.~\ref{prop:bounded-update}).\par
+\begin{theorem}[GD with diminishing steps]\label{thm:gd-diminishing}
+If $\sum_t\eta_t=\infty$, $\sum_t\eta_t^2<\infty$ and $\eta_t\le 1/\widehat L_{\mathcal{B}_t}$, then $\sum_t\eta_t\,\|\nabla\mathcal{L}_t\|^2<\infty$ and $\liminf_t\|\nabla\mathcal{L}_t\|=0$. If switching is finite or of zero density, every limit point is stationary for its mode.
+\end{theorem}
+\begin{theorem}[Linear rate under PL]\label{thm:pl}
+If a tag-stable neighborhood $U$ satisfies PL and $\eta\le 1/\widehat L$, then with no switches in $U$:
+$\mathcal{L}(\theta_{t})-\mathcal{L}^*\le (1-\mu\eta)^{t-t_0}\,(\mathcal{L}(\theta_{t_0})-\mathcal{L}^*)$.
+\end{theorem}
+\subsection*{SGD} With unbiased gradients, variance $\sigma^2$, and $\eta_t\le 1/\widehat L_{\mathcal{B}_t}$:
+\begin{theorem}[SGD convergence]\label{thm:sgd}
+If $\sum_t\eta_t=\infty$, $\sum_t\eta_t^2<\infty$, then $\liminf_t\mathbb{E}\|\nabla\mathcal{L}(\theta_t)\|=0$. Under PL and constant $\eta\le c/\widehat L$:
+$\mathbb{E}[\mathcal{L}(\theta_t)-\mathcal{L}^*]\ \le\ (1-\mu\eta)^t(\mathcal{L}(\theta_0)-\mathcal{L}^*) + \tfrac{\eta\sigma^2}{2\mu}$.
+\end{theorem}
+\subsection*{Hybrid view \& $\varepsilon$-limit} Define Lyapunov $V=\mathcal{L}+\lambda_1[\alpha_1-\hat\pi_1]_++\lambda_2[\alpha_2-\hat\pi_2]_++\mu[\hat\rho_{\mathrm{flip}}-\rho_{\max}]_+$. Between switches $\dot V\le -c\|\nabla\mathcal{L}\|^2$; at switches $V$ is nonincreasing by hysteresis/hinges. On REAL regions, $\lim_{\varepsilon\to0^+}\nabla^k P/(Q+\varepsilon)=\nabla^k P/Q$ ($k=0,1,2$); at poles, MR uses tags/saturation to remain well-posed.
+
+% ==========================
+% 9. Integration Notes
+% ==========================
+\section*{Integration into Main Text}
+Replace the original Proposition~2 with Section~\ref{sec:totality}; add the IEEE–TR Bridge (Section~\ref{sec:ieee-tr-bridge}); replace the autodiff section with Sections~\ref{sec:autodiff}, \ref{sec:hybrid}, and \ref{sec:finite-switching}; insert the Coverage Controller (Section~\ref{sec:coverage}), Batch-Safe LR (Section~\ref{sec:batch-safe}), Second-Order/Momentum (Section~\ref{sec:second-order-momentum}), Identifiability (Section~\ref{sec:ident}), Numerical Precision (Section~\ref{sec:precision-tags}), Reproducibility (Section~\ref{sec:policy-determinism}), FP Robustness (Section~\ref{sec:fp-robustness}), and Global Stability (Section~\ref{sec:global-convergence}). Ensure later theorems quantify over \(\mathcal{F}_{\!\mathrm{TR}}\) or state the chosen transcendental policy.
+
+% ==========================
+% Appendix A: Proofs (pointer)
+% ==========================
+\section*{Appendix A: Proofs}
+See the separate proofs appendix for details corresponding to each proposition and theorem.
