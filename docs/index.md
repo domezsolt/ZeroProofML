@@ -62,6 +62,8 @@ Welcome to the ZeroProof documentation. This guide combines conceptual foundatio
 
 - Evaluation
   - [Topic 7: Evaluation & Metrics](topics/07_evaluation_metrics.md) (new)
+  - [Topic 9: TR‑Softmax & Policies](topics/09_tr_softmax_and_policies.md) (new)
+  - [Topic 10: Policy & Contracts](topics/10_policy_and_contracts.md) (new)
 
 - Additional Reading
   - Conceptual whitepaper: `../concept_250908.md`

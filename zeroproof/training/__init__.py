@@ -9,6 +9,7 @@ from .coverage import CoverageTracker, CoverageMetrics
 from .adaptive_loss import AdaptiveLambda, AdaptiveLossPolicy, AdaptiveLossConfig, create_adaptive_loss
 from .trainer import TRTrainer, TrainingConfig, Optimizer
 from .hybrid_trainer import HybridTRTrainer, HybridTrainingConfig
+from .policy_utils import enable_default_tr_policy, enable_policy_from_model
 from .enhanced_coverage import (
     EnhancedCoverageMetrics,
     EnhancedCoverageTracker,
@@ -83,6 +84,8 @@ __all__ = [
     "Optimizer",
     "HybridTRTrainer",
     "HybridTrainingConfig",
+    "enable_default_tr_policy",
+    "enable_policy_from_model",
     
     # Advanced control
     "ControlStrategy",

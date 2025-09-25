@@ -73,7 +73,8 @@ class EnhancedCoverageMetrics:
     def update(self, 
                tags: List[TRTag],
                q_values: Optional[List[float]] = None,
-               pole_threshold: float = 0.1) -> None:
+               pole_threshold: float = 0.1,
+               d_values: Optional[List[float]] = None) -> None:
         """
         Update metrics with new batch of tags and Q values.
         
@@ -98,16 +99,24 @@ class EnhancedCoverageMetrics:
                 self.phi_samples += 1
                 self.actual_nonreal_outputs.append((self.total_samples - 1, tag))
             
-            # Update Q-value tracking if provided
+            # Update Q/distance tracking if provided
+            use_distance = d_values is not None and i < len(d_values)
             if q_values and i < len(q_values):
                 q_val = abs(q_values[i])
                 self.q_values.append(q_val)
-                
-                # Update min Q
                 if self.min_q_value is None or q_val < self.min_q_value:
                     self.min_q_value = q_val
-                
-                # Check if near pole
+            # Near-pole classification: prefer distance if provided
+            if use_distance:
+                d_val = abs(d_values[i])
+                if d_val <= pole_threshold:
+                    self.near_pole_samples += 1
+                    if tag == TRTag.REAL:
+                        self.near_pole_real += 1
+                    else:
+                        self.near_pole_nonreal += 1
+            elif q_values and i < len(q_values):
+                q_val = abs(q_values[i])
                 if q_val <= pole_threshold:
                     self.near_pole_samples += 1
                     if tag == TRTag.REAL:
@@ -188,7 +197,8 @@ class EnhancedCoverageTracker:
     def update(self,
                tags: List[TRTag],
                q_values: Optional[List[float]] = None,
-               x_values: Optional[List[float]] = None) -> None:
+               x_values: Optional[List[float]] = None,
+               d_values: Optional[List[float]] = None) -> None:
         """
         Update coverage statistics with a batch.
         
@@ -199,10 +209,10 @@ class EnhancedCoverageTracker:
         """
         # Update current batch
         self.current_batch.reset()
-        self.current_batch.update(tags, q_values, self.pole_threshold)
+        self.current_batch.update(tags, q_values, self.pole_threshold, d_values=d_values)
         
         # Update cumulative
-        self.cumulative.update(tags, q_values, self.pole_threshold)
+        self.cumulative.update(tags, q_values, self.pole_threshold, d_values=d_values)
         
         # Track pole encounters
         if q_values and self.track_pole_distances:

@@ -119,6 +119,29 @@ real_mask = tr_array.is_real()
 inf_mask = tr_array.is_infinite()
 ```
 
+## Hygiene & Semantics
+
+### Mapping Table
+
+| IEEE | TR |
+|------|----|
+| finite | (value, REAL) |
+| +∞ | PINF |
+| −∞ | NINF |
+| NaN | PHI |
+
+### Partial Homomorphism (Non‑NaN Regime)
+
+If IEEE computes `x ∘ y` (∘∈{+, −, ×, ÷}) without NaN, then `Φ(x) ∘_TR Φ(y) = Φ(x ∘ y)`.
+
+### Signed Zeros
+
+REAL zeros retain IEEE signed‑zero; policies can use this (e.g., classify `1/±0` consistently).
+
+### Export Policy for PHI
+
+`PHI` (nullity) exports to IEEE `NaN` by default. Consumers may choose strict errors instead.
+
 ## Testing Coverage
 
 ### Unit Tests (`test_bridge_extended.py`)

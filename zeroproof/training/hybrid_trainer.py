@@ -118,8 +118,28 @@ class HybridTrainingConfig(TrainingConfig):
     # Logging and tracking
     enable_structured_logging: bool = True
     log_interval: int = 1  # Log every N epochs
+
+    # TR policy activation (policy-driven hybrid hysteresis)
+    use_tr_policy: bool = False
+    policy_ulp_scale: float = 4.0
+    policy_deterministic_reduction: bool = True
+    policy_g_on: Optional[float] = None
+    policy_g_off: Optional[float] = None
     save_plots: bool = True
     run_dir: Optional[str] = None
+    
+    # Second-order safeguard: shrink LR when SAT dominates
+    sat_shrink_on_ratio: bool = True
+    sat_ratio_threshold: float = 0.3
+    sat_shrink_factor: float = 0.5
+    
+    # Logging: print curvature/Fisher proxies each epoch
+    log_curvature_fisher: bool = True
+
+    # Contract-safe LR clamp (from layer contract bounds)
+    use_contract_safe_lr: bool = False
+    contract_c: float = 1.0
+    loss_smoothness_beta: float = 1.0
 
 
 class HybridTRTrainer(TRTrainer):
@@ -186,6 +206,36 @@ class HybridTRTrainer(TRTrainer):
         
         # Initialize sampling components
         self._init_samplers()
+
+        # Ensure optional policies/trackers are defined
+        self.coverage_policy = None
+        self.pole_detector = None
+        self.anti_illusion_metrics = None
+        self.residual_loss = None
+
+        # Optionally enable a default TRPolicy for tagging and hybrid hysteresis
+        if self.hybrid_config.use_tr_policy:
+            try:
+                from .policy_utils import enable_policy_from_model, enable_default_tr_policy
+                # Prefer model-aware thresholds when possible
+                if hasattr(self.model, 'estimate_local_scales') and callable(getattr(self.model, 'estimate_local_scales')):
+                    enable_policy_from_model(
+                        self.model,
+                        ulp_scale=self.hybrid_config.policy_ulp_scale,
+                        deterministic_reduction=self.hybrid_config.policy_deterministic_reduction,
+                        g_on=self.hybrid_config.policy_g_on,
+                        g_off=self.hybrid_config.policy_g_off,
+                    )
+                else:
+                    enable_default_tr_policy(
+                        ulp_scale=self.hybrid_config.policy_ulp_scale,
+                        deterministic_reduction=self.hybrid_config.policy_deterministic_reduction,
+                        g_on=self.hybrid_config.policy_g_on,
+                        g_off=self.hybrid_config.policy_g_off,
+                    )
+            except Exception:
+                # Non-fatal: training can proceed without a policy
+                pass
         
         # Initialize hybrid gradient schedule if enabled
         self.hybrid_schedule = None
@@ -201,6 +251,7 @@ class HybridTRTrainer(TRTrainer):
         self.tag_statistics = []
         self.gradient_mode_history = []
         self.bench_history = []  # per-epoch timing summaries
+        self._epoch_records = []  # per-epoch plotting records
 
         # Persistent per-head and frontend optimizers if model exposes heads/layers
         self.head_optimizers = None
@@ -488,7 +539,20 @@ class HybridTRTrainer(TRTrainer):
             "lambda_rej": [],
             "tag_loss": [],
             "pole_loss": [],
-            "near_pole_ratio": []
+            "near_pole_ratio": [],
+            # Curvature/second-order proxies
+            "curvature_proxy": [],
+            "gn_proxy": [],
+            "grad_max": [],
+            # Second-order safeguard envelope (from per-batch when available)
+            "curvature_bound": [],
+            "B_k": [],
+            "H_k": [],
+            "G_max": [],
+            "H_max": [],
+            # Policy thresholds (copied from hybrid stats per-batch when present)
+            "tau_q_on": [],
+            "tau_q_off": [],
         }
         
         # Initialize coverage tracker (use enhanced if configured)
@@ -584,11 +648,24 @@ class HybridTRTrainer(TRTrainer):
             Q_values = None
             if hasattr(self.model, 'q_min_history') and self.model.q_min_history:
                 Q_values = self.model.q_min_history
-            
-            # Enforce coverage policy
+            # Current lambda and near-pole coverage
+            current_lambda = None
+            try:
+                if self.loss_policy and hasattr(self.loss_policy, 'adaptive_lambda'):
+                    current_lambda = float(self.loss_policy.adaptive_lambda.get_penalty())
+            except Exception:
+                current_lambda = None
+            near_cov = None
+            try:
+                if hasattr(coverage_tracker, 'near_pole_coverage'):
+                    near_cov = coverage_tracker.near_pole_coverage
+            except Exception:
+                near_cov = None
+            # Enforce coverage policy with correct arguments
             enforcement_actions = self.coverage_policy.enforce(
                 avg_metrics['coverage'],
-                self.epoch,
+                current_lambda if current_lambda is not None else 0.0,
+                near_cov,
                 Q_values
             )
             
@@ -638,15 +715,158 @@ class HybridTRTrainer(TRTrainer):
             hybrid_stats = HybridGradientContext.get_statistics()
             avg_metrics['saturating_ratio'] = hybrid_stats.get('saturating_ratio', 0.0)
             avg_metrics['gradient_mode'] = self.hybrid_schedule.get_mode_description(self.epoch)
-            
+            # Also carry epoch-level q/g quantiles if available
+            for k in ('q_min_epoch', 'q_p10', 'q_p50', 'q_p90', 'g_p10', 'g_p50', 'g_p90'):
+                if k in hybrid_stats and hybrid_stats.get(k) is not None:
+                    avg_metrics[k] = hybrid_stats.get(k)
+            # Copy policy thresholds if available
+            if 'tau_q_on' in hybrid_stats or 'tau_q_off' in hybrid_stats:
+                avg_metrics['tau_q_on'] = hybrid_stats.get('tau_q_on')
+                avg_metrics['tau_q_off'] = hybrid_stats.get('tau_q_off')
+            # Copy flip statistics to monitor finite/low-density switching
+            if 'policy_flip_count' in hybrid_stats:
+                avg_metrics['policy_flip_count'] = hybrid_stats.get('policy_flip_count')
+            if 'flip_rate' in hybrid_stats:
+                avg_metrics['flip_rate'] = hybrid_stats.get('flip_rate')
+            # Mask bandwidth: mask_real_activations / total_gradient_calls
+            try:
+                m = hybrid_stats.get('mask_real_activations', None)
+                t = hybrid_stats.get('total_gradient_calls', None)
+                if isinstance(m, (int, float)) and isinstance(t, (int, float)) and t > 0:
+                    avg_metrics['mask_bandwidth'] = float(m) / float(t)
+            except Exception:
+                pass
+
             # Track mode for history
             self.gradient_mode_history.append({
                 'epoch': self.epoch,
                 'mode': avg_metrics['gradient_mode'],
                 'delta': self.hybrid_schedule.get_delta(self.epoch)
             })
+
+        # Optional identifiability diagnostic (Sylvester s_min)
+        try:
+            from ..metrics import compute_sylvester_smin
+            if hasattr(self.model, 'theta') and hasattr(self.model, 'phi'):
+                smin = compute_sylvester_smin(self.model)
+                if smin == smin:  # not NaN
+                    avg_metrics['sylvester_smin'] = float(smin)
+        except Exception:
+            pass
+        
+        # Epoch-level GN/Fisher proxies derived from averaged grad stats
+        try:
+            import math as _math
+            gn_avg = float(avg_metrics.get('gn_proxy', float('nan')))
+            if gn_avg == gn_avg and gn_avg >= 0.0:
+                # grad_norm_epoch is L2 norm across parameters (averaged batch proxy)
+                avg_metrics['grad_norm_epoch'] = _math.sqrt(gn_avg)
+                # Fisher trace proxy ≈ E[||g||^2]
+                avg_metrics['fisher_trace'] = gn_avg
+                # Mean diagonal Fisher proxy (per-parameter average)
+                n_params = 0
+                if hasattr(self.model, 'parameters'):
+                    try:
+                        n_params = len(list(self.model.parameters()))
+                    except Exception:
+                        n_params = 0
+                if n_params > 0:
+                    avg_metrics['fisher_diag_mean'] = gn_avg / float(n_params)
+        except Exception:
+            pass
+        
+        # Second-order safeguard: shrink LR when SAT dominates
+        try:
+            if (self.hybrid_config.sat_shrink_on_ratio and
+                'saturating_ratio' in avg_metrics and
+                isinstance(avg_metrics['saturating_ratio'], (int, float)) and
+                avg_metrics['saturating_ratio'] >= self.hybrid_config.sat_ratio_threshold):
+                factor = max(0.1, min(1.0, float(self.hybrid_config.sat_shrink_factor)))
+                # Apply to all optimizers
+                self.optimizer.learning_rate *= factor
+                if self.frontend_optimizer is not None:
+                    self.frontend_optimizer.learning_rate *= factor
+                if self.head_optimizers is not None:
+                    for opt in self.head_optimizers:
+                        opt.learning_rate *= factor
+                avg_metrics['lr_shrunk'] = factor
+        except Exception:
+            pass
         
         return avg_metrics
+
+    def train(self,
+              train_data: List[Tuple[List[TRNode], List[TRNode]]],
+              val_data: Optional[List[Tuple[List[TRNode], List[TRNode]]]] = None) -> Dict[str, List[float]]:
+        """
+        Override to capture extended per-epoch metrics for plotting.
+        """
+        if self.config.verbose:
+            print(f"Starting training for {self.config.max_epochs} epochs")
+            if self.config.use_adaptive_loss:
+                print(f"Using adaptive loss with target coverage: {self.config.target_coverage}")
+
+        start_time = time.time()
+        # Reset epoch records
+        self._epoch_records = []
+
+        for epoch in range(self.config.max_epochs):
+            self.epoch = epoch + 1
+
+            # Train one epoch
+            train_metrics = self.train_epoch(train_data)
+
+            # Base history
+            self.training_history.setdefault("loss", []).append(train_metrics.get("loss", float('nan')))
+            if "coverage" in train_metrics:
+                self.training_history.setdefault("coverage", []).append(train_metrics["coverage"])
+            if "lambda_rej" in train_metrics:
+                self.training_history.setdefault("lambda_rej", []).append(train_metrics["lambda_rej"])
+
+            # Capture extended per-epoch metrics
+            keep_keys = {
+                'loss','coverage','lambda_rej','q_min','q_p10','q_p50','q_p90',
+                'd_p10','d_p50','d_p90','g_p10','g_p50','g_p90','saturating_ratio',
+                'flip_rate','sylvester_smin'
+            }
+            record: Dict[str, Any] = {'epoch': self.epoch}
+            for k, v in train_metrics.items():
+                if k in keep_keys and isinstance(v, (int,float)):
+                    record[k] = v
+            self._epoch_records.append(record)
+
+            # Validation
+            if val_data is not None:
+                val_metrics = self.evaluate(val_data)
+                val_loss = val_metrics["loss"]
+            else:
+                val_loss = train_metrics.get("loss", float('inf'))
+
+            # Logging
+            if self.config.verbose:
+                self._log_epoch(epoch, train_metrics, val_metrics if val_data else None)
+
+            # Early stopping
+            if self.config.early_stopping:
+                if val_loss < self.best_loss - self.config.min_delta:
+                    self.best_loss = val_loss
+                    self.patience_counter = 0
+                else:
+                    self.patience_counter += 1
+                    if self.patience_counter >= self.config.patience:
+                        if self.config.verbose:
+                            print(f"Early stopping at epoch {epoch + 1}")
+                        break
+
+        training_time = time.time() - start_time
+        if self.config.verbose:
+            print(f"Training completed in {training_time:.2f} seconds")
+
+        return self.training_history
+
+    def get_epoch_records(self) -> List[Dict[str, Any]]:
+        """Return per-epoch metric records for plotting."""
+        return list(self._epoch_records)
 
     def _log_epoch(self, epoch: int, train_metrics: Dict[str, float], 
                    val_metrics: Optional[Dict[str, float]] = None) -> None:
@@ -670,6 +890,34 @@ class HybridTRTrainer(TRTrainer):
                 f"optim_time_ms={train_metrics['optim_time_ms']:.1f}, "
                 f"batches={int(train_metrics['batches'])}"
             )
+        # Hybrid/controller summary (if available)
+        extra = []
+        if 'saturating_ratio' in train_metrics:
+            extra.append(f"sat={train_metrics['saturating_ratio']:.3f}")
+        if 'flip_rate' in train_metrics:
+            extra.append(f"flip={train_metrics['flip_rate']:.3f}")
+        if 'q_p10' in train_metrics and 'q_p90' in train_metrics:
+            extra.append(f"q_p10={train_metrics['q_p10']:.2e} q_p90={train_metrics['q_p90']:.2e}")
+        if 'g_p90' in train_metrics:
+            extra.append(f"g_p90={train_metrics['g_p90']:.2e}")
+        if 'sylvester_smin' in train_metrics:
+            extra.append(f"smin={train_metrics['sylvester_smin']:.2e}")
+        if extra:
+            print("Hybrid:", " ".join(extra))
+        # Curvature/Fisher summary (optional)
+        if getattr(self.hybrid_config, 'log_curvature_fisher', True):
+            curv = train_metrics.get('curvature_proxy', None)
+            gn = train_metrics.get('grad_norm_epoch', None)
+            ft = train_metrics.get('fisher_trace', None)
+            cf_parts = []
+            if isinstance(curv, (int, float)):
+                cf_parts.append(f"L_hat={curv:.3e}")
+            if isinstance(gn, (int, float)):
+                cf_parts.append(f"||g||={gn:.3e}")
+            if isinstance(ft, (int, float)):
+                cf_parts.append(f"F_tr={ft:.3e}")
+            if cf_parts:
+                print("Curv:", " ".join(cf_parts))
     
     def _train_batch(self,
                     inputs: List[TRScalar],
@@ -735,11 +983,12 @@ class HybridTRTrainer(TRTrainer):
                 predictions.append(y)
                 tags.append(y.tag)
         
-        # Track coverage with Q values if enhanced
+        # Track coverage with Q / distance values if enhanced
         if self.hybrid_config.use_enhanced_coverage:
             # Extract Q values and x values if available
             q_values_for_tracking = None
             x_values_for_tracking = None
+            d_values_for_tracking = None
             
             if Q_values:
                 q_values_for_tracking = [abs(q) for q in Q_values]
@@ -751,9 +1000,24 @@ class HybridTRTrainer(TRTrainer):
                         x_values_for_tracking.append(x.value)
                     else:
                         x_values_for_tracking.append(None)
+
+            # If model exposes distance estimator, compute distances for quotas
+            try:
+                if hasattr(self.model, 'estimate_distance_batch'):
+                    d_values_for_tracking = self.model.estimate_distance_batch(self._last_batch_inputs)
+            except Exception:
+                d_values_for_tracking = None
             
-            # Update with Q values and x values
-            coverage_tracker.update(tags, q_values_for_tracking, x_values_for_tracking)
+            # Update with Q/x/d values when tracker supports it; fallback otherwise
+            try:
+                coverage_tracker.update(tags, q_values_for_tracking, x_values_for_tracking, d_values=d_values_for_tracking)  # type: ignore[arg-type]
+            except TypeError:
+                try:
+                    # Try legacy enhanced signature without d_values
+                    coverage_tracker.update(tags, q_values_for_tracking, x_values_for_tracking)  # type: ignore[arg-type]
+                except TypeError:
+                    # Basic CoverageTracker signature
+                    coverage_tracker.update(tags)
         else:
             coverage_tracker.update(tags)
         
@@ -836,6 +1100,68 @@ class HybridTRTrainer(TRTrainer):
         self.zero_grad_all()
         batch_loss.backward()
         
+        # Optional safe LR clamp across optimizers
+        try:
+            if getattr(self.config, 'use_safe_lr', False):
+                # Compute safe LR using batch stats
+                q_min = None
+                if hasattr(self.model, 'compute_q_min'):
+                    q_min = self.model.compute_q_min(inputs)
+                Bpsi = getattr(getattr(self.model, 'basis', None), 'bound', None)
+                if q_min is not None and Bpsi is not None:
+                    y_vals = [p.value.value for p in predictions if p.tag == TRTag.REAL]
+                    y_max = max([abs(v) for v in y_vals], default=0.0)
+                    alpha = getattr(self.model, 'alpha_phi', 0.0) or 0.0
+                    L_hat = (Bpsi * Bpsi) / (max(q_min, 1e-12) ** 2) * (1.0 + y_max * y_max) + alpha
+                    eta_safe = 1.0 / max(L_hat, 1e-12)
+                    # Clamp all optimizers
+                    self.optimizer.learning_rate = min(self.optimizer.learning_rate, eta_safe)
+                    if self.frontend_optimizer is not None:
+                        self.frontend_optimizer.learning_rate = min(self.frontend_optimizer.learning_rate, eta_safe)
+                    if self.head_optimizers is not None:
+                        for opt in self.head_optimizers:
+                            opt.learning_rate = min(opt.learning_rate, eta_safe)
+        except Exception:
+            pass
+
+        # Curvature proxy and gradient-norm proxies (logging only)
+        try:
+            # Curvature proxy L_hat ≈ (B_psi^2 / q_min^2) * (1 + y_max^2) + alpha
+            q_min = None
+            if hasattr(self.model, 'compute_q_min'):
+                try:
+                    q_min = float(self.model.compute_q_min(inputs))
+                except Exception:
+                    q_min = None
+            Bpsi = getattr(getattr(self.model, 'basis', None), 'bound', None)
+            if isinstance(Bpsi, (int, float)) and Bpsi is not None:
+                y_vals = [abs(float(p.value.value)) for p in predictions if p.tag == TRTag.REAL]
+                y_max = max(y_vals) if y_vals else 0.0
+                alpha = float(getattr(self.model, 'alpha_phi', 0.0) or 0.0)
+                denom = max(abs(q_min) if q_min is not None else 0.0, 1e-12)
+                L_hat = (Bpsi * Bpsi) / (denom * denom) * (1.0 + y_max * y_max) + alpha
+                curvature_proxy_val = float(L_hat)
+            else:
+                curvature_proxy_val = float('nan')
+        except Exception:
+            curvature_proxy_val = float('nan')
+
+        # Gradient norm proxies after backward
+        gn_sq = 0.0
+        gmax = 0.0
+        try:
+            params = []
+            if hasattr(self.model, 'parameters'):
+                params = list(self.model.parameters())
+            for p in params:
+                g = getattr(p, 'gradient', None)
+                if g is not None and g.tag == TRTag.REAL:
+                    gv = float(g.value)
+                    gn_sq += gv * gv
+                    gmax = max(gmax, abs(gv))
+        except Exception:
+            pass
+
         # Optimizer step (supports per-head + frontend)
         self.step_all()
         
@@ -845,13 +1171,95 @@ class HybridTRTrainer(TRTrainer):
             'coverage': coverage_tracker.batch_coverage,
             'tag_loss': tag_loss_value,
             'pole_loss': pole_loss_value,
-            'residual_loss': residual_loss_value
+            'residual_loss': residual_loss_value,
+            # Logging-only curvature proxies
+            'curvature_proxy': curvature_proxy_val,
+            'gn_proxy': gn_sq,
+            'grad_max': gmax,
         }
+
+        # Optional: second-order curvature bound (safeguard envelope)
+        try:
+            if hasattr(self.model, 'get_q_values'):
+                from ..optim_utils_second_order import curvature_bound_for_batch
+                cb = curvature_bound_for_batch(self.model, inputs)
+                metrics['curvature_bound'] = cb.get('curvature_bound')
+                metrics['B_k'] = cb.get('B_k')
+                metrics['H_k'] = cb.get('H_k')
+                metrics['G_max'] = cb.get('G_max')
+                metrics['H_max'] = cb.get('H_max')
+        except Exception:
+            pass
+
+        # Contract-safe LR clamp using layer contract (theory: eta <= c / (beta * Π max{B_k,G_max}))
+        try:
+            if self.hybrid_config.use_contract_safe_lr and hasattr(self.model, 'get_layer_contract'):
+                contract = self.model.get_layer_contract()  # type: ignore[attr-defined]
+                B_k = float(contract.get('B_k', 1.0))
+                G_max = float(contract.get('G_max', 1.0))
+                depth = int(contract.get('depth_hint', 4))
+                beta = float(self.hybrid_config.loss_smoothness_beta)
+                c_const = float(self.hybrid_config.contract_c)
+                prod = max(B_k, G_max) ** max(1, depth)
+                eta_contract = c_const / max(1e-12, beta * prod)
+                # Clamp all optimizers
+                self.optimizer.learning_rate = min(self.optimizer.learning_rate, eta_contract)
+                if self.frontend_optimizer is not None:
+                    self.frontend_optimizer.learning_rate = min(self.frontend_optimizer.learning_rate, eta_contract)
+                if self.head_optimizers is not None:
+                    for opt in self.head_optimizers:
+                        opt.learning_rate = min(opt.learning_rate, eta_contract)
+                metrics['eta_contract'] = eta_contract
+        except Exception:
+            pass
         
-        # Add hybrid metrics
+        # Add hybrid metrics and update policy-driven hysteresis at batch end
         if self.hybrid_schedule:
             hybrid_stats = HybridGradientContext.get_statistics()
             metrics['near_pole_ratio'] = hybrid_stats.get('near_pole_ratio', 0.0)
+            # Copy quantiles if present
+            for k in ('q_p10', 'q_p50', 'q_p90', 'q_min_batch', 'q_mean_batch', 'q_median_batch'):
+                if k in hybrid_stats:
+                    metrics[k] = hybrid_stats.get(k)
+            # Sensitivity quantiles if present (g = 1/|Q|)
+            for k in ('g_p10', 'g_p50', 'g_p90'):
+                if k in hybrid_stats:
+                    metrics[k] = hybrid_stats.get(k)
+            # Copy policy mode and thresholds if available
+            if 'policy_mode' in hybrid_stats:
+                metrics['policy_mode'] = hybrid_stats.get('policy_mode')
+            if 'tau_q_on' in hybrid_stats or 'tau_q_off' in hybrid_stats:
+                metrics['tau_q_on'] = hybrid_stats.get('tau_q_on')
+                metrics['tau_q_off'] = hybrid_stats.get('tau_q_off')
+            # Copy saturating counters for clarity
+            if 'saturating_activations' in hybrid_stats:
+                metrics['saturating_activations'] = hybrid_stats.get('saturating_activations')
+            if 'total_gradient_calls' in hybrid_stats:
+                metrics['total_gradient_calls'] = hybrid_stats.get('total_gradient_calls')
+            if 'saturating_ratio' in hybrid_stats:
+                metrics['saturating_ratio'] = hybrid_stats.get('saturating_ratio')
+            if 'policy_flip_count' in hybrid_stats:
+                metrics['policy_flip_count'] = hybrid_stats.get('policy_flip_count')
+            if 'flip_rate' in hybrid_stats:
+                metrics['flip_rate'] = hybrid_stats.get('flip_rate')
+            # Update hybrid mode using policy hysteresis and reset batch stats
+            HybridGradientContext.end_batch_policy_update()
+
+        # If model exposes Q and/or distance estimators, add per-batch q/d quantiles when not using hybrid stats
+        try:
+            if 'q_p10' not in metrics and hasattr(self.model, 'get_q_values'):
+                from ..metrics import compute_q_stats
+                q_stats = compute_q_stats(self.model, inputs)
+                metrics.update(q_stats)
+        except Exception:
+            pass
+        try:
+            if hasattr(self.model, 'estimate_distance_batch'):
+                from ..metrics import compute_distance_stats
+                d_stats = compute_distance_stats(self.model, inputs)
+                metrics.update(d_stats)
+        except Exception:
+            pass
         
         # Add adaptive lambda if using policy
         if self.loss_policy:
@@ -1022,6 +1430,12 @@ class HybridTRTrainer(TRTrainer):
             'final_metrics': self.history,
             'bench_history': self.bench_history
         }
+        # Publish layer contract if available (B_k, H_k, G_max, H_max)
+        try:
+            if hasattr(self.model, 'get_layer_contract'):
+                summary['layer_contract'] = self.model.get_layer_contract()
+        except Exception:
+            pass
         
         # Add hybrid gradient history
         if self.gradient_mode_history:

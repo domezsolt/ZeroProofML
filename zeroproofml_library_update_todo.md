@@ -2,60 +2,73 @@
 
 ## ✅ Mandatory (keep theory ⇄ code aligned)
 
-- [ ] **Introduce a central TR policy config**
+- [x] **Introduce a central TR policy config**
   - Define `TRPolicy` with:
     - `tau_Q_on`, `tau_Q_off`, `tau_P_on`, `tau_P_off` (ULP-scaled thresholds)
     - rounding mode, **keep signed zero**, deterministic reduction flag
     - sensitivity triggers: `g_on`, `g_off`
   - Add `resolve_thresholds(ulp, local_scales)` to derive guard bands from ULP + local sensitivities (e.g., ‖∇Q‖, ‖∇P‖).
+    Implemented in `zeroproof/policy.py` with `TRPolicy.resolve_thresholds(...)` and
+    trainer integration via `enable_policy_from_model(...)` (model‑aware thresholds).
 
-- [ ] **Tagging with guard bands + hysteresis**
+- [x] **Tagging with guard bands + hysteresis**
   - In all `P/Q` layers: classify **REAL / INF / NULL** using `tau_*` with **on/off hysteresis**.
   - Preserve **signed zeros** for `Q` to encode approach direction (±0).
   - Use **deterministic reduction** (fixed tree) for `Q`-related computations.
+    Implemented via `classify_tag_with_policy(...)` and used in `TRRational`/multi/pole‑aware layers;
+    pairwise reductions controlled by policy.
 
-- [ ] **Mask-REAL backprop gating**
+- [x] **Mask-REAL backprop gating**
   - Wrap VJP/grad so each primitive multiplies by gate `χ_k ∈ {0,1}`.
   - When `χ_k = 0`, use **bounded surrogate derivative** `S_k` (smooth saturator), with `‖S_k‖ ≤ G_max`.
+    Implemented across autodiff ops (`zeroproof/autodiff/backward.py`, `saturating_ops.py`).
 
-- [ ] **Hybrid controller (MR ↔ SAT) with hysteresis**
+- [x] **Hybrid controller (MR ↔ SAT) with hysteresis**
   - Implement a small state machine:
     - **Enter SAT** if `d(x) ≤ δ_on` **or** `max_k g_k ≥ g_on` **or** batch tag-flip event.
     - **Return to MR** if `d(x) ≥ δ_off` **and** `max_k g_k ≤ g_off` **and** no flips.
   - Batch aggregation via robust quantiles (e.g., 90th percentile of `d`, `g`).
+    Implemented in `HybridGradientContext` with policy hysteresis and quantiles.
 
-- [ ] **Batch-safe learning-rate helper**
+- [x] **Batch-safe learning-rate helper**
   - Provide: `η_safe = min( α / L̂_batch , c / (L_ell * ∏_k max{B_k, G_max}) )`.
   - Adjust for momentum/Adam effective step sizes:
     - Heavy-ball: ensure `η ≤ 2(1−β1)/L̂_batch`.
     - Adam: ensure `η ≤ (1−β1) / (√(1−β2) * L̂_batch)` (sufficient condition).
+    Implemented in `zeroproof/optim_utils.py` with tests for heavy‑ball/Adam bounds.
 
-- [ ] **Core metrics & logging**
+- [x] **Core metrics & logging**
   - Log per batch: `min|Q|`, `flip_rate`, `%SAT_time`, quantiles of `d(x)` and `g_k`.
   - Expose hooks for the coverage controller and debugging.
+    Implemented via `zeroproof/utils/logging.py`, `zeroproof/metrics/*`, and enriched epoch metrics
+    (q_min, flip_rate, tau thresholds, saturating_ratio, curvature bound, mask bandwidth).
 
 ---
 
 ## 👍 Strongly recommended (robustness & performance)
 
-- [ ] **Deterministic reductions & memory layout**
+- [x] **Deterministic reductions & memory layout**
   - Use **Kahan/Neumaier** or **pairwise/tree** summation for `P`, `Q`, and gradient reductions.
   - Adopt **struct-of-arrays** layout for `(value, tag)`; **bit-pack** tags (1 bit/node).
+    Pairwise reductions wired under policy across TR layers and TRNorm/softmax; NumPy `TRArrayPacked`
+    provides bit‑packed tags for memory efficiency.
 
-- [ ] **IEEE ↔ TR bridge hygiene**
+- [x] **IEEE ↔ TR bridge hygiene**
   - Map **IEEE NaN → TR `NULL`**; export policy may map **`NULL → NaN`**.
   - Retain zero sign; document **partial homomorphism** (non-NaN regime).
+    IEEE bridge keeps signed zeros; dedicated tests validate NaN/∞ mapping and ±0 division signs.
 
-- [ ] **Coprime/identifiability diagnostics (optional regularizer)**
+- [x] **Coprime/identifiability diagnostics (optional regularizer)**
   - Add **Sylvester-matrix `s_min`** surrogate or **resultant-based** penalty; make it toggleable and logged.
+    Implemented `compute_sylvester_smin(...)` with tests; optional regularizer integrated in `TRRational`.
 
 ---
 
 ## ✨ Optional (advanced / nice to have)
 
-- [ ] **Per-node hybrid modes** (instead of global), same hysteresis policy.
-- [ ] **Second-order curvature safeguards** (GN/Fisher bounds) on SAT branches.
-- [ ] **TR-policy variants or rational surrogates** for softmax/layernorm as needed.
+- [x] **Per-node hybrid modes** (instead of global), same hysteresis policy.
+- [x] **Second-order curvature safeguards** (GN/Fisher bounds) on SAT branches.
+- [x] **TR-policy variants or rational surrogates** for softmax/layernorm as needed.
 
 ---
 
@@ -72,25 +85,25 @@
 
 ## ✅ Test & acceptance criteria
 
-- [ ] **Determinism outside guard bands**  
+- [x] **Determinism outside guard bands**  
   Same seeds/policy/device ⇒ identical tags/outputs for inputs with `|Q| ≥ τ_Q_off`.
 
-- [ ] **Finite/low-density switching**  
+- [x] **Finite/low-density switching**  
   With default hysteresis + batch-safe LR, mode switches per K steps are finite and decline; no chatter.
 
-- [ ] **Tag robustness**  
+- [x] **Tag robustness**  
   Unit tests: outside guard bands, tag classification invariant to FP perturbations (within 1–2 ULP).
 
-- [ ] **Hybrid safety**  
+- [x] **Hybrid safety**  
   With surrogate bounds `G_max`, parameter updates satisfy the bounded-update inequality across MR/SAT transitions.
 
-- [ ] **Optimizer safety**  
+- [x] **Optimizer safety**  
   Heavy-ball and Adam pass descent-lemma smoke tests under provided bounds.
 
-- [ ] **Overhead envelope**  
+- [x] **Overhead envelope**  
   Report `%SAT_time`, mask bandwidth, and total slowdown vs. baseline; show activation is rare and overhead localized near poles.
 
-- [ ] **Identifiability diagnostics (if enabled)**  
+- [x] **Identifiability diagnostics (if enabled)**  
   Coprime surrogate remains healthy during normal training; warns near shared-factor degeneracy.
 
 ---

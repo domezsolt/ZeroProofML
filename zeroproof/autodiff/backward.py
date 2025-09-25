@@ -202,7 +202,11 @@ def compute_input_gradients(node: TRNode, grad_output: TRScalar) -> List[Optiona
                 # Determine if near pole for local saturating
                 should_saturate = False
                 if y_val.tag == TRTag.REAL:
-                    should_saturate = HybridGradientContext.should_use_saturating(y_val.value)
+                    try:
+                        abs_q = abs(float(y_val.value))
+                    except Exception:
+                        abs_q = 0.0
+                    should_saturate = HybridGradientContext.should_use_saturating(abs_q)
                 
                 if should_saturate:
                     # Use saturating gradients near pole
@@ -247,27 +251,54 @@ def compute_input_gradients(node: TRNode, grad_output: TRScalar) -> List[Optiona
     
     elif op_type == OpType.LOG:
         # d/dx(log(x)) = 1/x
+        if gradient_mode == GradientMode.HYBRID:
+            # Use local threshold on |x| to decide saturating per-node
+            from .hybrid_gradient import HybridGradientContext
+            x_val = inputs[0].value
+            should_sat = False
+            if x_val.tag == TRTag.REAL:
+                try:
+                    should_sat = HybridGradientContext.should_use_saturating(abs(float(x_val.value)))
+                except Exception:
+                    should_sat = False
+            if should_sat:
+                from .saturating_ops import saturating_log_grad
+                grad_output_node = TRNode.constant(grad_output)
+                grad_x = saturating_log_grad(inputs[0], grad_output_node)
+                return [grad_x]
         if use_saturating:
             from .saturating_ops import saturating_log_grad
             grad_output_node = TRNode.constant(grad_output)
             grad_x = saturating_log_grad(inputs[0], grad_output_node)
             return [grad_x]
-        else:
-            x_val = inputs[0].value
-            return [tr_div(grad_output, x_val)]
+        x_val = inputs[0].value
+        return [tr_div(grad_output, x_val)]
     
     elif op_type == OpType.SQRT:
         # d/dx(sqrt(x)) = 1/(2*sqrt(x))
+        if gradient_mode == GradientMode.HYBRID:
+            from .hybrid_gradient import HybridGradientContext
+            x_val = inputs[0].value
+            should_sat = False
+            if x_val.tag == TRTag.REAL:
+                try:
+                    should_sat = HybridGradientContext.should_use_saturating(abs(float(x_val.value)))
+                except Exception:
+                    should_sat = False
+            if should_sat:
+                from .saturating_ops import saturating_sqrt_grad
+                grad_output_node = TRNode.constant(grad_output)
+                grad_x = saturating_sqrt_grad(inputs[0], grad_output_node)
+                return [grad_x]
         if use_saturating:
             from .saturating_ops import saturating_sqrt_grad
             grad_output_node = TRNode.constant(grad_output)
             grad_x = saturating_sqrt_grad(inputs[0], grad_output_node)
             return [grad_x]
-        else:
-            x_val = inputs[0].value
-            sqrt_x = tr_sqrt(x_val)
-            two_sqrt_x = tr_mul(real(2.0), sqrt_x)
-            return [tr_div(grad_output, two_sqrt_x)]
+        x_val = inputs[0].value
+        sqrt_x = tr_sqrt(x_val)
+        two_sqrt_x = tr_mul(real(2.0), sqrt_x)
+        return [tr_div(grad_output, two_sqrt_x)]
     
     elif op_type == OpType.POW_INT:
         # d/dx(x^n) = n * x^(n-1)

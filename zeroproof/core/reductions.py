@@ -9,6 +9,51 @@ from typing import List, Union, Optional
 from .tr_scalar import TRScalar, TRTag, real, pinf, ninf, phi, bottom
 from .tr_ops import tr_add, tr_div
 from .reduction import ReductionMode
+from .precision_config import PrecisionConfig
+import math
+
+
+# Global toggle for deterministic compensated reductions (set by policy)
+_DETERMINISTIC_REDUCTION: bool = False
+
+
+def set_deterministic_reduction(enabled: bool) -> None:
+    """
+    Enable/disable deterministic compensated reductions (Kahan/Neumaier).
+
+    This is intended to be driven by the active TR policy. When enabled,
+    REAL-only sum/mean use a compensated summation to reduce rounding error
+    while preserving TR semantics for non-REAL cases handled above.
+    """
+    global _DETERMINISTIC_REDUCTION
+    _DETERMINISTIC_REDUCTION = bool(enabled)
+
+
+def _compensated_sum_real(values: List[TRScalar]) -> TRScalar:
+    """
+    Neumaier compensated summation on REAL TRScalars.
+
+    Assumes all inputs have tag == TRTag.REAL (callers must filter/guard).
+    Returns a REAL TRScalar with improved numerical stability.
+    """
+    if not values:
+        return real(0.0)
+    # Neumaier algorithm
+    s = 0.0
+    c = 0.0
+    for v in values:
+        if v.tag != TRTag.REAL:
+            # Safety: should not occur when caller guards, but fall back
+            return tr_sum(values, mode=ReductionMode.STRICT)
+        x = float(v.value)
+        t = s + x
+        # |s| >= |x| ?
+        if abs(s) >= abs(x):
+            c += (s - t) + x
+        else:
+            c += (x - t) + s
+        s = t
+    return real(s + c)
 
 
 def tr_sum(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -> TRScalar:
@@ -66,13 +111,16 @@ def tr_sum(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
     elif has_ninf:
         return ninf()
     
-    # Sum REAL values
-    result = real(0.0)
-    for v in values:
-        if v.tag == TRTag.REAL:
-            result = tr_add(result, v)
-    
-    return result
+    # Sum REAL values (compensated if enabled)
+    if _DETERMINISTIC_REDUCTION:
+        real_values = [v for v in values if v.tag == TRTag.REAL]
+        return _compensated_sum_real(real_values)
+    else:
+        result = real(0.0)
+        for v in values:
+            if v.tag == TRTag.REAL:
+                result = tr_add(result, v)
+        return result
 
 
 def tr_mean(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -> TRScalar:
@@ -139,16 +187,41 @@ def tr_prod(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) 
         if any(v.tag == TRTag.PHI for v in values):
             return phi()
     
-    # Start with multiplicative identity
+    # Deterministic product if enabled and all REAL: use pairwise multiplication
+    if _DETERMINISTIC_REDUCTION:
+        all_real = all(v.tag == TRTag.REAL for v in values)
+        if all_real:
+            return _pairwise_prod_real(values)
+
+    # Fallback: sequential TR multiply (preserves TR semantics)
     result = real(1.0)
-    
     for v in values:
         result = tr_mul(result, v)
-        # Early exit if we get PHI (e.g., 0 × ∞)
         if result.tag == TRTag.PHI:
             return result
-    
     return result
+
+
+def _pairwise_prod_real(values: List[TRScalar]) -> TRScalar:
+    """
+    Pairwise product for REAL TRScalars (deterministic tree).
+
+    Preserves TR semantics via tr_mul; exact for many simple products.
+    """
+    if not values:
+        return real(1.0)
+    # Any zero yields zero immediately
+    for v in values:
+        if v.tag == TRTag.REAL and float(v.value) == 0.0:
+            return real(0.0)
+    def _prod(lo: int, hi: int) -> TRScalar:
+        if hi - lo == 1:
+            return values[lo]
+        mid = (lo + hi) // 2
+        left = _prod(lo, mid)
+        right = _prod(mid, hi)
+        return tr_mul(left, right)
+    return _prod(0, len(values))
 
 
 def tr_min(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -> TRScalar:

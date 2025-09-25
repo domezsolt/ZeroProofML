@@ -26,6 +26,19 @@ print(tr_arr.is_phi())      # [False, False, False, True, False]
 ieee_arr = to_numpy(tr_arr)
 ```
 
+##### Packed Arrays (bit‑packed tags)
+
+For memory efficiency, ZeroProof offers a packed representation that stores tag masks as bit arrays (1 bit/node) and implies PHI as the remainder:
+
+```python
+from zeroproof.bridge import from_numpy_packed, to_numpy, TRArrayPacked
+
+packed = from_numpy_packed(arr)   # TRArrayPacked
+restored = to_numpy(packed)       # IEEE round‑trip
+```
+
+Use `TRArrayPacked` when tag storage overhead matters (large arrays). Standard `TRArray` remains the most convenient for tag inspection.
+
 #### PyTorch Bridge
 ```python
 import torch
@@ -153,6 +166,36 @@ clipped = clip_infinities(tr_arr, max_value=1e308)
 - **Signed zeros**: Preserved in REAL values
 - **Subnormals**: Treated as normal REAL values
 - **NaN payloads**: Not preserved (all NaN → PHI)
+
+### Partial Homomorphism (Non‑NaN Regime)
+
+Let `Φ` be the IEEE→TR mapping and `Ψ` the TR→IEEE mapping on REAL/INF tags. For IEEE scalars `x, y` and an operation `∘ ∈ {+, −, ×, ÷}`:
+
+> If IEEE evaluates `x ∘ y` without producing NaN, then
+> `Φ(x) ∘_TR Φ(y) = Φ(x ∘ y)`.
+
+This means the bridge is a homomorphism on the non‑NaN subset; NaNs map to `PHI`, for which TR algebra has well‑defined (total) behavior.
+
+### Signed Zero Retention
+
+IEEE “−0.0” is retained on REAL zero values via a latent sign flag (e.g., policy logic uses `copysign`). This matters for directional limits like `1/±0`:
+
+```python
+from zeroproof.policy import TRPolicy, TRPolicyConfig
+
+pol = TRPolicy(keep_signed_zero=True)
+TRPolicyConfig.set_policy(pol)
+
+# Classifier can distinguish approach direction when computing tag signs
+```
+
+### Export Policy (Φ → IEEE)
+
+`PHI` has no IEEE numeric, so `Ψ(PHI)` returns NaN by default. Consumers may choose a stricter policy (raise) or a tolerant one (return NaN) depending on context.
+
+### Determinism and ULP Bands
+
+Floating‑point perturbations near guard bands can flip tag classification. Define ULP‑scaled thresholds (`τ_Q, τ_P = Θ(ULP)`) and use hysteresis for deterministic tag decisions across devices. Prefer deterministic reductions (pairwise/Kahan) to avoid order‑sensitivity.
 
 ### Round-Trip Guarantees
 

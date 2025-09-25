@@ -75,6 +75,9 @@ from . import layers
 # Do not import heavy/optional bridges (torch/jax) at top level to keep core framework-agnostic
 from . import utils
 from . import training
+from . import policy as _policy_mod  # side-effect-free access
+from . import optim_utils as _optim_utils
+from . import optim_utils_second_order as _optim2
 
 __all__ = [
     # Version info
@@ -137,6 +140,17 @@ __all__ = [
     "utils",
     "training",
     
+    # Policy
+    "TRPolicy",
+    "TRPolicyConfig",
+    
+    # Optim utils
+    "BatchCurvatureProxy",
+    "batch_safe_lr",
+    "eta_sgd",
+    "eta_heavy_ball",
+    "eta_adam",
+    
     # Re-export gradient modes for convenience
     "GradientMode",
     "gradient_mode",
@@ -149,6 +163,14 @@ __all__ = [
     "arithmetic_mode",
     "use_transreal",
     "use_wheel",
+    
+    # Second-order safeguards
+    "SecondOrderContract",
+    "saturating_surrogate_bounds",
+    "combine_path_bound",
+    "estimate_contract_for_tr_rational",
+    "curvature_bound_for_batch",
+    "gauss_newton_bound",
 ]
 
 # Import gradient mode functionality for re-export
@@ -156,3 +178,23 @@ from .autodiff import GradientMode, gradient_mode, use_mask_real, use_saturating
 
 # Import wheel mode functionality for re-export
 from .core import ArithmeticMode, wheel_mode, arithmetic_mode, use_transreal, use_wheel
+
+# Re-export policy and optim utils
+from .policy import TRPolicy, TRPolicyConfig
+from .optim_utils import (
+    BatchCurvatureProxy,
+    batch_safe_lr,
+    eta_sgd,
+    eta_heavy_ball,
+    eta_adam,
+)
+
+# Re-export second-order utilities
+from .optim_utils_second_order import (
+    SecondOrderContract,
+    saturating_surrogate_bounds,
+    combine_path_bound,
+    estimate_contract_for_tr_rational,
+    curvature_bound_for_batch,
+    gauss_newton_bound,
+)

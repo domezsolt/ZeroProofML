@@ -150,18 +150,47 @@ class TRNorm:
                 mean = TRNode.constant(real(0.0))
                 variance = TRNode.constant(real(0.0))
             else:
+                # Optional deterministic pairwise reduction for mean/variance
+                def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
+                    if not nodes:
+                        return TRNode.constant(real(0.0))
+                    if len(nodes) == 1:
+                        return nodes[0]
+                    mid = len(nodes) // 2
+                    left = _pairwise_sum(nodes[:mid])
+                    right = _pairwise_sum(nodes[mid:])
+                    return tr_add(left, right)
+                use_pairwise = False
+                try:
+                    from ..policy import TRPolicyConfig
+                    pol = TRPolicyConfig.get_policy()
+                    use_pairwise = bool(pol and pol.deterministic_reduction)
+                except Exception:
+                    use_pairwise = False
+
                 # Compute mean
-                mean = real_values[0]
-                for k in range(1, len(real_values)):
-                    mean = mean + real_values[k]
-                mean = mean / TRNode.constant(real(float(len(real_values))))
-                
-                # Compute variance
-                variance = TRNode.constant(real(0.0))
+                if use_pairwise:
+                    sum_vals = _pairwise_sum(real_values)
+                    mean = tr_div(sum_vals, TRNode.constant(real(float(len(real_values)))))
+                else:
+                    mean = real_values[0]
+                    for k in range(1, len(real_values)):
+                        mean = tr_add(mean, real_values[k])
+                    mean = tr_div(mean, TRNode.constant(real(float(len(real_values)))))
+
+                # Compute variance: average of squared deviations
+                sq_terms: List[TRNode] = []
                 for val in real_values:
-                    diff = val - mean
-                    variance = variance + diff * diff
-                variance = variance / TRNode.constant(real(float(len(real_values))))
+                    diff = tr_sub(val, mean)
+                    sq_terms.append(tr_mul(diff, diff))
+                if use_pairwise:
+                    var_sum = _pairwise_sum(sq_terms)
+                    variance = tr_div(var_sum, TRNode.constant(real(float(len(real_values)))))
+                else:
+                    variance = TRNode.constant(real(0.0))
+                    for t in sq_terms:
+                        variance = tr_add(variance, t)
+                    variance = tr_div(variance, TRNode.constant(real(float(len(real_values)))))
             
             # Update running statistics if enabled and valid REAL stats are available
             if self.track_running_stats and len(real_values) > 0 and mean.tag == TRTag.REAL and variance.tag == TRTag.REAL:

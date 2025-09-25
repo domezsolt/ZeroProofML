@@ -12,7 +12,7 @@ By default, the denominator Q is shared across outputs for parameter efficiency.
 
 from typing import List, Tuple, Optional, Union, Any
 
-from ..core import TRTag, real
+from ..core import TRTag, TRScalar, real
 from ..autodiff import TRNode
 from .tr_rational import TRRational, TRRationalMulti
 from .basis import Basis, MonomialBasis
@@ -49,11 +49,36 @@ class _TRDense:
             self.b.append(TRNode.parameter(real(0.0), name=f"b_{i}"))
 
     def forward(self, x: List[TRNode]) -> List[TRNode]:
+        # Optional deterministic pairwise reduction for sum of weighted inputs
+        def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
+            if not nodes:
+                return TRNode.constant(real(0.0))
+            if len(nodes) == 1:
+                return nodes[0]
+            mid = len(nodes) // 2
+            left = _pairwise_sum(nodes[:mid])
+            right = _pairwise_sum(nodes[mid:])
+            return left + right
+
         outputs: List[TRNode] = []
+        # Read policy once
+        use_pairwise = False
+        try:
+            from ..policy import TRPolicyConfig
+            pol = TRPolicyConfig.get_policy()
+            use_pairwise = bool(pol and pol.deterministic_reduction)
+        except Exception:
+            use_pairwise = False
+
         for i in range(self.out_dim):
-            a = self.b[i]
+            # Build terms: bias + sum_j W[i][j]*x[j]
+            terms: List[TRNode] = [self.b[i]]
             for j in range(self.in_dim):
-                a = a + self.W[i][j] * x[j]
+                terms.append(self.W[i][j] * x[j])
+            a = _pairwise_sum(terms) if use_pairwise else terms[0]
+            if not use_pairwise:
+                for t in terms[1:]:
+                    a = a + t
             if self.activation == "relu":
                 if a.tag == TRTag.REAL and a.value.value > 0:
                     outputs.append(a)
@@ -92,7 +117,10 @@ class TRMultiInputRational:
                  hidden_dims: Optional[List[int]] = None,
                  features_per_output: int = 1,
                  shared_Q: bool = True,
-                 enable_pole_head: bool = False):
+                 enable_pole_head: bool = False,
+                 # Coprime surrogate flags for heads
+                 enable_coprime_regularizer: bool = False,
+                 lambda_coprime: float = 0.0):
         self.input_dim = input_dim
         self.n_outputs = n_outputs
         self.d_p = d_p
@@ -102,6 +130,8 @@ class TRMultiInputRational:
         self.features_per_output = max(1, features_per_output)
         self.shared_Q = shared_Q
         self.enable_pole_head = enable_pole_head
+        self.enable_coprime_regularizer = enable_coprime_regularizer
+        self.lambda_coprime = float(lambda_coprime or 0.0)
 
         # Build a simple MLP that ends with K = n_outputs * features_per_output scalars
         self._build_frontend()
@@ -111,14 +141,24 @@ class TRMultiInputRational:
         self.heads: List[TRRational] = []
         if self.shared_Q and self.features_per_output == 1:
             # Share Q across outputs via TRRationalMulti, but wrap for unified API
-            self.multi = TRRationalMulti(d_p=self.d_p, d_q=self.d_q, n_outputs=self.n_outputs,
-                                         basis=self.basis, shared_Q=True)
+            self.multi = TRRationalMulti(
+                d_p=self.d_p, d_q=self.d_q, n_outputs=self.n_outputs,
+                basis=self.basis, shared_Q=True,
+                enable_coprime_regularizer=self.enable_coprime_regularizer,
+                lambda_coprime=self.lambda_coprime,
+            )
             # Create thin wrappers referencing multi.layers for parameter sharing
             self.heads = self.multi.layers  # type: ignore[attr-defined]
         else:
             # Independent heads
             for _ in range(self.n_outputs):
-                self.heads.append(TRRational(d_p=self.d_p, d_q=self.d_q, basis=self.basis))
+                self.heads.append(
+                    TRRational(
+                        d_p=self.d_p, d_q=self.d_q, basis=self.basis,
+                        enable_coprime_regularizer=self.enable_coprime_regularizer,
+                        lambda_coprime=self.lambda_coprime,
+                    )
+                )
 
         # Optional simple pole head on concatenated features (linear layer + sigmoid approx handled in trainer)
         if self.enable_pole_head:
@@ -180,10 +220,29 @@ class TRMultiInputRational:
             for i, head in enumerate(self.heads):
                 start = i * self.features_per_output
                 end = start + self.features_per_output
-                # Average features
-                acc = feats[start]
-                for j in range(start + 1, end):
-                    acc = acc + feats[j]
+                # Average features using optional pairwise sum
+                group = feats[start:end]
+                # Local helper
+                def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
+                    if not nodes:
+                        return TRNode.constant(real(0.0))
+                    if len(nodes) == 1:
+                        return nodes[0]
+                    mid = len(nodes) // 2
+                    left = _pairwise_sum(nodes[:mid])
+                    right = _pairwise_sum(nodes[mid:])
+                    return left + right
+                use_pairwise = False
+                try:
+                    from ..policy import TRPolicyConfig
+                    pol = TRPolicyConfig.get_policy()
+                    use_pairwise = bool(pol and pol.deterministic_reduction)
+                except Exception:
+                    use_pairwise = False
+                acc = _pairwise_sum(group) if use_pairwise else group[0]
+                if not use_pairwise:
+                    for t in group[1:]:
+                        acc = acc + t
                 acc = acc / TRNode.constant(real(float(self.features_per_output)))
                 y, tag = head.forward(acc)
                 outputs.append((y, tag))
@@ -200,9 +259,27 @@ class TRMultiInputRational:
             for i in range(self.n_outputs):
                 start = i * self.features_per_output
                 end = start + self.features_per_output
-                acc = feats[start]
-                for j in range(start + 1, end):
-                    acc = acc + feats[j]
+                group = feats[start:end]
+                def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
+                    if not nodes:
+                        return TRNode.constant(real(0.0))
+                    if len(nodes) == 1:
+                        return nodes[0]
+                    mid = len(nodes) // 2
+                    left = _pairwise_sum(nodes[:mid])
+                    right = _pairwise_sum(nodes[mid:])
+                    return left + right
+                use_pairwise = False
+                try:
+                    from ..policy import TRPolicyConfig
+                    pol = TRPolicyConfig.get_policy()
+                    use_pairwise = bool(pol and pol.deterministic_reduction)
+                except Exception:
+                    use_pairwise = False
+                acc = _pairwise_sum(group) if use_pairwise else group[0]
+                if not use_pairwise:
+                    for t in group[1:]:
+                        acc = acc + t
                 acc = acc / TRNode.constant(real(float(self.features_per_output)))
                 agg.append(acc)
             feats_use = agg
@@ -283,6 +360,29 @@ class TRMultiInputRational:
             params.append(self.pole_b)
         return params
 
+    def get_layer_contract(self) -> dict:
+        """Publish a layer contract by delegating to a representative head.
+
+        If shared_Q: use the first head (shared denominator typical).
+        Otherwise: aggregate by taking max over heads for safety.
+        """
+        try:
+            if hasattr(self, 'heads') and self.heads:
+                if self.shared_Q:
+                    return self.heads[0].get_layer_contract()
+                # Aggregate conservatively
+                contracts = [h.get_layer_contract() for h in self.heads if hasattr(h, 'get_layer_contract')]
+                if not contracts:
+                    return {'B_k': 1.0, 'H_k': 1.0, 'G_max': 1.0, 'H_max': 1.0, 'depth_hint': 4}
+                out = {}
+                for k in ('B_k', 'H_k', 'G_max', 'H_max'):
+                    out[k] = float(max(c.get(k, 1.0) for c in contracts))
+                out['depth_hint'] = int(max(c.get('depth_hint', 4) for c in contracts))
+                return out
+        except Exception:
+            pass
+        return {'B_k': 1.0, 'H_k': 1.0, 'G_max': 1.0, 'H_max': 1.0, 'depth_hint': 4}
+
     def pole_parameters(self) -> List[TRNode]:
         params: List[TRNode] = []
         if getattr(self, 'enable_pole_head', False):
@@ -303,3 +403,127 @@ class TRMultiInputRational:
         for head in self.heads:
             reg = reg + head.regularization_loss()
         return reg
+
+    # -----------------------------
+    # SoA value-only fast inference (batch)
+    # -----------------------------
+    def value_only_batch(self, X: List[Union[List[float], Tuple[float, ...]]]) -> List[List[TRScalar]]:
+        """
+        Fast value-only batch inference using SoA path for the front-end and
+        TRRational.value_only for heads. Builds no autodiff graph.
+
+        Falls back to regular forward for a sample if any parameter tag is non-REAL
+        or inputs are malformed.
+
+        Args:
+            X: List of input vectors (each length = input_dim)
+
+        Returns:
+            List of outputs per sample (each a list of TRScalar of length n_outputs)
+        """
+        # Verify dense params are REAL once; else fallback per-sample
+        params_real = True
+        try:
+            for layer in self.layers:
+                for i in range(layer.out_dim):
+                    if layer.b[i].value.tag != TRTag.REAL:
+                        params_real = False
+                        break
+                    for j in range(layer.in_dim):
+                        if layer.W[i][j].value.tag != TRTag.REAL:
+                            params_real = False
+                            break
+                    if not params_real:
+                        break
+        except Exception:
+            params_real = False
+
+        outputs: List[List[TRScalar]] = []
+        for x_vec in X:
+            # Input validation and conversion to floats
+            try:
+                if not isinstance(x_vec, (list, tuple)) or len(x_vec) != self.input_dim:
+                    raise TypeError("value_only_batch expects list/tuple inputs matching input_dim")
+                x_floats = [float(v) for v in x_vec]
+            except Exception:
+                # Fallback to regular forward
+                y_tags = self.forward(x_vec)  # type: ignore[arg-type]
+                outs = []
+                for y, tag in y_tags:
+                    outs.append(y.value)
+                outputs.append(outs)
+                continue
+
+            if not params_real:
+                # Fallback to regular forward if any dense param non-REAL
+                y_tags = self.forward([TRNode.constant(real(v)) for v in x_floats])
+                outs = []
+                for y, tag in y_tags:
+                    outs.append(y.value)
+                outputs.append(outs)
+                continue
+
+            # Frontend numeric pass
+            h = x_floats
+            try:
+                for layer in self.layers:
+                    y_vals: List[float] = []
+                    # Pre-fetch weights as floats
+                    Wf = [[float(layer.W[i][j].value.value) for j in range(layer.in_dim)]
+                          for i in range(layer.out_dim)]
+                    bf = [float(layer.b[i].value.value) for i in range(layer.out_dim)]
+                    for i in range(layer.out_dim):
+                        a = bf[i]
+                        row = Wf[i]
+                        # Dot product
+                        for j in range(layer.in_dim):
+                            a += row[j] * h[j]
+                        if layer.activation == "relu":
+                            y_vals.append(a if a > 0.0 else 0.0)
+                        else:  # linear or other
+                            y_vals.append(a)
+                    h = y_vals
+            except Exception:
+                # Fallback
+                y_tags = self.forward([TRNode.constant(real(v)) for v in x_floats])
+                outs = []
+                for y, tag in y_tags:
+                    outs.append(y.value)
+                outputs.append(outs)
+                continue
+
+            # Consume features with heads via value_only
+            feats = h
+            sample_outs: List[TRScalar] = []
+            if self.features_per_output == 1:
+                for i, head in enumerate(self.heads):
+                    z = feats[i]
+                    sample_outs.append(head.value_only(z))
+            else:
+                for i, head in enumerate(self.heads):
+                    start = i * self.features_per_output
+                    end = start + self.features_per_output
+                    # Average per-group
+                    acc = 0.0
+                    cnt = 0
+                    for j in range(start, end):
+                        if j < len(feats):
+                            acc += feats[j]
+                            cnt += 1
+                    z = acc / max(1, cnt)
+                    sample_outs.append(head.value_only(z))
+            outputs.append(sample_outs)
+
+        return outputs
+
+    # Policy sensitivity scales (heuristic): use first head (shared Q typical)
+    def get_policy_local_scales(self) -> Tuple[float, float]:
+        try:
+            if hasattr(self, 'multi') and hasattr(self.multi, 'layers') and self.multi.layers:
+                return self.multi.layers[0].get_policy_local_scales()
+            if self.heads:
+                return self.heads[0].get_policy_local_scales()
+        except Exception:
+            pass
+        # Default conservative scales
+        return (1.0, 1.0)

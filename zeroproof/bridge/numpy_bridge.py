@@ -18,6 +18,33 @@ except ImportError:
 from ..core import TRScalar, TRTag, real, pinf, ninf, phi
 
 
+def _pack_bits(mask: 'np.ndarray') -> 'np.ndarray':
+    """Pack a boolean mask into a uint8 array (bit-packed).
+
+    The length of the returned array is ceil(len(mask)/8). Bits are stored LSB-first.
+    """
+    if not NUMPY_AVAILABLE:
+        raise ImportError("NumPy is required")
+    mask = np.asarray(mask, dtype=bool).ravel()
+    n = mask.size
+    out = np.zeros((n + 7) // 8, dtype=np.uint8)
+    for i, bit in enumerate(mask):
+        if bit:
+            out[i >> 3] |= (1 << (i & 7))
+    return out
+
+
+def _unpack_bits(packed: 'np.ndarray', length: int) -> 'np.ndarray':
+    """Unpack a uint8 bit-packed array into a boolean array of given length."""
+    if not NUMPY_AVAILABLE:
+        raise ImportError("NumPy is required")
+    packed = np.asarray(packed, dtype=np.uint8)
+    out = np.zeros(length, dtype=bool)
+    for i in range(length):
+        out[i] = (packed[i >> 3] >> (i & 7)) & 1
+    return out
+
+
 class TRArray:
     """
     Transreal array representation.
@@ -138,6 +165,90 @@ class TRArray:
             return TRArray(values, tags)
 
 
+class TRArrayPacked:
+    """
+    Packed transreal array representation.
+
+    Stores values in a float ndarray and tag masks as bit-packed arrays
+    for REAL, PINF, and NINF. PHI is implied as the remainder.
+    """
+
+    def __init__(self, values: 'np.ndarray', real_bits: 'np.ndarray', pinf_bits: 'np.ndarray', ninf_bits: 'np.ndarray', shape: tuple[int, ...]):
+        if not NUMPY_AVAILABLE:
+            raise ImportError("NumPy is required for TRArrayPacked")
+        self.values = values
+        self._real_bits = real_bits
+        self._pinf_bits = pinf_bits
+        self._ninf_bits = ninf_bits
+        self._shape = tuple(shape)
+        self._size = int(np.prod(shape))
+        self._dtype = values.dtype
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return self._shape
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def ndim(self) -> int:
+        return len(self._shape)
+
+    @property
+    def size(self) -> int:
+        return self._size
+
+    def _unpack_all(self) -> tuple['np.ndarray','np.ndarray','np.ndarray']:
+        n = self._size
+        real = _unpack_bits(self._real_bits, n).reshape(self._shape)
+        pinf = _unpack_bits(self._pinf_bits, n).reshape(self._shape)
+        ninf = _unpack_bits(self._ninf_bits, n).reshape(self._shape)
+        return real, pinf, ninf
+
+    def is_real(self) -> 'np.ndarray':
+        return self._unpack_all()[0]
+
+    def is_pinf(self) -> 'np.ndarray':
+        return self._unpack_all()[1]
+
+    def is_ninf(self) -> 'np.ndarray':
+        return self._unpack_all()[2]
+
+    def is_phi(self) -> 'np.ndarray':
+        real, pinf, ninf = self._unpack_all()
+        return ~(real | pinf | ninf)
+
+    def to_numpy(self) -> 'np.ndarray':
+        return to_numpy(self)
+
+    def __getitem__(self, key):
+        # Slice values and reconstruct bit masks for the slice
+        values = self.values[key]
+        # Unpack + slice then repack for simplicity
+        real = self.is_real()[key]
+        pinf = self.is_pinf()[key]
+        ninf = self.is_ninf()[key]
+        # Scalar result
+        if np.isscalar(values) or (isinstance(values, np.ndarray) and values.shape == ()):  # type: ignore
+            # Determine tag
+            if real:
+                return TRScalar(float(values), TRTag.REAL)
+            elif pinf:
+                return TRScalar(float('nan'), TRTag.PINF)
+            elif ninf:
+                return TRScalar(float('nan'), TRTag.NINF)
+            else:
+                return TRScalar(float('nan'), TRTag.PHI)
+        # Pack masks
+        real_bits = _pack_bits(real.ravel())
+        pinf_bits = _pack_bits(pinf.ravel())
+        ninf_bits = _pack_bits(ninf.ravel())
+        shape = values.shape
+        return TRArrayPacked(values, real_bits, pinf_bits, ninf_bits, shape)
+
+
 # Tag encoding for efficient storage
 def tag_to_code(tag: TRTag) -> int:
     """Convert TR tag to uint8 code."""
@@ -214,6 +325,33 @@ def from_numpy(arr: Union['np.ndarray', float], *, return_array: bool = False) -
     return TRArray(values, tags)
 
 
+def from_numpy_packed(arr: Union['np.ndarray', float]) -> Union[TRArrayPacked, TRScalar]:
+    """
+    Convert NumPy array or scalar to a packed transreal representation.
+
+    For scalars, returns TRScalar. For arrays, returns TRArrayPacked which stores
+    tag masks as bit-packed arrays (is_real, is_pinf, is_ninf), implying PHI as the remainder.
+    """
+    if not NUMPY_AVAILABLE:
+        raise ImportError("NumPy is required for from_numpy_packed")
+    if np.isscalar(arr):
+        return from_ieee_scalar(float(arr))
+    arr = np.asarray(arr)
+    # Classify tags from IEEE
+    finite_mask = np.isfinite(arr)
+    nan_mask = np.isnan(arr)
+    pinf_mask = np.isposinf(arr)
+    ninf_mask = np.isneginf(arr)
+    real_mask = finite_mask & ~nan_mask
+    # Pack masks
+    real_bits = _pack_bits(real_mask)
+    pinf_bits = _pack_bits(pinf_mask)
+    ninf_bits = _pack_bits(ninf_mask)
+    # Values: keep original floats (including specials)
+    values = arr.astype(np.float64, copy=True)
+    return TRArrayPacked(values, real_bits, pinf_bits, ninf_bits, tuple(arr.shape))
+
+
 def to_numpy_array(tr_array: TRArray) -> 'np.ndarray':
     """
     Convert TRArray to NumPy array (IEEE representation).
@@ -243,7 +381,7 @@ def to_numpy_array(tr_array: TRArray) -> 'np.ndarray':
     return result
 
 
-def to_numpy(tr_obj: Union[TRScalar, TRArray]) -> Union[float, 'np.ndarray']:
+def to_numpy(tr_obj: Union[TRScalar, TRArray, TRArrayPacked]) -> Union[float, 'np.ndarray']:
     """
     Convert TR object to NumPy representation.
     
@@ -257,6 +395,18 @@ def to_numpy(tr_obj: Union[TRScalar, TRArray]) -> Union[float, 'np.ndarray']:
         return to_ieee_scalar(tr_obj)
     elif isinstance(tr_obj, TRArray):
         return to_numpy_array(tr_obj)
+    elif isinstance(tr_obj, TRArrayPacked):
+        # Reconstruct from bit masks
+        real = tr_obj.is_real()
+        pinf = tr_obj.is_pinf()
+        ninf = tr_obj.is_ninf()
+        phi_mask = tr_obj.is_phi()
+        out = tr_obj.values.copy()
+        out[pinf] = np.inf
+        out[ninf] = -np.inf
+        out[phi_mask] = np.nan
+        # REAL positions keep their numeric values
+        return out
     else:
         raise TypeError(f"Expected TRScalar or TRArray, got {type(tr_obj)}")
 

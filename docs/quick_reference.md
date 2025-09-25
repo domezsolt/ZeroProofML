@@ -85,6 +85,21 @@ norm = TRNorm(num_features=10)
 output = norm.forward(batch)
 ```
 
+### TR-Softmax (Rational Surrogate)
+```python
+from zeroproof.layers import tr_softmax
+from zeroproof.autodiff import TRNode
+
+logits = [TRNode.constant(zp.real(0.0)), TRNode.constant(zp.real(1.5)), TRNode.constant(zp.real(-0.5))]
+probs = tr_softmax(logits)  # List[TRNode]
+```
+- Sums to 1.0 in REAL regions; stable for extreme logits.
+- Policy toggle (optional): force one‑hot when any `+∞` is present:
+```python
+from zeroproof.policy import TRPolicy, TRPolicyConfig
+TRPolicyConfig.set_policy(TRPolicy(softmax_one_hot_infinity=True))
+```
+
 ## Optimization Tools
 
 ### Profiling

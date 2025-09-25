@@ -7,6 +7,7 @@ explicitly learns to predict where the denominator Q approaches zero.
 
 from typing import Optional, Tuple, List, Union, Dict
 from ..core import TRScalar, TRTag, real
+from ..policy import TRPolicyConfig, classify_tag_with_policy
 from ..autodiff import TRNode
 from ..autodiff.hybrid_gradient import HybridGradientSchedule
 from ..training.pole_detection import (
@@ -107,17 +108,46 @@ class PoleAwareRational(HybridTRRational):
         # Evaluate basis functions
         psi = self.basis(x, max(self.d_p, self.d_q))
         
-        # Compute P(x)
-        P = self.theta[0] * psi[0]
-        for k in range(1, self.d_p + 1):
+        # Compute P(x) with optional deterministic pairwise reduction
+        def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
+            if not nodes:
+                return TRNode.constant(real(0.0))
+            if len(nodes) == 1:
+                return nodes[0]
+            mid = len(nodes) // 2
+            left = _pairwise_sum(nodes[:mid])
+            right = _pairwise_sum(nodes[mid:])
+            return left + right
+
+        P_terms: List[TRNode] = []
+        for k in range(0, self.d_p + 1):
             if k < len(psi):
-                P = P + self.theta[k] * psi[k]
+                P_terms.append(self.theta[k] * psi[k])
+        use_pairwise = False
+        try:
+            from ..policy import TRPolicyConfig
+            pol = TRPolicyConfig.get_policy()
+            use_pairwise = bool(pol and pol.deterministic_reduction)
+        except Exception:
+            use_pairwise = False
+        if use_pairwise:
+            P = _pairwise_sum(P_terms)
+        else:
+            P = P_terms[0]
+            for term in P_terms[1:]:
+                P = P + term
         
-        # Compute Q(x)
-        Q = TRNode.constant(real(1.0))  # Leading 1
+        # Compute Q(x) with optional deterministic pairwise reduction
+        Q_terms: List[TRNode] = [TRNode.constant(real(1.0))]
         for k in range(1, self.d_q + 1):
             if k < len(psi) and k <= len(self.phi):
-                Q = Q + self.phi[k-1] * psi[k]
+                Q_terms.append(self.phi[k-1] * psi[k])
+        if use_pairwise:
+            Q = _pairwise_sum(Q_terms)
+        else:
+            Q = Q_terms[0]
+            for term in Q_terms[1:]:
+                Q = Q + term
         
         # Store Q value for pole detection
         self._last_Q_value = Q.value
@@ -125,19 +155,39 @@ class PoleAwareRational(HybridTRRational):
             self._last_Q_abs = abs(Q.value.value)
         else:
             self._last_Q_abs = float('inf')
+
+        # Update hybrid controller Q-tracking for quantile stats
+        try:
+            if Q.tag == TRTag.REAL:
+                from ..autodiff.hybrid_gradient import HybridGradientContext
+                HybridGradientContext.update_q_value(abs(Q.value.value))
+        except Exception:
+            pass
         
         # Compute rational function
         y = P / Q
-        
-        # Determine tag
-        if Q.value.tag == TRTag.REAL and Q.value.value != 0:
-            tag = TRTag.REAL
-        elif Q.value.tag == TRTag.REAL and Q.value.value == 0:
-            if P.value.tag == TRTag.REAL and P.value.value != 0:
-                tag = TRTag.PINF if P.value.value > 0 else TRTag.NINF
+
+        # Determine tag (policy-aware if configured)
+        tag = y.tag
+        try:
+            policy = TRPolicyConfig.get_policy()
+            if policy is not None:
+                prev = getattr(self, "_last_policy_tag", None)
+                tag = classify_tag_with_policy(policy, P.value, Q.value, y.tag, prev_policy_tag=prev)
+                self._last_policy_tag = tag
             else:
-                tag = TRTag.PHI
-        else:
+                # Fallback: simple TR-based classification near exact pole
+                if Q.value.tag == TRTag.REAL and Q.value.value != 0:
+                    tag = TRTag.REAL
+                elif Q.value.tag == TRTag.REAL and Q.value.value == 0:
+                    if P.value.tag == TRTag.REAL and P.value.value != 0:
+                        tag = TRTag.PINF if P.value.value > 0 else TRTag.NINF
+                    else:
+                        tag = TRTag.PHI
+                else:
+                    tag = y.tag
+        except Exception:
+            # Any error in policy classification: use TR tag
             tag = y.tag
         
         # Track Q values if enabled

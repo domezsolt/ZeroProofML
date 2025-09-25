@@ -7,7 +7,9 @@ from .ieee_tr import from_ieee, to_ieee, from_numpy, to_numpy
 try:
     from .numpy_bridge import (
         TRArray,
+        TRArrayPacked,
         from_numpy as from_numpy_array,
+        from_numpy_packed,
         to_numpy as to_numpy_array,
         validate_array,
         check_finite,
@@ -103,6 +105,7 @@ __all__ = [
 if NUMPY_AVAILABLE:
     __all__.extend([
         "from_numpy_array",
+        "from_numpy_packed",
         "to_numpy_array",
         "validate_array",
         "check_finite",
@@ -110,6 +113,7 @@ if NUMPY_AVAILABLE:
         "count_tags",
         "real_values",
         "clip_infinities",
+        "TRArrayPacked",
     ])
 
 if TORCH_AVAILABLE:

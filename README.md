@@ -214,6 +214,28 @@ layer = zp.layers.TRRational(
 )
 ```
 
+### Policy & Guard Bands (TRPolicy)
+
+ZeroProof provides a central TR policy that defines guard bands around poles and optional deterministic reductions:
+
+```python
+from zeroproof.policy import TRPolicy, TRPolicyConfig
+
+# Enable ULP‑scaled thresholds with pairwise reductions
+TRPolicyConfig.set_policy(TRPolicy(
+    tau_Q_on=0.0, tau_Q_off=0.0,  # resolved automatically if desired
+    tau_P_on=0.0, tau_P_off=0.0,
+    keep_signed_zero=True,
+    deterministic_reduction=True,
+))
+
+# Model‑aware thresholds (recommended)
+from zeroproof.training import enable_policy_from_model
+enable_policy_from_model(model, ulp_scale=4.0)
+```
+
+Deterministic reductions (pairwise trees) are honored throughout: P/Q in TR‑Rational, TR‑Norm mean/var, TR‑softmax normalization, dense sums, and regularizers when `deterministic_reduction=True`.
+
 ### Epsilon-Free Normalization
 
 Batch normalization without epsilon hacks:
@@ -223,6 +245,38 @@ norm = zp.layers.TRNorm(num_features=128)
 # Handles zero-variance features deterministically
 # No more eps=1e-5 parameters!
 ```
+
+### TR-Softmax (Rational Surrogate)
+
+ZeroProof includes a TR‑safe softmax built from rational operations (no exp). It preserves autodiff paths and avoids NaN/Inf propagation.
+
+```python
+from zeroproof.layers import tr_softmax
+from zeroproof.autodiff import TRNode
+
+logits = [TRNode.constant(zp.real(0.0)),
+          TRNode.constant(zp.real(1.5)),
+          TRNode.constant(zp.real(-0.5))]
+
+probs = tr_softmax(logits)  # List[TRNode], sums to 1 in REAL regions
+```
+
+Policy: one‑hot on +∞ (optional)
+
+By default, if a logit is `+∞`, the shift‑by‑max can yield non‑REAL tags in the surrogate (still TR‑safe). To force a deterministic one‑hot distribution when any `+∞` is present, enable the policy toggle:
+
+```python
+from zeroproof.policy import TRPolicy, TRPolicyConfig
+
+pol = TRPolicy(softmax_one_hot_infinity=True)
+TRPolicyConfig.set_policy(pol)
+
+# Now tr_softmax([…, +∞, …]) returns one‑hot at the first +∞ index
+```
+
+Internals
+
+- The surrogate uses a monotone rational decay after a max‑shift; it is stable on extreme logits and compatible with Mask‑REAL/Hybrid modes.
 
 ### IEEE-754 Bridge
 
@@ -343,3 +397,45 @@ This implementation is based on the transreal arithmetic theory developed by [Ja
 <div align="center">
 Made with ❤️ by the ZeroProof Team
 </div>
+### Packed NumPy Arrays (bit‑packed tags)
+
+For memory efficiency, you can use a packed representation of TR arrays with bit‑packed tag masks (REAL, ±∞) and PHI implied by the remainder:
+
+```python
+import numpy as np
+from zeroproof.bridge import from_numpy_packed, to_numpy, TRArrayPacked
+
+arr = np.array([1.0, np.inf, -np.inf, np.nan])
+packed = from_numpy_packed(arr)      # TRArrayPacked
+restored = to_numpy(packed)          # IEEE round‑trip
+```
+
+This complements the standard `TRArray` struct‑of‑arrays layout for values+tags.
+
+### Second‑Order Safeguards & Contracts
+
+ZeroProof logs a conservative curvature bound and layer contract during training:
+
+- Contract: `{B_k, H_k, G_max, H_max, depth_hint}` (published by layers)
+- Curvature bound: logged per‑batch/epoch and included in summaries
+
+Optional contract‑safe LR clamp (off by default) can be enabled in the IK runner via CLI:
+
+```bash
+python examples/robotics/rr_ik_train.py \
+  --dataset data/rr_ik_dataset.json --model tr_rat \
+  --use_contract_safe_lr --contract_c 1.0 --loss_smoothness_beta 1.0 \
+  --output_dir runs/ik_experiment
+```
+
+Training summaries/results include policy and safeguard metrics: `flip_rate`, `saturating_ratio`, `tau_q_on/off`, `q_min_epoch`, `curvature_bound`, and `layer_contract`.
+
+### Plot Training Curves
+
+Use the compact utility to visualize flip rate, thresholds, and curvature over epochs:
+
+```bash
+python scripts/plot_training_curves.py \
+  --results runs/ik_experiment/results_tr_rat.json \
+  --outdir runs/ik_experiment
+```

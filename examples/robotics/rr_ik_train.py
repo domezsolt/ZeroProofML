@@ -88,6 +88,21 @@ class TrainingConfig:
     epsilon: Optional[float] = None  # For Rational+ε (P/(Q+ε)) baseline
     clip_grad: Optional[float] = None  # Global-norm gradient clipping for baselines
 
+    # Policy / hybrid knobs
+    use_tr_policy: bool = True
+    policy_ulp_scale: float = 4.0
+    policy_deterministic_reduction: bool = True
+    hybrid_aggressive: bool = False
+    hybrid_delta_init: float = 1e-2
+    hybrid_delta_final: float = 1e-6
+    # Contract-safe LR clamp
+    use_contract_safe_lr: bool = False
+    contract_c: float = 1.0
+    loss_smoothness_beta: float = 1.0
+    # Coprime surrogate regularizer
+    enable_coprime_regularizer: bool = False
+    lambda_coprime: float = 0.0
+
 
 class MLPBaseline:
     """Standard MLP baseline for comparison."""
@@ -255,6 +270,8 @@ class IKTrainer:
                     hidden_dims=[hidden],
                     shared_Q=True,
                     enable_pole_head=self.config.use_pole_head,
+                    enable_coprime_regularizer=self.config.enable_coprime_regularizer,
+                    lambda_coprime=self.config.lambda_coprime,
                 )
             else:
                 # Single output rational
@@ -272,7 +289,9 @@ class IKTrainer:
                     self.model = TRRational(
                         d_p=self.config.degree_p,
                         d_q=self.config.degree_q,
-                        basis=basis
+                        basis=basis,
+                        enable_coprime_regularizer=self.config.enable_coprime_regularizer,
+                        lambda_coprime=self.config.lambda_coprime,
                     )
         
         else:
@@ -289,7 +308,7 @@ class IKTrainer:
             return
         
         # ZeroProof enhanced training
-        hybrid_config = HybridTrainingConfig(
+    hybrid_config = HybridTrainingConfig(
             learning_rate=self.config.learning_rate,
             max_epochs=self.config.epochs,  # map local 'epochs' to base TrainingConfig field
             
@@ -297,6 +316,11 @@ class IKTrainer:
             use_hybrid_gradient=self.config.use_hybrid_schedule,
             hybrid_warmup_epochs=max(1, self.config.epochs // 5),
             hybrid_transition_epochs=max(1, self.config.epochs // 3),
+            
+            # Policy-driven hybrid hysteresis (enable by default)
+            use_tr_policy=self.config.use_tr_policy,
+            policy_ulp_scale=self.config.policy_ulp_scale,
+            policy_deterministic_reduction=self.config.policy_deterministic_reduction,
             
             # Tag loss
             use_tag_loss=self.config.use_tag_loss,
@@ -315,7 +339,16 @@ class IKTrainer:
             min_coverage=self.config.min_coverage,
             log_interval=self.config.log_every,
             enable_structured_logging=not getattr(self.config, 'no_structured_logging', False),
-            save_plots=not getattr(self.config, 'no_plots', False)
+            save_plots=not getattr(self.config, 'no_plots', False),
+            
+            # Optional: schedule aggressiveness and deltas
+            hybrid_aggressive=self.config.hybrid_aggressive,
+            hybrid_delta_init=self.config.hybrid_delta_init,
+            hybrid_delta_final=self.config.hybrid_delta_final,
+            # Contract-safe LR clamp
+            use_contract_safe_lr=self.config.use_contract_safe_lr,
+            contract_c=self.config.contract_c,
+            loss_smoothness_beta=self.config.loss_smoothness_beta,
         )
         
         # Handle multi-output case
@@ -521,9 +554,32 @@ class IKTrainer:
                         self.ple_history.append(ple)
                     except Exception:
                         pass
-                # Logging cadence: every epoch for now; could be gated by config
-                print(f"Epoch {epoch}/{self.config.epochs - 1}: Loss = {avg_loss:.6f}  "
-                      f"Bench: avg_step_ms={avg_step:.1f}, data_ms={avg_data:.1f}, optim_ms={avg_optim:.1f}, batches={n_batches}")
+                # Logging cadence
+                if getattr(self, 'log_policy_console', False):
+                    try:
+                        from zeroproof.autodiff.hybrid_gradient import HybridGradientContext
+                        h = HybridGradientContext.get_statistics()
+                        policy_mode = h.get('policy_mode', 'MR')
+                        q_p10 = h.get('q_p10'); q_p50 = h.get('q_p50'); q_p90 = h.get('q_p90')
+                        tau_on = h.get('tau_q_on'); tau_off = h.get('tau_q_off')
+                        sat = h.get('saturating_activations', 0); total = h.get('total_gradient_calls', 0)
+                        npr = h.get('near_pole_ratio', 0.0)
+                        print(
+                            f"Epoch {epoch}/{self.config.epochs - 1}: Loss={avg_loss:.6f} | "
+                            f"policy={policy_mode} q_p10={q_p10} q_p50={q_p50} q_p90={q_p90} "
+                            f"tau_on={tau_on} tau_off={tau_off} | sat={sat}/{total} npr={npr:.3f} | "
+                            f"Bench: avg_step_ms={avg_step:.1f}, data_ms={avg_data:.1f}, optim_ms={avg_optim:.1f}, batches={n_batches}"
+                        )
+                    except Exception:
+                        print(
+                            f"Epoch {epoch}/{self.config.epochs - 1}: Loss = {avg_loss:.6f}  "
+                            f"Bench: avg_step_ms={avg_step:.1f}, data_ms={avg_data:.1f}, optim_ms={avg_optim:.1f}, batches={n_batches}"
+                        )
+                else:
+                    print(
+                        f"Epoch {epoch}/{self.config.epochs - 1}: Loss = {avg_loss:.6f}  "
+                        f"Bench: avg_step_ms={avg_step:.1f}, data_ms={avg_data:.1f}, optim_ms={avg_optim:.1f}, batches={n_batches}"
+                    )
 
     def _compute_ple_on_data(self, inputs: List[List[float]]) -> float:
         """Compute PLE against θ2∈{0,π} lines for provided inputs using current model."""
@@ -577,11 +633,45 @@ class IKTrainer:
                 
                 epoch_loss += batch_loss
                 n_batches += 1
+
+                # Update policy hysteresis after each batch to reflect quantiles
+                try:
+                    from zeroproof.autodiff.hybrid_gradient import HybridGradientContext
+                    HybridGradientContext.end_batch_policy_update()
+                except Exception:
+                    pass
             
-            # Log progress
-            if epoch % 10 == 0 and n_batches > 0:
+            # Log progress (per-epoch summary)
+            if n_batches > 0 and (epoch % max(1, self.config.log_every) == 0):
                 avg_loss = epoch_loss / n_batches
-                print(f"Epoch {epoch}: Loss = {avg_loss:.6f}")
+                # Hybrid policy metrics
+                try:
+                    from zeroproof.autodiff.hybrid_gradient import HybridGradientContext
+                    h = HybridGradientContext.get_statistics()
+                    policy_mode = h.get('policy_mode', 'MR')
+                    q_p10 = h.get('q_p10'); q_p50 = h.get('q_p50'); q_p90 = h.get('q_p90')
+                    tau_on = h.get('tau_q_on'); tau_off = h.get('tau_q_off')
+                    sat = h.get('saturating_activations', 0); total = h.get('total_gradient_calls', 0)
+                    npr = h.get('near_pole_ratio', 0.0)
+                    print(
+                        f"Epoch {epoch}: Loss={avg_loss:.6f} | policy_mode={policy_mode} "
+                        f"q_p10={q_p10} q_p50={q_p50} q_p90={q_p90} "
+                        f"tau_on={tau_on} tau_off={tau_off} | sat={sat}/{total} npr={npr:.3f}"
+                    )
+                    # Store a compact per-epoch record for plotting
+                    try:
+                        if hasattr(self, 'trainer') and hasattr(self.trainer, '_epoch_records'):
+                            self.trainer._epoch_records.append({
+                                'epoch': epoch + 1,
+                                'loss': float(avg_loss),
+                                'q_p10': q_p10, 'q_p50': q_p50, 'q_p90': q_p90,
+                                'saturating_ratio': h.get('saturating_ratio', 0.0),
+                                'flip_rate': h.get('flip_rate', 0.0),
+                            })
+                    except Exception:
+                        pass
+                except Exception:
+                    print(f"Epoch {epoch}: Loss = {avg_loss:.6f}")
                 self.training_history.append(avg_loss)
 
     def _apply_gradient_clipping(self) -> None:
@@ -716,7 +806,13 @@ class IKTrainer:
         return summary
 
 
-def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str, seed: Optional[int] = None):
+def run_experiment(dataset_file: str,
+                  config: TrainingConfig,
+                  output_dir: str,
+                  seed: Optional[int] = None,
+                  limit_train: Optional[int] = None,
+                  limit_test: Optional[int] = None,
+                  log_policy_console: bool = False):
     """Run complete training experiment."""
     print(f"=== Running IK Training Experiment ===")
     print(f"Model: {config.model_type}")
@@ -737,6 +833,12 @@ def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str, s
         n_train = int(0.8 * len(samples))
     train_samples = samples[:n_train]
     test_samples = samples[n_train:]
+
+    # Optional subsampling for quick runs
+    if isinstance(limit_train, int) and limit_train > 0:
+        train_samples = train_samples[:min(limit_train, len(train_samples))]
+    if isinstance(limit_test, int) and limit_test > 0:
+        test_samples = test_samples[:min(limit_test, len(test_samples))]
     
     # Create trainer
     trainer = IKTrainer(config)
@@ -746,6 +848,11 @@ def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str, s
     # Output: [dtheta1, dtheta2] -> 2D
     trainer.create_model(input_dim=4, output_dim=2)
     trainer.setup_trainer()
+    # Enable console policy logs if requested
+    try:
+        setattr(trainer, 'log_policy_console', bool(log_policy_console))
+    except Exception:
+        pass
     
     # Train model
     trainer.train(train_samples, test_samples)
@@ -782,6 +889,48 @@ def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str, s
         'env': collect_env_info(),
     }
 
+    # Attach policy summary (thresholds and flags) if active
+    try:
+        from zeroproof.policy import TRPolicyConfig
+        pol = TRPolicyConfig.get_policy()
+        if pol is not None:
+            results['policy'] = {
+                'tau_Q_on': float(pol.tau_Q_on),
+                'tau_Q_off': float(pol.tau_Q_off),
+                'tau_P_on': float(pol.tau_P_on),
+                'tau_P_off': float(pol.tau_P_off),
+                'rounding_mode': getattr(pol, 'rounding_mode', None),
+                'keep_signed_zero': bool(getattr(pol, 'keep_signed_zero', True)),
+                'deterministic_reduction': bool(getattr(pol, 'deterministic_reduction', True)),
+                'g_on': float(pol.g_on) if pol.g_on is not None else None,
+                'g_off': float(pol.g_off) if pol.g_off is not None else None,
+            }
+    except Exception:
+        pass
+
+    # Extract final curvature bound/thresholds from training summary if available
+    try:
+        hist = results.get('training_summary', {}).get('final_metrics', [])
+        if isinstance(hist, list) and hist:
+            last = hist[-1]
+            for k in (
+                'curvature_bound', 'B_k', 'H_k', 'G_max', 'H_max',
+                'tau_q_on', 'tau_q_off',
+                'flip_rate', 'saturating_ratio', 'q_min_epoch', 'mask_bandwidth'
+            ):
+                if k in last and last[k] is not None:
+                    results[k] = last[k]
+    except Exception:
+        pass
+
+    # Attach layer contract at top level for convenience
+    try:
+        lc = results.get('training_summary', {}).get('layer_contract', None)
+        if lc is not None:
+            results['layer_contract'] = lc
+    except Exception:
+        pass
+
     # Guardrail: warn if hybrid did not switch (near_pole_ratio too low)
     try:
         tz = results.get('training_summary', {}).get('zeroproof_metrics', {})
@@ -800,6 +949,20 @@ def run_experiment(dataset_file: str, config: TrainingConfig, output_dir: str, s
         json.dump(to_builtin(results), f, indent=2)
     
     print(f"Results saved to {results_file}")
+    
+    # Save training plots (including Q/D/smin curves) if available
+    try:
+        if hasattr(trainer, 'trainer') and trainer.trainer:
+            epoch_records = []
+            try:
+                epoch_records = trainer.trainer.get_epoch_records()
+            except Exception:
+                epoch_records = []
+            if epoch_records:
+                from zeroproof.utils.plotting import save_all_plots
+                save_all_plots(output_dir, epoch_records, model=trainer.model)
+    except Exception as e:
+        print(f"Warning: failed to save training plots: {e}")
     
     return results
 
@@ -824,6 +987,8 @@ def main():
                        help='Disable structured logging inside Hybrid trainer for performance')
     parser.add_argument('--no_plots', action='store_true',
                        help='Disable plot generation inside Hybrid trainer for performance')
+    parser.add_argument('--emit_overhead', action='store_true',
+                       help='Emit Hybrid vs Mask-REAL overhead JSON after training')
     
     # Model parameters
     parser.add_argument('--hidden_dim', type=int, default=32,
@@ -871,6 +1036,41 @@ def main():
     parser.add_argument('--lambda_residual', type=float, default=0.02,
                        help='Residual loss weight')
     
+    # Quick run and logging controls
+    parser.add_argument('--quick_demo', action='store_true',
+                       help='Use very few epochs and a small data subset for a quick run')
+    parser.add_argument('--limit_train', type=int, default=None,
+                       help='Limit number of training samples (for quick runs)')
+    parser.add_argument('--limit_test', type=int, default=None,
+                       help='Limit number of test/val samples (for quick runs)')
+    parser.add_argument('--log_policy_console', action='store_true',
+                       help='Print policy/hybrid metrics in console at each epoch')
+    # Policy/Hybrid tuning
+    parser.add_argument('--no_tr_policy', action='store_true',
+                       help='Disable TR policy (use raw TR tags only)')
+    parser.add_argument('--policy_ulp_scale', type=float, default=4.0,
+                       help='ULP scale factor for policy guard bands (e.g., 1e12)')
+    parser.add_argument('--no_policy_det_reduction', action='store_true',
+                       help='Disable deterministic pairwise reductions for P/Q')
+    parser.add_argument('--hybrid_aggressive', action='store_true',
+                       help='Use aggressive hybrid schedule (smaller bound)')
+    parser.add_argument('--hybrid_delta_init', type=float, default=1e-2,
+                       help='Initial delta for hybrid schedule')
+    parser.add_argument('--hybrid_delta_final', type=float, default=1e-6,
+                       help='Final delta for hybrid schedule')
+    # Contract-safe LR clamp
+    parser.add_argument('--use_contract_safe_lr', action='store_true',
+                       help='Enable contract-safe LR clamp from layer contract')
+    parser.add_argument('--contract_c', type=float, default=1.0,
+                       help='Contract constant c used in LR clamp (eta <= c / (beta * prod))')
+    parser.add_argument('--loss_smoothness_beta', type=float, default=1.0,
+                       help='Assumed loss smoothness beta for LR clamp')
+    # Coprime surrogate regularizer
+    parser.add_argument('--enable_coprime_reg', action='store_true',
+                       help='Enable coprime surrogate regularizer on rational heads')
+    parser.add_argument('--lambda_coprime', type=float, default=0.0,
+                       help='Weight for coprime surrogate regularizer')
+    
     args = parser.parse_args()
     
     # Create configuration
@@ -897,6 +1097,20 @@ def main():
         lambda_residual=args.lambda_residual,
         epsilon=args.epsilon,
         clip_grad=args.clip_grad,
+        # Policy/Hybrid knobs
+        use_tr_policy=not args.no_tr_policy,
+        policy_ulp_scale=args.policy_ulp_scale,
+        policy_deterministic_reduction=not args.no_policy_det_reduction,
+        hybrid_aggressive=args.hybrid_aggressive,
+        hybrid_delta_init=args.hybrid_delta_init,
+        hybrid_delta_final=args.hybrid_delta_final,
+        # Contract-safe LR
+        use_contract_safe_lr=args.use_contract_safe_lr,
+        contract_c=args.contract_c,
+        loss_smoothness_beta=args.loss_smoothness_beta,
+        # Coprime surrogate knobs
+        enable_coprime_regularizer=args.enable_coprime_reg,
+        lambda_coprime=args.lambda_coprime,
     )
 
     # Apply profile defaults (Section 7)
@@ -932,7 +1146,56 @@ def main():
     set_global_seed(args.seed)
 
     # Run experiment
-    results = run_experiment(args.dataset, config, args.output_dir, seed=args.seed)
+    # Optional quick demo overrides
+    if hasattr(args, 'quick_demo') and args.quick_demo:
+        if args.epochs == parser.get_default('epochs'):
+            config.epochs = 3
+        if args.batch_size == parser.get_default('batch_size'):
+            config.batch_size = 128
+        # If dataset is large, cap to a small subset
+        args.limit_train = args.limit_train or 2000
+        args.limit_test = args.limit_test or 500
+
+    results = run_experiment(
+        args.dataset,
+        config,
+        args.output_dir,
+        seed=args.seed,
+        limit_train=args.limit_train,
+        limit_test=args.limit_test,
+        log_policy_console=getattr(args, 'log_policy_console', False),
+    )
+    
+    # Optional: overhead report
+    if getattr(args, 'emit_overhead', False):
+        try:
+            from zeroproof.utils.overhead import overhead_report
+            from zeroproof.core import real as tr_real
+            import json, os
+            # Build a tiny data loader from a small subset of the dataset
+            trainer_obj = trainer.trainer if hasattr(trainer, 'trainer') else None
+            if trainer_obj is not None:
+                # Use first 32 training samples (or fewer)
+                subset = train_samples[:min(32, len(train_samples))]
+                inputs, targets = trainer.prepare_data(subset)
+                # Convert to TRScalars for scalar path or keep vectors for multi-input
+                data_loader = []
+                if inputs and isinstance(inputs[0], list):
+                    # Multi-input vector case
+                    # Convert to TRNodes/TRScalars at _train_batch_multi path; we can pass floats and rely on trainer internals
+                    data_loader = [(inputs, targets)]
+                else:
+                    # Scalar case
+                    tr_inputs = [tr_real(float(v)) for v in inputs]
+                    tr_targets = [tr_real(float(v)) for v in targets]
+                    data_loader = [(tr_inputs, tr_targets)]
+                rep = overhead_report(trainer_obj, data_loader)
+                overhead_file = os.path.join(args.output_dir, 'overhead_report.json')
+                with open(overhead_file, 'w') as f:
+                    json.dump(rep, f, indent=2)
+                print(f"Overhead report saved to {overhead_file}")
+        except Exception as e:
+            print(f"Warning: failed to emit overhead report: {e}")
     
     print("Experiment completed successfully!")
 

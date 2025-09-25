@@ -34,6 +34,10 @@ from .pole_aware_rational import (
 from .multi_input_rational import (
     TRMultiInputRational,
 )
+from .tr_softmax import (
+    tr_softmax,
+    pade_exp_approx,
+)
 from .enhanced_pole_detection import (
     EnhancedPoleConfig,
     EnhancedPoleDetectionHead,
@@ -80,6 +84,10 @@ __all__ = [
     
     # Multi-input rational model
     "TRMultiInputRational",
+    
+    # Softmax surrogate
+    "tr_softmax",
+    "pade_exp_approx",
     
     # Enhanced pole detection
     "EnhancedPoleConfig",

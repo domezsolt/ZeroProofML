@@ -117,6 +117,101 @@ class TrainingCurvePlotter:
             print(f"Training curves saved to {save_path}")
         
         return fig
+
+    def plot_qd_smin(self,
+                      training_history: List[Dict[str, Any]],
+                      title: str = "Q/D Quantiles and smin",
+                      save_path: Optional[str] = None):
+        """
+        Plot q and d quantiles and Sylvester smin over epochs if present.
+
+        Expects training_history as a list of epoch dicts.
+        """
+        if not MATPLOTLIB_AVAILABLE:
+            print("Warning: Matplotlib not available, skipping plot")
+            return None
+
+        metrics_groups = [
+            (['q_p10', 'q_p50', 'q_p90'], 'Q quantiles'),
+            (['d_p10', 'd_p50', 'd_p90'], 'D quantiles'),
+            (['sylvester_smin'], 'Sylvester smin'),
+        ]
+        epochs = [entry.get('epoch', i) for i, entry in enumerate(training_history)]
+
+        fig, axes = plt.subplots(3, 1, figsize=(10, 10), squeeze=False)
+        axes = axes.flatten()
+
+        for ax_idx, (metrics, label) in enumerate(metrics_groups):
+            plotted = False
+            for i, metric in enumerate(metrics):
+                values = []
+                valid_epochs = []
+                for epoch, entry in zip(epochs, training_history):
+                    if metric in entry and isinstance(entry[metric], (int, float)):
+                        if not (np.isnan(entry[metric]) or np.isinf(entry[metric])):
+                            values.append(entry[metric])
+                            valid_epochs.append(epoch)
+                if values:
+                    axes[ax_idx].plot(valid_epochs, values,
+                                      color=self.colors[i % len(self.colors)],
+                                      linewidth=2, label=metric)
+                    plotted = True
+            axes[ax_idx].set_xlabel('Epoch')
+            axes[ax_idx].set_ylabel(label)
+            axes[ax_idx].grid(True, alpha=0.3)
+            if plotted:
+                axes[ax_idx].legend()
+
+        plt.suptitle(title, fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            print(f"Q/D/smin curves saved to {save_path}")
+        return fig
+
+    def plot_curvature_fisher(self,
+                              training_history: List[Dict[str, Any]],
+                              title: str = "Curvature/Fisher Proxies",
+                              save_path: Optional[str] = None):
+        """
+        Plot curvature_proxy, grad_norm_epoch, and fisher_trace over epochs.
+        """
+        if not MATPLOTLIB_AVAILABLE:
+            print("Warning: Matplotlib not available, skipping plot")
+            return None
+
+        metrics = ["curvature_proxy", "grad_norm_epoch", "fisher_trace"]
+        labels = ["Curvature Proxy (L_hat)", "Grad Norm (epoch)", "Fisher Trace"]
+        epochs = [entry.get('epoch', i) for i, entry in enumerate(training_history)]
+
+        fig, axes = plt.subplots(3, 1, figsize=(10, 10), squeeze=False)
+        axes = axes.flatten()
+
+        for idx, (metric, label) in enumerate(zip(metrics, labels)):
+            values = []
+            valid_epochs = []
+            for epoch, entry in zip(epochs, training_history):
+                if metric in entry and isinstance(entry[metric], (int, float)):
+                    v = entry[metric]
+                    if not (np.isnan(v) or np.isinf(v)):
+                        values.append(v)
+                        valid_epochs.append(epoch)
+            if values:
+                axes[idx].plot(valid_epochs, values,
+                               color=self.colors[idx % len(self.colors)],
+                               linewidth=2, label=metric)
+            axes[idx].set_xlabel('Epoch')
+            axes[idx].set_ylabel(label)
+            axes[idx].grid(True, alpha=0.3)
+            if values:
+                axes[idx].legend()
+
+        plt.suptitle(title, fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            print(f"Curvature/Fisher curves saved to {save_path}")
+        return fig
     
     def plot_tag_distribution(self,
                             training_history: List[Dict[str, Any]],
@@ -846,6 +941,26 @@ def save_all_plots(run_dir: str,
         fig2.savefig(path2, dpi=150, bbox_inches='tight')
         saved_plots.append(path2)
         plt.close(fig2)
+
+        # Q/D/smin
+        try:
+            fig_qd = plotter.plot_qd_smin(training_history)
+            path_qd = os.path.join(plots_dir, "qd_smin_curves.png")
+            fig_qd.savefig(path_qd, dpi=150, bbox_inches='tight')
+            saved_plots.append(path_qd)
+            plt.close(fig_qd)
+        except Exception as e:
+            print(f"Failed to create Q/D/smin plot: {e}")
+
+        # Curvature / Fisher proxies
+        try:
+            fig_cf = plotter.plot_curvature_fisher(training_history)
+            path_cf = os.path.join(plots_dir, "curvature_fisher_curves.png")
+            fig_cf.savefig(path_cf, dpi=150, bbox_inches='tight')
+            saved_plots.append(path_cf)
+            plt.close(fig_cf)
+        except Exception as e:
+            print(f"Failed to create curvature/fisher plot: {e}")
         
     except Exception as e:
         print(f"Failed to create training plots: {e}")

@@ -11,6 +11,7 @@ import math
 import numpy as np
 
 from ..core import TRScalar, TRTag, real, pinf, ninf, phi
+from ..policy import TRPolicyConfig
 from ..autodiff import TRNode
 from ..autodiff.tr_ops_grad import tr_add, tr_mul, tr_div, tr_sub, tr_neg
 from ..training.pole_detection import sigmoid, tanh_activation, relu_activation
@@ -642,11 +643,33 @@ class PoleAwareRationalInterface:
                 psi = basis(x_node, max_degree)
                 
                 # Compute Q(x)
-                Q = TRNode.constant(real(1.0))  # Leading 1
+                terms: List[TRNode] = [TRNode.constant(real(1.0))]
                 for k in range(1, self.rational_layer.d_q + 1):
                     if k < len(psi) and k <= len(self.rational_layer.phi):
-                        Q = tr_add(Q, tr_mul(self.rational_layer.phi[k-1], psi[k]))
-                return Q
+                        terms.append(tr_mul(self.rational_layer.phi[k-1], psi[k]))
+                # Optional deterministic pairwise reduction
+                def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
+                    if not nodes:
+                        return TRNode.constant(real(0.0))
+                    if len(nodes) == 1:
+                        return nodes[0]
+                    mid = len(nodes) // 2
+                    left = _pairwise_sum(nodes[:mid])
+                    right = _pairwise_sum(nodes[mid:])
+                    return tr_add(left, right)
+                use_pairwise = False
+                try:
+                    pol = TRPolicyConfig.get_policy()
+                    use_pairwise = bool(pol and pol.deterministic_reduction)
+                except Exception:
+                    use_pairwise = False
+                if use_pairwise:
+                    return _pairwise_sum(terms)
+                else:
+                    acc = terms[0]
+                    for t in terms[1:]:
+                        acc = tr_add(acc, t)
+                    return acc
             
             reg_loss = self.regularizer.compute_regularization(Q_func, x_samples)
         

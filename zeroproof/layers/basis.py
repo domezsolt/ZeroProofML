@@ -37,6 +37,15 @@ class Basis(Protocol):
     def bound(self) -> float:
         """Upper bound B such that |ψ_k(x)| ≤ B for all k on the domain."""
         ...
+    
+    # Optional API: derivative values up to degree
+    # Implemented by bases that can provide analytic derivatives.
+    def derivative(self, x: Union[TRScalar, TRNode], degree: int) -> List[Union[TRScalar, TRNode]]:  # pragma: no cover - optional
+        """
+        Evaluate derivatives [ψ'_0(x), ψ'_1(x), ..., ψ'_degree(x)].
+        Default: not implemented; callers should check hasattr(..., 'derivative').
+        """
+        raise NotImplementedError
 
 
 class MonomialBasis:
@@ -80,6 +89,30 @@ class MonomialBasis:
     @property
     def bound(self) -> float:
         return self._bound
+
+    # Optional analytic derivative for monomials: d/dx x^k = k x^{k-1}
+    def derivative(self, x: Union[TRScalar, TRNode], degree: int) -> List[Union[TRScalar, TRNode]]:
+        if degree < 0:
+            return []
+        # ψ'_0 = 0
+        if isinstance(x, TRScalar):
+            from ..core import tr_pow_int
+            derivs: List[Union[TRScalar, TRNode]] = [real(0.0)]
+            for k in range(1, degree + 1):
+                if k == 1:
+                    derivs.append(real(1.0))
+                else:
+                    derivs.append(tr_pow_int(x, k - 1) * real(float(k)))
+            return derivs
+        else:
+            from ..autodiff import tr_pow_int
+            derivs = [TRNode.constant(real(0.0))]
+            for k in range(1, degree + 1):
+                if k == 1:
+                    derivs.append(TRNode.constant(real(1.0)))
+                else:
+                    derivs.append(tr_pow_int(x, k - 1) * TRNode.constant(real(float(k))))
+            return derivs
 
 
 class ChebyshevBasis:

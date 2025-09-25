@@ -13,6 +13,14 @@ from .pole_3r import (
     compute_sign_consistency_rate_3r,
     compute_ple_to_3r_lines,
 )
+from .core import (
+    compute_q_stats,
+    compute_distance_stats,
+    hybrid_stats,
+)
+from .identifiability import (
+    compute_sylvester_smin,
+)
 
 __all__ = [
     'compute_pole_metrics_2d',
@@ -25,4 +33,10 @@ __all__ = [
     'compute_residual_consistency_3r',
     'compute_sign_consistency_rate_3r',
     'compute_ple_to_3r_lines',
+    # Core stats
+    'compute_q_stats',
+    'compute_distance_stats',
+    'hybrid_stats',
+    # Identifiability
+    'compute_sylvester_smin',
 ]

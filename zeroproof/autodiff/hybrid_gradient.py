@@ -180,6 +180,17 @@ class HybridGradientContext:
     _q_values_batch: List[float] = []
     _near_pole_samples: Set[int] = set()
     _exploration_regions: List[Tuple[float, float]] = []
+    # Flip tracking across batches in an epoch
+    _policy_flip_count_epoch: int = 0
+    _batch_count_epoch: int = 0
+
+    # Policy-driven hysteresis state
+    _policy_enabled: bool = False
+    _policy_mode_sat: bool = False  # False: MR, True: SAT
+    _tau_q_on: Optional[float] = None
+    _tau_q_off: Optional[float] = None
+    _g_on: Optional[float] = None
+    _g_off: Optional[float] = None
 
     @classmethod
     def set_schedule(cls, schedule: HybridGradientSchedule) -> None:
@@ -200,6 +211,25 @@ class HybridGradientContext:
             cls._local_threshold = cls._schedule.get_delta(epoch)
             # Set exploration regions for this epoch
             cls._exploration_regions = cls._schedule.get_exploration_regions(epoch)
+
+        # Configure policy-based thresholds if a policy is active
+        try:
+            from ..policy import TRPolicyConfig
+            pol = TRPolicyConfig.get_policy()
+            if pol is not None:
+                cls._policy_enabled = True
+                cls._tau_q_on = float(pol.tau_Q_on)
+                cls._tau_q_off = float(pol.tau_Q_off)
+                cls._g_on = float(pol.g_on) if pol.g_on is not None else None
+                cls._g_off = float(pol.g_off) if pol.g_off is not None else None
+            else:
+                cls._policy_enabled = False
+                cls._tau_q_on = cls._tau_q_off = None
+                cls._g_on = cls._g_off = None
+        except Exception:
+            cls._policy_enabled = False
+            cls._tau_q_on = cls._tau_q_off = None
+            cls._g_on = cls._g_off = None
             
         # Expose threshold to grad mode config for callers that consult it
         GradientModeConfig.set_local_threshold(cls._local_threshold)
@@ -227,8 +257,18 @@ class HybridGradientContext:
                     cls._near_pole_samples.add(cls._stats_total_calls)
                     return True
         
-        # Standard threshold check
+        # If policy hysteresis says SAT globally, honor it
+        if cls._policy_enabled and cls._policy_mode_sat:
+            cls._stats_saturating += 1
+            cls._near_pole_samples.add(cls._stats_total_calls)
+            return True
+
+        # Standard threshold check (schedule or policy ON threshold)
         thr = cls._local_threshold
+        # If policy exists, prefer its ON threshold when schedule threshold is absent
+        if thr is None and cls._policy_enabled and cls._tau_q_on is not None:
+            thr = cls._tau_q_on
+
         if thr is not None and abs_q_value <= thr:
             cls._stats_saturating += 1
             cls._near_pole_samples.add(cls._stats_total_calls)
@@ -247,14 +287,42 @@ class HybridGradientContext:
         # Compute q statistics
         q_stats = {}
         if cls._q_values_batch:
+            q_arr = np.array(cls._q_values_batch, dtype=float)
+            # Robust batch stats and quantiles available regardless of policy
+            try:
+                p10 = float(np.percentile(q_arr, 10))
+                p50 = float(np.percentile(q_arr, 50))
+                p90 = float(np.percentile(q_arr, 90))
+            except Exception:
+                p10 = float(np.min(q_arr))
+                p50 = float(np.median(q_arr))
+                p90 = float(np.max(q_arr))
+            # Derive sensitivity proxy g = 1/|Q|
+            try:
+                g_arr = 1.0 / np.maximum(q_arr, 1e-18)
+                g_p10 = float(np.percentile(g_arr, 10))
+                g_p50 = float(np.percentile(g_arr, 50))
+                g_p90 = float(np.percentile(g_arr, 90))
+            except Exception:
+                # Fallbacks
+                g_p10 = float(1.0 / max(p90, 1e-18))
+                g_p50 = float(1.0 / max(p50, 1e-18))
+                g_p90 = float(1.0 / max(p10, 1e-18))
+
             q_stats = {
                 "q_min_batch": cls._q_min_batch,
-                "q_mean_batch": np.mean(cls._q_values_batch),
-                "q_median_batch": np.median(cls._q_values_batch),
-                "near_pole_ratio": len(cls._near_pole_samples) / len(cls._q_values_batch)
+                "q_mean_batch": float(np.mean(q_arr)),
+                "q_median_batch": float(np.median(q_arr)),
+                "q_p10": p10,
+                "q_p50": p50,
+                "q_p90": p90,
+                "g_p10": g_p10,
+                "g_p50": g_p50,
+                "g_p90": g_p90,
+                "near_pole_ratio": len(cls._near_pole_samples) / len(cls._q_values_batch),
             }
         
-        return {
+        stats = {
             "current_epoch": cls._current_epoch,
             "local_threshold": cls._local_threshold,
             "total_gradient_calls": total,
@@ -265,6 +333,30 @@ class HybridGradientContext:
             "exploration_regions": len(cls._exploration_regions),
             **q_stats
         }
+
+        # Add policy/hysteresis summary and thresholds if available
+        if cls._policy_enabled:
+            try:
+                stats.update({
+                    "policy_mode": "SAT" if cls._policy_mode_sat else "MR",
+                    "tau_q_on": cls._tau_q_on,
+                    "tau_q_off": cls._tau_q_off,
+                })
+            except Exception:
+                stats.update({
+                    "policy_mode": "SAT" if cls._policy_mode_sat else "MR",
+                    "tau_q_on": cls._tau_q_on,
+                    "tau_q_off": cls._tau_q_off,
+                })
+
+        # Flip stats across batches in this epoch (if tracked)
+        if hasattr(cls, '_policy_flip_count_epoch') and hasattr(cls, '_batch_count_epoch'):
+            flips = getattr(cls, '_policy_flip_count_epoch', 0) or 0
+            batches = getattr(cls, '_batch_count_epoch', 0) or 0
+            stats['policy_flip_count'] = flips
+            stats['flip_rate'] = (float(flips) / float(batches)) if batches > 0 else 0.0
+
+        return stats
 
     @classmethod
     def reset_statistics(cls) -> None:
@@ -286,6 +378,59 @@ class HybridGradientContext:
         """Reset per-epoch statistics."""
         cls._q_min_epoch = None
         cls._exploration_regions = []
+        cls._policy_flip_count_epoch = 0
+        cls._batch_count_epoch = 0
+
+    @classmethod
+    def end_batch_policy_update(cls) -> None:
+        """Update hybrid mode using policy hysteresis based on batch quantiles.
+
+        - Enter SAT if q_p10 <= tau_Q_on or g90 >= g_on
+        - Return to MR if q_p10 >= tau_Q_off and (g90 <= g_off if provided)
+        Then reset per-batch statistics.
+        """
+        if not cls._policy_enabled or not cls._q_values_batch:
+            cls.reset_statistics()
+            return
+
+        q = np.array(cls._q_values_batch, dtype=float)
+        try:
+            q_p10 = float(np.percentile(q, 10))
+        except Exception:
+            q_p10 = float(np.min(q))
+
+        # Sensitivity proxy g ≈ 1/|Q|; use 90th percentile for robustness
+        with np.errstate(divide='ignore', invalid='ignore'):
+            g_vals = 1.0 / np.maximum(q, 1e-18)
+        try:
+            g90 = float(np.percentile(g_vals, 90))
+        except Exception:
+            g90 = float(np.max(g_vals))
+
+        # Hysteresis decisions
+        enter_sat = False
+        exit_mr = False
+        if cls._tau_q_on is not None and q_p10 <= cls._tau_q_on:
+            enter_sat = True
+        if cls._g_on is not None and g90 >= cls._g_on:
+            enter_sat = True
+        if cls._tau_q_off is not None and q_p10 >= cls._tau_q_off:
+            exit_mr = True
+        if cls._g_off is not None and g90 > cls._g_off:
+            exit_mr = False
+
+        prev_mode = cls._policy_mode_sat
+        if not cls._policy_mode_sat and enter_sat:
+            cls._policy_mode_sat = True
+        elif cls._policy_mode_sat and exit_mr:
+            cls._policy_mode_sat = False
+        # Update flip counters
+        if cls._policy_mode_sat != prev_mode:
+            cls._policy_flip_count_epoch += 1
+        cls._batch_count_epoch += 1
+
+        # Reset per-batch stats after update
+        cls.reset_statistics()
     
     @classmethod
     def get_q_min(cls) -> Optional[float]:
@@ -302,6 +447,11 @@ class HybridGradientContext:
         """Update q_min tracking."""
         if cls._q_min_batch is None or abs_q < cls._q_min_batch:
             cls._q_min_batch = abs_q
+        # Also record for quantiles even if saturating decision path is not hit
+        try:
+            cls._q_values_batch.append(float(abs_q))
+        except Exception:
+            pass
     
     @classmethod
     def set_exploration_regions(cls, regions: List[Tuple[float, float]]) -> None:

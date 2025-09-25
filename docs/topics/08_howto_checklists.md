@@ -97,6 +97,29 @@ python examples/robotics/rr_ik_train.py \
 - Output JSON: `runs/ik_experiment/results_tr_rat.json`
 - Console prints final test MSE and training summary.
 
+Key CLI flags (policy/hybrid/contracts)
+
+| Flag | Description |
+|------|-------------|
+| `--no_tr_policy` | Disable TR policy (use raw TR tags) |
+| `--policy_ulp_scale` | ULP scale for τ guard bands (used by default/auto policy) |
+| `--no_policy_det_reduction` | Disable deterministic pairwise reductions |
+| `--hybrid_aggressive` | More aggressive hybrid schedule (smaller bound) |
+| `--hybrid_delta_init/final` | Initial/final `delta` for schedule |
+| `--use_contract_safe_lr` | Enable contract‑safe LR clamp |
+| `--contract_c` | Contract constant `c` for LR clamp |
+| `--loss_smoothness_beta` | Loss smoothness `β` assumption for LR clamp |
+
+Training metrics captured per‑epoch include: `flip_rate`, `saturating_ratio`, `tau_q_on/off`, `q_min_epoch`, `curvature_bound`, and `mask_bandwidth`. The `layer_contract` is included in the training summary and top‑level results.
+
+Plot training curves:
+
+```bash
+python scripts/plot_training_curves.py \
+  --results runs/ik_experiment/results_tr_rat.json \
+  --outdir runs/ik_experiment
+```
+
 Optional — supervise pole head with analytic teacher and log PLE each epoch:
 ```bash
 python examples/robotics/rr_ik_train.py \
