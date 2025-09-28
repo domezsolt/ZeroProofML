@@ -1,20 +1,16 @@
-\begin{thebibliography}{36}
+\begin{thebibliography}{31}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
 
-\bibitem[Anderson(2019)]{anderson2019transmathematics}
-James~AD Anderson.
-\newblock \emph{Transmathematics: A Total Mathematics for Computer Arithmetic}.
-\newblock Transmathematics Institute, 2019.
-
-\bibitem[Anderson et~al.(2006)Anderson, Volz, and Adams]{anderson2006perspex}
-James~AD Anderson, Norbert Volz, and Andrew~A Adams.
-\newblock Perspex machine viii: axioms of transreal arithmetic.
-\newblock \emph{Advances in Computer Science and Engineering}, 4\penalty0
-  (1):\penalty0 1--8, 2006.
+\bibitem[Anderson et~al.(2007)Anderson, V{"o}lker, and
+  Adams]{anderson2006perspex}
+J.~A. D.~W. Anderson, Norbert V{"o}lker, and Andrew~A. Adams.
+\newblock Perspex machine viii: Axioms of transreal arithmetic.
+\newblock In \emph{Vision Geometry XV}, volume 6499 of \emph{Proceedings of
+  SPIE}, pages 649902--1--649902--12. SPIE, 2007.
 
 \bibitem[Ba et~al.(2016)Ba, Kiros, and Hinton]{ba2016layernorm}
 Jimmy~Lei Ba, Jamie~Ryan Kiros, and Geoffrey~E Hinton.
@@ -46,14 +42,6 @@ Nicolas Boulle, Yuji Nakatsukasa, and Alex Townsend.
 \newblock \emph{Advances in Neural Information Processing Systems},
   33:\penalty0 14243--14253, 2020.
 
-\bibitem[Chiacchio et~al.(1990)Chiacchio, Chiaverini, Sciavicco, and
-  Siciliano]{chiacchio1990review}
-Pasquale Chiacchio, Stefano Chiaverini, Lorenzo Sciavicco, and Bruno Siciliano.
-\newblock A review of some techniques for the resolution of the inverse
-  kinematics problem.
-\newblock \emph{Robotics and Autonomous Systems}, 6\penalty0 (4):\penalty0
-  403--424, 1990.
-
 \bibitem[Cybenko(1989)]{cybenko1989approximation}
 George Cybenko.
 \newblock Approximation by superpositions of a sigmoidal function.
@@ -65,6 +53,13 @@ Tiago~S dos Reis and James~AD Anderson.
 \newblock Transreal calculus.
 \newblock \emph{IAENG International Journal of Applied Mathematics},
   46\penalty0 (1):\penalty0 1--26, 2016.
+
+\bibitem[dos Reis et~al.(2016)dos Reis, Gomide, and
+  Anderson]{reis2016transfields}
+Tiago~S dos Reis, Walter Gomide, and J.~A. D.~W. Anderson.
+\newblock Construction of the transreal numbers and algebraic transfields.
+\newblock \emph{IAENG International Journal of Applied Mathematics},
+  46\penalty0 (1):\penalty0 11--23, 2016.
 
 \bibitem[Goldberg(1991)]{goldberg1991every}
 David Goldberg.
@@ -134,32 +129,20 @@ Aditi Krishnapriyan, Amir Gholami, Shandian Zhe, Robert Kirby, and Michael~W
 \newblock \emph{Advances in Neural Information Processing Systems},
   34:\penalty0 26548--26560, 2021.
 
-\bibitem[Levenberg(1944)]{dls1977damped}
-Kenneth Levenberg.
-\newblock A technique for the numerical solution of certain integral equations
-  of the first kind.
-\newblock \emph{Quarterly of applied mathematics}, 2\penalty0 (2):\penalty0
-  164--168, 1944.
-
-\bibitem[Molina et~al.(2020)Molina, Schramowski, and Kersting]{molina2020pade}
+\bibitem[Molina et~al.(2019)Molina, Schramowski, and
+  Kersting]{montanher2020pade}
 Alejandro Molina, Patrick Schramowski, and Kristian Kersting.
-\newblock Pad{\'e} activation functions in neural networks.
-\newblock \emph{arXiv preprint arXiv:1906.06735}, 2020.
-
-\bibitem[Montanher et~al.(2020)Montanher, Zuben, and
-  Campello]{montanher2020pade}
-Thiago Montanher, Fernando J~Von Zuben, and Ricardo~JGB Campello.
 \newblock Pad{\'e} activation units: End-to-end learning of flexible activation
   functions in deep networks.
-\newblock \emph{arXiv preprint arXiv:1907.06732}, 2020.
+\newblock \emph{arXiv preprint arXiv:1907.06732}, 2019.
 
-\bibitem[Muller et~al.(2010)Muller, Brisebarre, De~Dinechin, Jeannerod,
-  Lef{\`e}vre, Melquiond, Revol, Stehl{\'e}, and Torres]{muller2010handbook}
+\bibitem[Muller et~al.(2018)Muller, Brisebarre, De~Dinechin, Jeannerod,
+  Lefevre, Melquiond, Revol, Stehl{\'e}, and Torres]{muller2010handbook}
 Jean-Michel Muller, Nicolas Brisebarre, Florent De~Dinechin, Claude-Pierre
-  Jeannerod, Vincent Lef{\`e}vre, Guillaume Melquiond, Nathalie Revol, Damien
+  Jeannerod, Vincent Lefevre, Guillaume Melquiond, Nathalie Revol, Damien
   Stehl{\'e}, and Serge Torres.
-\newblock Handbook of floating-point arithmetic.
-\newblock \emph{Springer}, 2010.
+\newblock \emph{Handbook of Floating-Point Arithmetic}, volume~1.
+\newblock Birkh\"{a}user, Basel, Switzerland, 2018.
 
 \bibitem[Nakamura(1991)]{nakamura1991advanced}
 Yoshihiko Nakamura.
@@ -206,17 +189,10 @@ Matus Telgarsky.
 \newblock \emph{International Conference on Machine Learning}, pages
   3387--3393, 2017.
 
-\bibitem[Trefethen and Bau~III(1997)]{trefethen1997numerical}
-Lloyd~N Trefethen and David Bau~III.
+\bibitem[Trefethen and Bau(2022)]{trefethen1997numerical}
+Lloyd~N. Trefethen and David Bau.
 \newblock \emph{Numerical linear algebra}.
-\newblock SIAM, 1997.
-
-\bibitem[Wampler(1986)]{wampler1986manipulator}
-Charles~W Wampler.
-\newblock Manipulator inverse kinematic solutions based on vector formulations
-  and damped least-squares methods.
-\newblock \emph{IEEE Transactions on Systems, Man, and Cybernetics},
-  16\penalty0 (1):\penalty0 93--101, 1986.
+\newblock Society for Industrial and Applied Mathematics, 2022.
 
 \bibitem[Wang et~al.(2021)Wang, Teng, and Perdikaris]{wang2021understanding}
 Sifan Wang, Yujun Teng, and Paris Perdikaris.
@@ -224,11 +200,5 @@ Sifan Wang, Yujun Teng, and Paris Perdikaris.
   physics-informed neural networks.
 \newblock \emph{SIAM Journal on Scientific Computing}, 43\penalty0
   (5):\penalty0 A3055--A3081, 2021.
-
-\bibitem[Yoshikawa(1985)]{yoshikawa1985manipulability}
-Tsuneo Yoshikawa.
-\newblock Manipulability of robotic mechanisms.
-\newblock \emph{The international journal of Robotics Research}, 4\penalty0
-  (2):\penalty0 3--9, 1985.
 
 \end{thebibliography}

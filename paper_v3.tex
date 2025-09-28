@@ -104,7 +104,7 @@ This mathematical singularity manifests in real-world robotics as sudden ``freez
 
 \textbf{Mathematical Root Cause:} The fundamental issue is that standard ML optimization occurs over $\mathbb{R}^n$, but functions with essential singularities are not well-defined on this domain. The mathematical structure requires an extended number system that can represent infinite values and indeterminate forms as first-class citizens, not error conditions.
 \subsection{Our Approach: Transreal Learning}
-\textbf{Core Insight:} We fundamentally reconceptualize the learning problem by operating in the transreal domain $\TR = \RR \cup \{+\infty, -\infty, \Phi\}$, where division by zero and other singular operations become well-defined, deterministic computations rather than error conditions. In this extended arithmetic, $1/0 = +\infty$, while $0/0 = \Phi$ (nullity), providing consistent semantics for all arithmetic expressions.
+\textbf{Core Insight:} Building on foundational work in transreal arithmetic \citep{anderson2006perspex,reis2016transreal}, we operate in the transreal domain $\TR = \RR \cup \{+\infty, -\infty, \Phi\}$, where division by zero and other singular operations become well-defined, deterministic computations rather than error conditions. In this extended arithmetic, $1/0 = +\infty$, while $0/0 = \Phi$ (nullity), providing consistent semantics for all arithmetic expressions.
 
 \begin{examplebox}[Intuitive Comparison]
 \textbf{Computing $1/(x-1)$ near $x=1$:}
@@ -174,10 +174,10 @@ The inverse kinematics (IK) problem seeks joint configurations $q \in \mathbb{R}
 $$\dot{q} = J^{-1}(q)\dot{x}$$
 where $J(q) = \partial f/\partial q$ is the manipulator Jacobian~\citep{nakamura1991advanced}. This formulation reveals the core challenge: when $\mathrm{rank}(J) < \min(m,n)$, the system becomes singular and $J^{-1}$ is undefined or unbounded.
 
-\textbf{Singularity taxonomy:} Following the classification of \citet{chiacchio1990review}, we encounter three distinct singularity types in robotic systems:
+\textbf{Singularity taxonomy:} We encounter three distinct singularity types in robotic systems:
 \begin{itemize}
 \item \textbf{Boundary singularities:} Occur at workspace limits where the arm is fully extended or retracted. These are predictable from the robot's physical dimensions.
-\item \textbf{Interior singularities:} Arise within the workspace when multiple joints align, causing rank deficiency~\citep{yoshikawa1985manipulability}. These are configuration-dependent and harder to predict.
+\item \textbf{Interior singularities:} Arise within the workspace when multiple joints align, causing rank deficiency. These are configuration-dependent and harder to predict.
 \item \textbf{Algorithmic singularities:} Introduced by the mathematical formulation or control algorithm, not inherent to the physical system.
 \end{itemize}
 \subsection{Existing Singularity Handling}
@@ -185,7 +185,7 @@ Having established the mathematical challenge posed by singularities, we now sur
 
 \textbf{Traditional Robotics Approaches:}
 \begin{itemize}
-\item \textbf{Damped Least Squares (DLS):} Introduced by \citet{wampler1986manipulator}, this method replaces $J^{-1}$ with $(J^TJ + \lambda^2I)^{-1}J^T$ where $\lambda$ is a damping factor. While this ensures numerical stability, it introduces systematic tracking error proportional to $\lambda$~\citep{dls1977damped}. The computational complexity of $O(n^3)$ makes it prohibitive for high-DOF systems or real-time control.
+\item \textbf{Damped Least Squares (DLS):} This method replaces $J^{-1}$ with $(J^TJ + \lambda^2I)^{-1}J^T$ where $\lambda$ is a damping factor. While this ensures numerical stability, it introduces systematic tracking error proportional to $\lambda$. The computational complexity of $O(n^3)$ makes it prohibitive for high-DOF systems or real-time control.
 \item \textbf{Singular Value Decomposition (SVD):} Decomposes $J = U\Sigma V^T$ and truncates small singular values~\citep{golub2013matrix}. This provides optimal least-squares solutions but requires $O(mn^2)$ operations, limiting real-time applicability. Moreover, the truncation threshold requires careful tuning.
 \item \textbf{Task-space augmentation:} Introduces artificial task dimensions to ensure full rank. However, this modifies the control objective and may conflict with the primary task.
 \end{itemize}
@@ -197,7 +197,7 @@ Having established the mathematical challenge posed by singularities, we now sur
 \item \textbf{Auxiliary consistency losses:} Additional terms penalizing constraint violations (e.g., $\|f(g(x)) - x\|^2$ for inverse consistency). While improving average-case performance, these do not address the fundamental singularity issue.
 \end{itemize}
 \subsection{Transreal Arithmetic}
-Transreal arithmetic, pioneered by \citet{anderson2006perspex} and refined through subsequent mathematical investigation~\citep{reis2016transreal,anderson2019transmathematics}, extends the real number system $\RR$ to a total arithmetic system $\TR = \RR \cup \{+\infty, -\infty, \Phi\}$. This extension is not merely notational convenience but provides a rigorous algebraic structure where every arithmetic operation is total (defined for all inputs).
+Transreal arithmetic, pioneered by \citet{anderson2006perspex} and refined through subsequent mathematical investigation~\citep{reis2016transreal,reis2016transfields}, extends the real number system $\RR$ to a total arithmetic system $\TR = \RR \cup \{+\infty, -\infty, \Phi\}$. This extension is not merely notational convenience but provides a rigorous algebraic structure where every arithmetic operation is total (defined for all inputs).
 
 \textbf{Fundamental Properties:}
 \begin{itemize}
@@ -232,7 +232,7 @@ Building on the limitations of existing approaches identified in Section~\ref{se
 \end{figure}
 
 \subsection{Mathematical Foundation}
-\textbf{Definition 1 (Transreal Numbers):} $\RR^\ast=\RR\cup\{\infty,\Phi\}$, where $\infty$ denotes positive infinity for $1/0$ under signed semantics, and $\Phi$ denotes indeterminate ($0/0$). Arithmetic is total.
+\textbf{Definition 1 (Transreal Numbers):} $T = \RR \cup \{+\infty, -\infty, \Phi\}$, where $\infty$ denotes positive infinity for $1/0$ under signed semantics, and $\Phi$ denotes indeterminate ($0/0$). Arithmetic is total.
 \newline
 \textbf{Definition 2 (TR-Rational Layer):}
 \[\mathrm{TR\text{-}Rational}(P,Q)=
@@ -990,9 +990,9 @@ $\mathbb{E}[\mathcal{L}(\theta_t)-\mathcal{L}^*]\ \le\ (1-\mu\eta)^t(\mathcal{L}
 \paragraph{Aggregation.} 3 seeds (2R/6R), deterministic policy for TR; means$\pm$std reported across seeds. Scripts emit per-seed JSONs and LaTeX tables/figures used below.
 
 \section*{Related Work}
-Rational neural networks model functions as $P/Q$ with strong approximation guarantees~\citep{boulle2020rational,telgarsky2017neural}; practical deployments often use $\varepsilon$-regularized denominators $Q+\varepsilon$ to avoid division-by-zero. Recent work on Padé activation units~\citep{montanher2020pade,molina2020pade} explores rational approximations in neural architectures. Batch normalization and related techniques also rely on explicit $\varepsilon$~\citep{ioffe2015batchnorm}. 
+Rational neural networks model functions as $P/Q$ with strong approximation guarantees~\citep{boulle2020rational,telgarsky2017neural}; practical deployments often use $\varepsilon$-regularized denominators $Q+\varepsilon$ to avoid division-by-zero. Recent work on Padé activation units~\citep{montanher2020pade} explores rational approximations in neural architectures. Batch normalization and related techniques also rely on explicit $\varepsilon$~\citep{ioffe2015batchnorm}. 
 
-Transreal arithmetic provides totalized operations with explicit tags for infinities and indeterminate forms~\citep{reis2016transreal,anderson2019transmathematics,anderson2006perspex}. This builds on decades of work in numerical analysis~\citep{higham2002accuracy,muller2010handbook} and floating-point arithmetic standards~\citep{ieee754-2019,goldberg1991every}.
+Transreal arithmetic provides totalized operations with explicit tags for infinities and indeterminate forms~\citep{anderson2006perspex,reis2016transreal,reis2016transfields}. This builds on decades of work in numerical analysis~\citep{higham2002accuracy,muller2010handbook} and floating-point arithmetic standards~\citep{ieee754-2019,goldberg1991every}.
 
 Masking rules in autodiff have appeared in robust training~\citep{pascanu2013difficulty} and subgradient methods; our Mask-REAL rule formalizes tag-aware gradient flow, ensuring exact zeros through non-\TAGREAL{} nodes while preserving classical derivatives on \TAGREAL{} paths. Bounded (saturating) gradients near poles relate to gradient clipping and smooth surrogates, but here arise from a deterministic, tag-aware calculus under an explicit policy. We adopt standard optimizers (e.g., Adam~\citep{kingma2015adam}) and normalization variants (e.g., LayerNorm~\citep{ba2016layernorm}) as needed in controlled baselines.
 
@@ -1032,6 +1032,10 @@ This section provides formal pseudocode for the core ZeroProofML procedures, ena
 \label{alg:tr-forward}
 \textbf{Input:} $x \in \mathbb{R}^n$, parameters $\theta_P, \theta_Q$, threshold $\tau_{\text{switch}}$ \\
 \textbf{Output:} $ (y, \text{tag}) \in \TR \times \{\TAGREAL,\TAGPINF,\TAGNINF,\TAGPHI\} $
+
+
+\noindent\emph{Switching rationale.} If $|Q| > \tau_{\text{switch}}$ (guard band), we keep the finite REAL path (Mask-REAL), preserving gradients; otherwise we emit explicit tags ($+\infty$, $-\infty$, $\Phi$) to maintain totality and avoid undefined operations.
+\medskip
 
 \begin{enumerate}
 \item $P \leftarrow \text{Polynomial}(x; \theta_P)$ \hfill // Numerator evaluation

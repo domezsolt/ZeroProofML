@@ -2,54 +2,51 @@ This is BibTeX, Version 0.99d (TeX Live 2023/Debian)
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: paper_v3.aux
 The style file: plainnat.bst
-Illegal, another \bibstyle command---line 120 of file paper_v3.aux
+Illegal, another \bibstyle command---line 124 of file paper_v3.aux
  : \bibstyle
  :          {plainnat}
 I'm skipping whatever remains of this command
 Database file #1: references.bib
-Repeated entry---line 234 of file references.bib
- : @book{anderson2019transmathematics
- :                                   ,
-I'm skipping whatever remains of this entry
-You've used 36 entries,
+Warning--I didn't find a database entry for "molina2020pade"
+You've used 31 entries,
             2773 wiz_defined-function locations,
-            788 strings with 10699 characters,
-and the built_in function-call counts, 16366 in all, are:
-= -- 1441
-> -- 939
-< -- 24
-+ -- 321
-- -- 285
-* -- 1291
-:= -- 2533
-add.period$ -- 109
-call.type$ -- 36
-change.case$ -- 195
-chr.to.int$ -- 36
-cite$ -- 72
-duplicate$ -- 775
-empty$ -- 1347
-format.name$ -- 335
-if$ -- 3413
+            764 strings with 9918 characters,
+and the built_in function-call counts, 14823 in all, are:
+= -- 1313
+> -- 860
+< -- 23
++ -- 292
+- -- 261
+* -- 1177
+:= -- 2264
+add.period$ -- 95
+call.type$ -- 31
+change.case$ -- 172
+chr.to.int$ -- 31
+cite$ -- 62
+duplicate$ -- 695
+empty$ -- 1201
+format.name$ -- 306
+if$ -- 3118
 int.to.chr$ -- 1
 int.to.str$ -- 1
-missing$ -- 43
-newline$ -- 188
-num.names$ -- 144
-pop$ -- 410
+missing$ -- 38
+newline$ -- 163
+num.names$ -- 124
+pop$ -- 367
 preamble$ -- 1
-purify$ -- 167
+purify$ -- 149
 quote$ -- 0
-skip$ -- 590
+skip$ -- 544
 stack$ -- 0
-substring$ -- 614
-swap$ -- 80
-text.length$ -- 5
+substring$ -- 596
+swap$ -- 94
+text.length$ -- 8
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 356
+type$ -- 301
 warning$ -- 0
-while$ -- 151
+while$ -- 131
 width$ -- 0
-write$ -- 463
-(There were 2 error messages)
+write$ -- 404
+(There was 1 error message)
