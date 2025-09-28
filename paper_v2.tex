@@ -1,0 +1,101 @@
+% ZeroProofML — Full Article (Theory + Empirics)
+% Standalone JMLR-style paper built around merged theory and new experiments.
+
+\documentclass[11pt,twoside]{article}
+\usepackage{jmlr2e}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+% Macros
+\newcommand{\tr}{\text{TR}}
+\newcommand{\real}{\mathbb{R}}
+\newcommand{\eps}{\varepsilon}
+
+\title{ZeroProofML: Epsilon-Free Rational Neural Layers via Transreal Arithmetic}
+
+\author{\name Zsolt D\"ome \email zpml.dome@outlook.com \\\\
+\addr Independent Researcher}
+\ShortHeadings{ZeroProofML}{D\"ome}
+\firstpageno{1}
+
+\editor{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We introduce ZeroProofML, a framework for deterministic, $\varepsilon$-free rational neural layers based on transreal (TR) arithmetic. By totalizing division (and other singular operations) with explicit tags (REAL, $\pm\infty$, $\Phi$), TR removes ad-hoc $\varepsilon$ knobs and yields reproducible semantics for singularities. We formalize TR autodiff (Mask-REAL) and give stability statements (bounded updates, batch-safe steps). On 2R inverse kinematics, TR matches overall accuracy and achieves 1.5--2.5$\times$ lower error in the closest near-singularity bins (B0--B1), modest improvements in B2 ($\sim$3--4\%), and near parity elsewhere, with stable closed-loop behavior. Results extend to planar 3R and synthetic 6R, supporting robustness near rank-deficient Jacobians.
+\end{abstract}
+
+\begin{keywords}
+transreal arithmetic, rational layers, singularities, robotics IK, reproducibility
+\end{keywords}
+
+% ==========================
+% Preliminaries and Core Theory (abridged from merged theory file)
+% ==========================
+\section{Preliminaries}
+We use the transreal domain $\mathbb{T}=\mathbb{R}\cup\{+\infty,-\infty,\bot\}$ with tags $\{\mathrm{REAL},\mathrm{INF},\mathrm{NULL}\}$. Values are pairs $(v,\tau)$ with $v\in\overline{\mathbb{R}}=\mathbb{R}\cup\{\pm\infty\}$. Arithmetic on $\mathbb{T}$ follows explicit tag rules (addition/multiplication/division, integer powers, and guarded $\sqrt{\cdot}$). All expressions in our admissible class are total on $\mathbb{T}^n$.
+
+\paragraph{IEEE--TR bridge.} We define total maps $\Phi:\mathsf{IEEE}\to\mathbb{T}$ and $\Psi:\mathbb{T}_{\mathrm{REAL/INF}}\to\mathsf{IEEE}$ (round-to-nearest-even; undefined on $\bot$). Signed zeros are retained in a latent flag used only when directional limits matter.
+
+\section{Autodiff with Tags and Hybrid Switching}
+Let nodes be $z_k=F_k(z_{i_1},\dots,z_{i_m})$ with $F_k$ in our admissible class. Each primitive has a REAL-mask predicate $\chi_k\in\{0,1\}$ that is 1 iff all inputs and the evaluation are REAL. Mask-REAL backprop uses gates $\bar z_i {+}{=} \chi_k\,\bar z_k\,\partial_{z_i}F_k\vert_{\mathrm{REAL}}$. In a small band around poles we use bounded surrogates (saturating gradients) and a hybrid policy with hysteresis ($\tau^{\rm on}<\tau^{\rm off}$), delivering bounded updates.
+
+\paragraph{Batch-safe steps.} A per-batch curvature proxy $L_\mathrm{batch} \approx (B_\psi^2/q_{\min}^2)(1+y_{\max}^2)+\alpha$ yields a safe clamp $\eta\le 1/L_\mathrm{batch}$; combined with bounded surrogates, per-step updates remain bounded.
+
+\paragraph{Policy determinism.} ULP-scaled guard bands, signed-zero retention, and deterministic reductions make tag classification deterministic up to stated ULP bands; outside guard bands tags are identical across seeds.
+
+\section{Global Stability and Convergence}
+Under standard smoothness assumptions and $\eta_t\le 1/\widehat L_{\mathcal{B}_t}$, GD/SGD enjoy standard descent/convergence guarantees; bounded gradients in SAT regions preserve stability across MR$\leftrightarrow$SAT switches.
+
+\section{Experimental Setup}
+\paragraph{Tasks.} Planar 2R IK with $|\det J|\approx |\sin\theta_2|$ (primary), planar 3R (rank drop by alignment), and synthetic 6R (serial DH).
+\paragraph{Datasets.} 2R: stratified by $|\det J|$ with edges $[0,10^{-5},10^{-4},10^{-3},10^{-2},\infty)$; near-pole coverage ensured in train/test. 3R: stratified by manipulability ($\sigma_1\sigma_2$). 6R: stratified by $d_1=\sigma_{\min}(J)$.
+\paragraph{Baselines.} MLP; Rational+$\varepsilon$ (grid); smooth surrogate $P/\sqrt{Q^2+\alpha^2}$ (grid); learnable-$\varepsilon$; $\varepsilon$-ensemble. Reference: DLS.
+\paragraph{TR models.} TR--Basic (Mask-REAL only). TR--Full: shared-$Q$ TR--Rational heads with hybrid gradients, tag/pole heads, anti-illusion residual, coprime regularizer; coverage enforcement and TR policy hysteresis; batch-safe LR.
+\paragraph{Metrics.} Overall and per-bucket MSE (B0--B4); closed-loop tracking (task-space error, max $\|\Delta\theta\|$, failures). 3R: PLE, sign consistency across $\theta_2,\theta_3$, residual consistency. 6R: overall + selected bins.
+\paragraph{Aggregation.} Three seeds (2R/6R), deterministic policy for TR; means$\pm$std reported. Scripts emit per-seed JSONs and LaTeX tables/figures used below.
+
+\section{Empirical Validation}
+Across seeds (2R), TR--Full matches or exceeds the strongest $\varepsilon$/smooth baselines in overall error and attains 1.5--2.5$\times$ lower error in the tightest near--pole bins (B0--B1), with $\sim$3--4\% gains in B2 and near parity in B3 (Table~\ref{tab:near_pole_bins}; see also Table~\ref{tab:overall_mse}). Under closed--loop tracking, TR--Full yields the lowest task--space error and smallest joint steps (Table~\ref{tab:rollout}).
+
+\noindent\textbf{Across-seed overall:} \input{results/robotics/paper_suite/latex/overall_table.tex}
+
+\noindent\textbf{Near-pole bins (B0--B2):} \input{results/robotics/paper_suite/latex/near_pole_table.tex}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.60\linewidth]{results/robotics/paper_suite/figures/b012_bars.png}
+  \caption{Near--pole MSE (B0--B2) by method (lower is better).}
+  \label{fig:b012bars-paper}
+\end{figure}
+
+\noindent\textbf{Closed-loop tracking:} \input{results/robotics/paper_suite/latex/rollout_table.tex}
+
+\noindent\textbf{3R TR metrics:} \input{results/robotics/paper_suite/latex/e3r_table.tex}
+
+\noindent\textbf{6R TR summary:} \input{results/robotics/paper_suite/latex/ik6r_table.tex}
+
+\section{Related Work}
+Rational neural networks model functions as $P/Q$ with strong approximation guarantees \citep{boulle2020rational}; practical deployments often use $\varepsilon$-regularized denominators $Q+\varepsilon$ to avoid division-by-zero. Batch normalization and related techniques also rely on explicit $\varepsilon$ \citep{ioffe2015batchnorm}. Transreal arithmetic provides totalized operations with explicit tags for infinities and indeterminate forms \citep{dosreis2016transreal,anderson2019transmathematics}. Masking rules in autodiff have appeared in robust training and subgradient methods; our Mask-REAL rule formalizes tag-aware gradient flow, ensuring exact zeros through non-REAL nodes while preserving classical derivatives on REAL paths. Bounded (saturating) gradients near poles relate to gradient clipping and smooth surrogates, but here arise from a deterministic, tag-aware calculus under an explicit policy. We adopt standard optimizers (e.g., Adam \citep{kingma2015adam}) and normalization variants (e.g., LayerNorm \citep{ba2016layernorm}) as needed in controlled baselines.
+
+\section{Limitations and Outlook}
+Our approach targets models with explicit singular structure (rational layers, Jacobian-based control) and declared tag policies; it is not a replacement for generic deep architectures without divisions. Extending empirical coverage to higher-DOF systems with full physics stacks (URDF/Pinocchio) and integrating TR policies with mainstream autodiff frameworks are promising directions.
+
+\section{Code and Data Availability}
+All code, dataset generators, per-seed results, aggregated CSVs, and LaTeX tables/figures are available at \href{https://github.com/domezsolt/ZeroProofML}{github.com/domezsolt/ZeroProofML}. The repository records environment info and dataset hashes for reproducibility.
+
+\section{Conclusion}
+ZeroProofML replaces $\varepsilon$-based numerical fixes with a principled, tag-aware calculus that is total by construction. Mask-REAL autodiff, hybrid switching with bounded surrogates, coverage control, and policy determinism translate into empirical advantages: decisive near-pole accuracy (B0--B1), bounded updates and stable rollouts, and low across-seed variance under a declared policy. We expect these guarantees to benefit rational and control-oriented models where explicit singular structure is intrinsic.
+
+\section*{Acknowledgments}
+We thank contributors to the open-source ZeroProofML codebase and reviewers for constructive feedback.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
+

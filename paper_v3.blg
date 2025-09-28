@@ -1,0 +1,55 @@
+This is BibTeX, Version 0.99d (TeX Live 2023/Debian)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: paper_v3.aux
+The style file: plainnat.bst
+Illegal, another \bibstyle command---line 115 of file paper_v3.aux
+ : \bibstyle
+ :          {plainnat}
+I'm skipping whatever remains of this command
+Database file #1: references.bib
+Repeated entry---line 234 of file references.bib
+ : @book{anderson2019transmathematics
+ :                                   ,
+I'm skipping whatever remains of this entry
+You've used 36 entries,
+            2773 wiz_defined-function locations,
+            788 strings with 10699 characters,
+and the built_in function-call counts, 16366 in all, are:
+= -- 1441
+> -- 939
+< -- 24
++ -- 321
+- -- 285
+* -- 1291
+:= -- 2533
+add.period$ -- 109
+call.type$ -- 36
+change.case$ -- 195
+chr.to.int$ -- 36
+cite$ -- 72
+duplicate$ -- 775
+empty$ -- 1347
+format.name$ -- 335
+if$ -- 3413
+int.to.chr$ -- 1
+int.to.str$ -- 1
+missing$ -- 43
+newline$ -- 188
+num.names$ -- 144
+pop$ -- 410
+preamble$ -- 1
+purify$ -- 167
+quote$ -- 0
+skip$ -- 590
+stack$ -- 0
+substring$ -- 614
+swap$ -- 80
+text.length$ -- 5
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 356
+warning$ -- 0
+while$ -- 151
+width$ -- 0
+write$ -- 463
+(There were 2 error messages)

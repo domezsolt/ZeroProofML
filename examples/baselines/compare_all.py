@@ -17,6 +17,9 @@ import math
 # Import all baseline implementations
 from .mlp_baseline import MLPConfig, MLPBaseline, MLPTrainer, run_mlp_baseline
 from .rational_eps_baseline import RationalEpsConfig, run_rational_eps_baseline, grid_search_epsilon
+from .smooth_rational_baseline import SmoothConfig, run_smooth_baseline
+from .learnable_eps_baseline import LearnableEpsConfig, run_learnable_eps_baseline
+from .eps_ensemble_baseline import EnsembleConfig, run_eps_ensemble_baseline
 from .dls_solver import DLSConfig, run_dls_reference
 
 # Import ZeroProofML for comparison
@@ -96,25 +99,45 @@ def run_zeroproof_baseline(train_data: Tuple[List, List],
 
     # Create multi-input TR model
     if enable_enhancements:
-        # Use a front end but keep fully integrated rational heads implicit via TRMultiInputRational
-        model = TRMultiInputRational(input_dim=input_dim, n_outputs=output_dim,
-                                     d_p=3, d_q=2, hidden_dims=[8], shared_Q=True)
+        # Full TR: shared-Q heads, pole head, coprime regularizer
+        model = TRMultiInputRational(
+            input_dim=input_dim,
+            n_outputs=output_dim,
+            d_p=3,
+            d_q=2,
+            hidden_dims=[8],
+            shared_Q=True,
+            enable_pole_head=True,
+            enable_coprime_regularizer=True,
+            lambda_coprime=1e-4,
+        )
         trainer = HybridTRTrainer(
             model=model,
             optimizer=Optimizer(model.parameters(), learning_rate=0.01),
             config=HybridTrainingConfig(
                 learning_rate=0.01,
-                max_epochs=100,
+                max_epochs=epochs,
+                # Core extras
                 use_hybrid_gradient=True,
                 use_tag_loss=True,
                 lambda_tag=0.05,
                 use_pole_head=True,
                 lambda_pole=0.1,
                 enable_anti_illusion=True,
-                lambda_residual=0.02
+                lambda_residual=0.02,
+                # Coverage enforcement
+                enforce_coverage=True,
+                min_coverage=0.70,
+                # TR policy hysteresis (ULP bands + deterministic reductions)
+                use_tr_policy=True,
+                policy_ulp_scale=4.0,
+                policy_deterministic_reduction=True,
+                # Contract/safe learning rate clamp
+                use_safe_lr=True,
+                use_contract_safe_lr=True,
             )
         )
-        print("ZeroProofML with full enhancements enabled")
+        print("ZeroProofML with full enhancements enabled (policy, coverage, safe-LR, coprime)")
     else:
         model = TRMultiInputRational(input_dim=input_dim, n_outputs=output_dim,
                                      d_p=3, d_q=2, hidden_dims=[8], shared_Q=True)
@@ -376,7 +399,7 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
     rat_epochs = int(overrides.get('rat_epochs', 50))
     rat_epsilon = overrides.get('rat_epsilon', None)
     zp_epochs = int(overrides.get('zp_epochs', 100))
-    enabled_models = set(overrides.get('models', ['mlp','rational_eps','dls','tr_basic','tr_full']))
+    enabled_models = set(overrides.get('models', ['mlp','rational_eps','smooth','learnable_eps','eps_ens','dls','tr_basic','tr_full']))
 
     # 1. MLP Baseline
     print("\n1. Running MLP Baseline...")
@@ -429,6 +452,12 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
             epochs=rat_epochs,
             epsilon_values=[1e-4, 1e-3, 1e-2]
         )
+        # Optional clipping override
+        if 'rat_clip_norm' in overrides and overrides['rat_clip_norm'] is not None:
+            try:
+                rational_config.clip_norm = float(overrides['rat_clip_norm'])
+            except Exception:
+                pass
         if rat_epsilon is not None:
             # Skip grid search
             rational_results = run_rational_eps_baseline(
@@ -469,7 +498,99 @@ def run_complete_comparison(dataset_file: str, output_dir: str = "results/compar
     except Exception as e:
         print(f"✗ Rational+ε failed: {e}")
         all_results['Rational+ε'] = {'error': str(e)}
-    
+
+    # 2b. Smooth surrogate (sqrt(Q^2 + α^2))
+    print("\n2b. Running Smooth surrogate Baseline...")
+    try:
+        if 'smooth' not in enabled_models:
+            raise RuntimeError('skipped')
+        sm_cfg = SmoothConfig(epochs=rat_epochs)
+        smooth_results = run_smooth_baseline(train_data, test_data, cfg=sm_cfg, output_dir=f"{output_dir}/smooth", seed=seed)
+        sm_test = smooth_results.get('test_metrics', {})
+        sm_mse_list = sm_test.get('per_sample_mse', [])
+        sm_bucket_mse, sm_bucket_counts = compute_bucket_mse(sm_mse_list, bucket_edges, test_detj)
+        smooth_results['near_pole_bucket_mse'] = {'edges': bucket_edges, 'bucket_mse': sm_bucket_mse, 'bucket_counts': sm_bucket_counts}
+        smooth_results['pole_metrics'] = compute_pole_metrics_2d(test_data[0], sm_test.get('predictions', []))
+        all_results['Smooth'] = smooth_results
+        comparison_table.append({
+            'Method': 'Smooth',
+            'Parameters': smooth_results['n_parameters'],
+            'Epochs': sm_cfg.epochs,
+            'Train_MSE': 'N/A',
+            'Test_MSE': sm_test.get('mse', float('inf')),
+            'Training_Time': smooth_results['training_time'],
+            'Avg_Epoch_Time': smooth_results['training_time'] / max(1, sm_cfg.epochs),
+            'Success_Rate': 1.0,
+            'Notes': f"alpha={smooth_results.get('alpha')}",
+            'NearPoleCountsB0_B3': [sm_bucket_counts.get(f"({bucket_edges[i]:.0e},{bucket_edges[i+1]:.0e}]", 0) for i in range(4)],
+        })
+        print(f"✓ Smooth: MSE={sm_test.get('mse', float('inf')):.6f}")
+    except Exception as e:
+        print(f"✗ Smooth failed: {e}")
+        all_results['Smooth'] = {'error': str(e)}
+
+    # 2c. Learnable-ε baseline
+    print("\n2c. Running Learnable-ε Baseline...")
+    try:
+        if 'learnable_eps' not in enabled_models:
+            raise RuntimeError('skipped')
+        le_cfg = LearnableEpsConfig(epochs=rat_epochs)
+        le_results = run_learnable_eps_baseline(train_data, test_data, cfg=le_cfg, output_dir=f"{output_dir}/learnable_eps", seed=seed)
+        le_test = le_results.get('test_metrics', {})
+        le_mse_list = le_test.get('per_sample_mse', [])
+        le_bucket_mse, le_bucket_counts = compute_bucket_mse(le_mse_list, bucket_edges, test_detj)
+        le_results['near_pole_bucket_mse'] = {'edges': bucket_edges, 'bucket_mse': le_bucket_mse, 'bucket_counts': le_bucket_counts}
+        le_results['pole_metrics'] = compute_pole_metrics_2d(test_data[0], le_test.get('predictions', []))
+        all_results['Learnable-ε'] = le_results
+        comparison_table.append({
+            'Method': 'Learnable-ε',
+            'Parameters': le_results['n_parameters'],
+            'Epochs': le_cfg.epochs,
+            'Train_MSE': 'N/A',
+            'Test_MSE': le_test.get('mse', float('inf')),
+            'Training_Time': le_results['training_time'],
+            'Avg_Epoch_Time': le_results['training_time'] / max(1, le_cfg.epochs),
+            'Success_Rate': 1.0,
+            'Notes': f"eps≈{le_test.get('eps_final')}",
+            'NearPoleCountsB0_B3': [le_bucket_counts.get(f"({bucket_edges[i]:.0e},{bucket_edges[i+1]:.0e}]", 0) for i in range(4)],
+        })
+        print(f"✓ Learnable-ε: MSE={le_test.get('mse', float('inf')):.6f}")
+    except Exception as e:
+        print(f"✗ Learnable-ε failed: {e}")
+        all_results['Learnable-ε'] = {'error': str(e)}
+
+    # 2d. ε-Ensemble baseline
+    print("\n2d. Running ε-Ensemble Baseline...")
+    try:
+        if 'eps_ens' not in enabled_models:
+            raise RuntimeError('skipped')
+        ens_cfg = EnsembleConfig()
+        if quick:
+            ens_cfg.epochs = min(ens_cfg.epochs, 10)
+        ens_results = run_eps_ensemble_baseline(train_data, test_data, cfg=ens_cfg, output_dir=f"{output_dir}/eps_ens", seed=seed)
+        ens_test = ens_results.get('test_metrics', {})
+        ens_mse_list = ens_test.get('per_sample_mse', [])
+        ens_bucket_mse, ens_bucket_counts = compute_bucket_mse(ens_mse_list, bucket_edges, test_detj)
+        ens_results['near_pole_bucket_mse'] = {'edges': bucket_edges, 'bucket_mse': ens_bucket_mse, 'bucket_counts': ens_bucket_counts}
+        ens_results['pole_metrics'] = compute_pole_metrics_2d(test_data[0], ens_test.get('predictions', []))
+        all_results['EpsEnsemble'] = ens_results
+        comparison_table.append({
+            'Method': 'EpsEnsemble',
+            'Parameters': '—',
+            'Epochs': ens_cfg.epochs,
+            'Train_MSE': 'N/A',
+            'Test_MSE': ens_test.get('mse', float('inf')),
+            'Training_Time': ens_results.get('training_time_total', 0.0),
+            'Avg_Epoch_Time': ens_results.get('training_time_total', 0.0) / max(1, ens_cfg.epochs),
+            'Success_Rate': 1.0,
+            'Notes': f"members={ens_cfg.member_eps}",
+            'NearPoleCountsB0_B3': [ens_bucket_counts.get(f"({bucket_edges[i]:.0e},{bucket_edges[i+1]:.0e}]", 0) for i in range(4)],
+        })
+        print(f"✓ EpsEnsemble: MSE={ens_test.get('mse', float('inf')):.6f}")
+    except Exception as e:
+        print(f"✗ EpsEnsemble failed: {e}")
+        all_results['EpsEnsemble'] = {'error': str(e)}
+
     # 3. DLS Reference
     print("\n3. Running DLS Reference...")
     try:

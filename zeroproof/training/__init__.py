@@ -50,17 +50,21 @@ try:
 except Exception:
     _POLE_SUPERVISION_AVAILABLE = False
 
-from .sampling_diagnostics import (
-    SamplingStrategy,
-    ImportanceSampler,
-    ImportanceSamplerConfig,
-    ActiveSampler,
-    ActiveSamplerConfig,
-    DiagnosticMonitor,
-    DiagnosticConfig,
-    IntegratedSampler,
-    create_integrated_sampler,
-)
+_SAMPLING_AVAILABLE = True
+try:
+    from .sampling_diagnostics import (
+        SamplingStrategy,
+        ImportanceSampler,
+        ImportanceSamplerConfig,
+        ActiveSampler,
+        ActiveSamplerConfig,
+        DiagnosticMonitor,
+        DiagnosticConfig,
+        IntegratedSampler,
+        create_integrated_sampler,
+    )
+except Exception:
+    _SAMPLING_AVAILABLE = False
 
 __all__ = [
     # Coverage tracking
@@ -125,6 +129,24 @@ if _POLE_SUPERVISION_AVAILABLE:
         "HybridTeacher",
         "create_pole_teacher",
     ])
+
+# Remove sampling exports if unavailable (e.g., no torch installed)
+if not _SAMPLING_AVAILABLE:
+    for name in [
+        "SamplingStrategy",
+        "ImportanceSampler",
+        "ImportanceSamplerConfig",
+        "ActiveSampler",
+        "ActiveSamplerConfig",
+        "DiagnosticMonitor",
+        "DiagnosticConfig",
+        "IntegratedSampler",
+        "create_integrated_sampler",
+    ]:
+        try:
+            __all__.remove(name)
+        except ValueError:
+            pass
 
 
 # Lightweight shims for Torch integration in tests

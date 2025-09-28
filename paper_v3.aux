@@ -1,0 +1,241 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\bibstyle{plainnat}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Notation summary used throughout.}}{1}{table.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{tab:notation}{{1}{1}{Notation summary used throughout}{table.caption.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}Motivation: The Singularity Problem}{1}{subsection.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}Current Limitations}{2}{subsection.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}Our Approach: Transreal Learning}{2}{subsection.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Overview.}{3}{Item.3}\protected@file@percent }
+\citation{siciliano2016robotics}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Comparison of singularity-handling approaches}}{4}{table.caption.2}\protected@file@percent }
+\newlabel{tab:approach_comparison}{{2}{4}{Comparison of singularity-handling approaches}{table.caption.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.4}Contributions}{4}{subsection.1.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Background and Related Work}{4}{section.2}\protected@file@percent }
+\newlabel{sec:background}{{2}{4}{}{section.2}{}}
+\citation{nakamura1991advanced}
+\citation{chiacchio1990review}
+\citation{yoshikawa1985manipulability}
+\citation{wampler1986manipulator}
+\citation{dls1977damped}
+\citation{golub2013matrix}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}The Inverse Kinematics Problem}{5}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Existing Singularity Handling}{5}{subsection.2.2}\protected@file@percent }
+\citation{wang2021understanding}
+\citation{anderson2006perspex}
+\citation{reis2016transreal,anderson2019transmathematics}
+\citation{higham2002accuracy}
+\citation{goldberg1991every,ieee754-2019}
+\citation{kahan1996ieee}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Transreal Arithmetic}{6}{subsection.2.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Conceptual comparison of division-by-zero handling. (a) Traditional $\varepsilon $-regularization introduces systematic bias that grows near singularities. (b) ZeroProofML's transreal approach maintains mathematical correctness by explicitly representing infinite values with appropriate tags, eliminating bias while preserving computational stability.}}{7}{figure.caption.3}\protected@file@percent }
+\newlabel{fig:conceptual}{{1}{7}{Conceptual comparison of division-by-zero handling. (a) Traditional $\varepsilon $-regularization introduces systematic bias that grows near singularities. (b) ZeroProofML's transreal approach maintains mathematical correctness by explicitly representing infinite values with appropriate tags, eliminating bias while preserving computational stability}{figure.caption.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Gap in Literature}{7}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Transreal Learning Framework}{7}{section.3}\protected@file@percent }
+\newlabel{sec:framework}{{3}{7}{}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Mathematical Foundation}{7}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Hybrid Switching Protocol}{7}{subsection.3.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces ZeroProofML architecture and computational flow. Input data flows through TR-Rational layers where condition checking ($|Q| > \tau _{\text  {switch}}$) determines the computational path: Guard mode for high-precision transreal arithmetic (left) or Real mode for masked operations (right). The coverage controller provides adaptive feedback to maintain focus on near-singularity regions. All paths converge to tagged outputs in the transreal domain $\mathbb  {T}$.}}{8}{figure.caption.4}\protected@file@percent }
+\newlabel{fig:zeroproofml_schematic}{{2}{8}{ZeroProofML architecture and computational flow. Input data flows through TR-Rational layers where condition checking ($|Q| > \tau _{\text {switch}}$) determines the computational path: Guard mode for high-precision transreal arithmetic (left) or Real mode for masked operations (right). The coverage controller provides adaptive feedback to maintain focus on near-singularity regions. All paths converge to tagged outputs in the transreal domain $\mathbb {T}$}{figure.caption.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Coverage Control Ablation: Impact on Near-Singularity Learning}}{8}{table.caption.6}\protected@file@percent }
+\newlabel{tab:coverage_ablation}{{3}{8}{Coverage Control Ablation: Impact on Near-Singularity Learning}{table.caption.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Training Protocol}{8}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.3.1}Coverage Control Mechanism}{8}{subsubsection.3.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Coverage control ablation study. (a) Training loss appears lower without coverage control due to avoidance of hard samples. (b) Coverage evolution shows dramatic collapse from target 15\% to under 5\% without the controller. (c) Near-pole performance degrades by 83--90\% in critical bins B0--B1 without active coverage maintenance.}}{9}{figure.caption.5}\protected@file@percent }
+\newlabel{fig:coverage_ablation}{{3}{9}{Coverage control ablation study. (a) Training loss appears lower without coverage control due to avoidance of hard samples. (b) Coverage evolution shows dramatic collapse from target 15\% to under 5\% without the controller. (c) Near-pole performance degrades by 83--90\% in critical bins B0--B1 without active coverage maintenance}{figure.caption.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Gradient Policy Comparison}}{9}{table.caption.8}\protected@file@percent }
+\newlabel{tab:policy_ablation}{{4}{9}{Gradient Policy Comparison}{table.caption.8}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.3.2}Additional Ablation Studies}{9}{subsubsection.3.3.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Comprehensive ablation studies. (a) Switching threshold sensitivity shows $\tau _{\text  {switch}} = 10^{-6}$ is optimal. (b) Frequency vs stability trade-off. (c) Gradient policy comparison validates hybrid approach. (d) Policy characteristics across multiple metrics. (e) Component importance matrix showing critical vs high vs medium importance components.}}{10}{figure.caption.7}\protected@file@percent }
+\newlabel{fig:complete_ablations}{{4}{10}{Comprehensive ablation studies. (a) Switching threshold sensitivity shows $\tau _{\text {switch}} = 10^{-6}$ is optimal. (b) Frequency vs stability trade-off. (c) Gradient policy comparison validates hybrid approach. (d) Policy characteristics across multiple metrics. (e) Component importance matrix showing critical vs high vs medium importance components}{figure.caption.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Component Importance Analysis}}{10}{table.caption.9}\protected@file@percent }
+\newlabel{tab:component_importance}{{5}{10}{Component Importance Analysis}{table.caption.9}{}}
+\citation{griewank2008evaluating,baydin2017automatic}
+\citation{pascanu2013difficulty,bengio1994learning}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Theoretical Analysis}{11}{section.4}\protected@file@percent }
+\newlabel{sec:theory}{{4}{11}{}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Transreal Arithmetic and Totalized Rational Layers}{11}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Totalized Rational Layer.}{11}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Stability via Tag-Aware Autodiff}{11}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Convergence Guarantees}{11}{subsection.4.3}\protected@file@percent }
+\citation{baker1996pade}
+\citation{cybenko1989approximation,hornik1989multilayer,pinkus1999approximation}
+\citation{boulle2020rational,telgarsky2017neural}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Approximation Theory}{12}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Computational Complexity}{13}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}Proof Sketches}{13}{subsection.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Experimental Design}{13}{section.5}\protected@file@percent }
+\newlabel{sec:experimental_design}{{5}{13}{}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Robotics Testbed}{13}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Datasets and Metrics}{13}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Baselines}{13}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Metrics and Protocols}{13}{subsection.5.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Near-singularity performance comparison across methods. ZeroProofML achieves 29.7\% and 46.6\% error reduction in the most critical buckets B0 and B1 respectively, where $|\det (J)| < 10^{-4}$. Error bars show standard deviation across 3 seeds.}}{14}{figure.caption.10}\protected@file@percent }
+\newlabel{fig:nearpole_performance}{{5}{14}{Near-singularity performance comparison across methods. ZeroProofML achieves 29.7\% and 46.6\% error reduction in the most critical buckets B0 and B1 respectively, where $|\det (J)| < 10^{-4}$. Error bars show standard deviation across 3 seeds}{figure.caption.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Implementation and Training}{14}{subsection.5.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Results}{14}{section.6}\protected@file@percent }
+\newlabel{sec:results}{{6}{14}{}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Near-Singularity Performance}{14}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Experimental Hypotheses.}{14}{figure.caption.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{H1: Near-Pole Accuracy.}{15}{Item.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{H2: Sign Consistency.}{15}{Item.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{H3: Hybrid Advantage.}{15}{Item.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{H4: Computational Efficiency.}{15}{Item.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Key Findings and Interpretation.}{15}{Item.13}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Bucket-wise MSE (mean $\pm $ std over 3 seeds). Lower is better.}}{16}{table.caption.11}\protected@file@percent }
+\newlabel{tab:bucket_mse}{{6}{16}{Bucket-wise MSE (mean $\pm $ std over 3 seeds). Lower is better}{table.caption.11}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Training efficiency comparison (representative seed).}}{16}{table.caption.12}\protected@file@percent }
+\newlabel{tab:efficiency}{{7}{16}{Training efficiency comparison (representative seed)}{table.caption.12}{}}
+\@writefile{toc}{\contentsline {paragraph}{Hypothesis Validation Summary.}{16}{Item.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Computational Efficiency}{17}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Sign Consistency and Scalability}{17}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Rollout Validation}{17}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Analysis and Discussion}{17}{section.7}\protected@file@percent }
+\newlabel{sec:analysis}{{7}{17}{}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Why Does Transreal Learning Work?}{17}{subsection.7.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Ablation study comparing Mask-REAL (basic) vs Hybrid (full) configurations. (a) Training convergence shows similar final loss. (b) Per-bucket MSE reveals identical performance, validating that hybrid switching preserves accuracy. (c) Hybrid achieves 13.7\% lower rollout tracking error, demonstrating improved stability in closed-loop control.}}{18}{figure.caption.13}\protected@file@percent }
+\newlabel{fig:ablation}{{6}{18}{Ablation study comparing Mask-REAL (basic) vs Hybrid (full) configurations. (a) Training convergence shows similar final loss. (b) Per-bucket MSE reveals identical performance, validating that hybrid switching preserves accuracy. (c) Hybrid achieves 13.7\% lower rollout tracking error, demonstrating improved stability in closed-loop control}{figure.caption.13}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Critical Design Choices and Their Rationale}{18}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Limitations and Future Work}{19}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.4}Practical Implementation Insights}{20}{subsection.7.4}\protected@file@percent }
+\citation{boulle2020rational,montanher2020pade,molina2020pade}
+\citation{telgarsky2017neural}
+\citation{boulle2020rational}
+\citation{wang2021understanding,krishnapriyan2021characterizing}
+\citation{jagtap2020conservative}
+\citation{sitzmann2020implicit}
+\citation{rahaman2019spectral}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Related Work Revisited}{21}{section.8}\protected@file@percent }
+\citation{higham2002accuracy,trefethen1997numerical}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{22}{section.9}\protected@file@percent }
+\bibstyle{plainnat}
+\bibdata{references}
+\bibcite{anderson2019transmathematics}{{1}{2019}{{Anderson}}{{}}}
+\bibcite{anderson2006perspex}{{2}{2006}{{Anderson et~al.}}{{Anderson, Volz, and Adams}}}
+\bibcite{ba2016layernorm}{{3}{2016}{{Ba et~al.}}{{Ba, Kiros, and Hinton}}}
+\bibcite{baker1996pade}{{4}{1996}{{Baker~Jr and Graves-Morris}}{{}}}
+\bibcite{baydin2017automatic}{{5}{2017}{{Baydin et~al.}}{{Baydin, Pearlmutter, Radul, and Siskind}}}
+\bibcite{bengio1994learning}{{6}{1994}{{Bengio et~al.}}{{Bengio, Simard, and Frasconi}}}
+\bibcite{boulle2020rational}{{7}{2020}{{Boulle et~al.}}{{Boulle, Nakatsukasa, and Townsend}}}
+\bibcite{chiacchio1990review}{{8}{1990}{{Chiacchio et~al.}}{{Chiacchio, Chiaverini, Sciavicco, and Siciliano}}}
+\bibcite{cybenko1989approximation}{{9}{1989}{{Cybenko}}{{}}}
+\bibcite{reis2016transreal}{{10}{2016}{{dos Reis and Anderson}}{{}}}
+\bibcite{goldberg1991every}{{11}{1991}{{Goldberg}}{{}}}
+\bibcite{golub2013matrix}{{12}{2013}{{Golub and Van~Loan}}{{}}}
+\bibcite{griewank2008evaluating}{{13}{2008}{{Griewank and Walther}}{{}}}
+\bibcite{higham2002accuracy}{{14}{2002}{{Higham}}{{}}}
+\bibcite{hornik1989multilayer}{{15}{1989}{{Hornik et~al.}}{{Hornik, Stinchcombe, and White}}}
+\bibcite{ieee754-2019}{{16}{2019}{{IEEE Computer Society}}{{}}}
+\bibcite{ioffe2015batchnorm}{{17}{2015}{{Ioffe and Szegedy}}{{}}}
+\bibcite{jagtap2020conservative}{{18}{2020}{{Jagtap et~al.}}{{Jagtap, Kawaguchi, and Karniadakis}}}
+\bibcite{kahan1996ieee}{{19}{1996}{{Kahan}}{{}}}
+\bibcite{kingma2015adam}{{20}{2015}{{Kingma and Ba}}{{}}}
+\bibcite{krishnapriyan2021characterizing}{{21}{2021}{{Krishnapriyan et~al.}}{{Krishnapriyan, Gholami, Zhe, Kirby, and Mahoney}}}
+\bibcite{dls1977damped}{{22}{1944}{{Levenberg}}{{}}}
+\bibcite{molina2020pade}{{23}{2020}{{Molina et~al.}}{{Molina, Schramowski, and Kersting}}}
+\bibcite{montanher2020pade}{{24}{2020}{{Montanher et~al.}}{{Montanher, Zuben, and Campello}}}
+\bibcite{muller2010handbook}{{25}{2010}{{Muller et~al.}}{{Muller, Brisebarre, De~Dinechin, Jeannerod, Lef{\`e}vre, Melquiond, Revol, Stehl{\'e}, and Torres}}}
+\bibcite{nakamura1991advanced}{{26}{1991}{{Nakamura}}{{}}}
+\bibcite{pascanu2013difficulty}{{27}{2013}{{Pascanu et~al.}}{{Pascanu, Mikolov, and Bengio}}}
+\bibcite{pinkus1999approximation}{{28}{1999}{{Pinkus}}{{}}}
+\bibcite{rahaman2019spectral}{{29}{2019}{{Rahaman et~al.}}{{Rahaman, Baratin, Arpit, Draxler, Lin, Hamprecht, Bengio, and Courville}}}
+\bibcite{siciliano2016robotics}{{30}{2016}{{Siciliano et~al.}}{{Siciliano, Sciavicco, Villani, and Oriolo}}}
+\bibcite{sitzmann2020implicit}{{31}{2020}{{Sitzmann et~al.}}{{Sitzmann, Martel, Bergman, Lindell, and Wetzstein}}}
+\bibcite{telgarsky2017neural}{{32}{2017}{{Telgarsky}}{{}}}
+\bibcite{trefethen1997numerical}{{33}{1997}{{Trefethen and Bau~III}}{{}}}
+\bibcite{wampler1986manipulator}{{34}{1986}{{Wampler}}{{}}}
+\bibcite{wang2021understanding}{{35}{2021}{{Wang et~al.}}{{Wang, Teng, and Perdikaris}}}
+\bibcite{yoshikawa1985manipulability}{{36}{1985}{{Yoshikawa}}{{}}}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Transreal Arithmetic Details}{26}{appendix.A}\protected@file@percent }
+\newlabel{app:transreal}{{A}{26}{}{appendix.A}{}}
+\newlabel{sec:prelim}{{A}{26}{Preliminaries}{section*.15}{}}
+\newlabel{sec:positioning}{{A}{26}{Positioning \& Practicality}{section*.16}{}}
+\newlabel{sec:totality}{{A}{26}{Scope of Totality}{section*.17}{}}
+\newlabel{def:FTR}{{1}{26}{Admissible class \(\mathcal {F}_{\!\mathrm {TR}}\)}{theorem.1}{}}
+\newlabel{prop:totality}{{2}{26}{Totality within \(\mathcal {F}_{\!\mathrm {TR}}\)}{theorem.2}{}}
+\newlabel{sec:scope-composability}{{A}{26}{Scope \& Composability}{section*.18}{}}
+\@writefile{toc}{\contentsline {paragraph}{Standard components.}{26}{section*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{When TR helps.}{26}{section*.18}\protected@file@percent }
+\newlabel{sec:ieee-tr-bridge}{{A}{26}{IEEE--TR Bridge}{section*.19}{}}
+\@writefile{toc}{\contentsline {paragraph}{Signed zeros.}{26}{theorem.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Export.}{27}{theorem.4}\protected@file@percent }
+\newlabel{sec:autodiff}{{A}{27}{Autodiff with Tags: Mask-REAL}{section*.20}{}}
+\newlabel{def:mask-real}{{5}{27}{Mask-REAL gradient}{theorem.5}{}}
+\newlabel{lem:real}{{6}{27}{REAL-path equivalence}{theorem.6}{}}
+\newlabel{lem:chain}{{7}{27}{Chain rule with tag gating}{theorem.7}{}}
+\newlabel{prop:bounded-update}{{8}{27}{Bounded update under saturation}{theorem.8}{}}
+\newlabel{rem:sat}{{9}{27}{Saturation}{theorem.9}{}}
+\newlabel{sec:hybrid}{{A}{27}{Hybrid Switching: Mask-REAL $\leftrightarrow $ Saturated}{section*.21}{}}
+\@writefile{toc}{\contentsline {paragraph}{Aggregator choice.}{27}{section*.21}\protected@file@percent }
+\newlabel{sec:finite-switching}{{A}{27}{Sufficient Conditions for Finite Switching}{section*.22}{}}
+\newlabel{sec:coverage}{{A}{28}{Coverage Controller}{section*.23}{}}
+\@writefile{toc}{\contentsline {paragraph}{Distance estimator.}{28}{section*.23}\protected@file@percent }
+\newlabel{sec:batch-safe}{{A}{28}{Batch-Safe Learning Rate}{section*.24}{}}
+\newlabel{sec:second-order-momentum}{{A}{28}{Second-Order Derivatives and Momentum Stability}{section*.25}{}}
+\@writefile{toc}{\contentsline {paragraph}{Assumptions.}{28}{section*.25}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Hessian on REAL regions.}{28}{section*.25}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Across guard bands.}{28}{section*.25}\protected@file@percent }
+\newlabel{prop:bounded-hessian}{{14}{28}{Bounded curvature with saturation}{theorem.14}{}}
+\@writefile{toc}{\contentsline {paragraph}{Gauss--Newton \& Fisher.}{28}{theorem.14}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Heavy-ball/Polyak.}{28}{section*.26}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Nesterov.}{28}{section*.26}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Adam/RMSProp.}{28}{section*.26}\protected@file@percent }
+\newlabel{sec:ident}{{A}{28}{Identifiability}{section*.27}{}}
+\newlabel{prop:ident-prop}{{15}{29}{Identifiability a.e}{theorem.15}{}}
+\newlabel{sec:ident-manifold}{{A}{29}{Identifiability}{theorem.15}{}}
+\@writefile{toc}{\contentsline {paragraph}{Identifiability under manifold support.}{29}{theorem.15}\protected@file@percent }
+\newlabel{sec:precision-tags}{{A}{29}{Numerical Precision and Tag Robustness}{section*.28}{}}
+\@writefile{toc}{\contentsline {paragraph}{Policy note (training vs evaluation).}{29}{section*.28}\protected@file@percent }
+\newlabel{sec:policy-determinism}{{A}{29}{Reproducibility as Policy-Determinism}{section*.29}{}}
+\newlabel{sec:fp-robustness}{{A}{29}{Robustness to Floating-Point Errors}{section*.30}{}}
+\@writefile{toc}{\contentsline {paragraph}{Overflow/Underflow.}{29}{section*.30}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Mixed precision.}{29}{section*.30}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Stable reductions.}{29}{section*.30}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Cross-hardware.}{29}{section*.30}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Error propagation.}{29}{section*.30}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Layer contracts.}{29}{section*.30}\protected@file@percent }
+\newlabel{sec:global-convergence}{{A}{29}{Global Stability and Convergence}{section*.31}{}}
+\@writefile{toc}{\contentsline {paragraph}{Standing assumptions.}{29}{section*.31}\protected@file@percent }
+\citation{boulle2020rational,telgarsky2017neural}
+\citation{montanher2020pade,molina2020pade}
+\citation{ioffe2015batchnorm}
+\citation{reis2016transreal,anderson2019transmathematics,anderson2006perspex}
+\citation{higham2002accuracy,muller2010handbook}
+\citation{ieee754-2019,goldberg1991every}
+\citation{pascanu2013difficulty}
+\citation{kingma2015adam}
+\citation{ba2016layernorm}
+\newlabel{thm:gd-diminishing}{{16}{30}{GD with diminishing steps}{theorem.16}{}}
+\newlabel{thm:pl}{{17}{30}{Linear rate under PL}{theorem.17}{}}
+\newlabel{thm:sgd}{{18}{30}{SGD convergence}{theorem.18}{}}
+\newlabel{sec:exp-setup}{{A}{30}{Experimental Setup}{section*.34}{}}
+\@writefile{toc}{\contentsline {paragraph}{Tasks.}{30}{section*.34}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Datasets.}{30}{section*.34}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Baselines.}{30}{section*.34}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{TR models.}{30}{section*.34}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Metrics.}{30}{section*.34}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Aggregation.}{30}{section*.34}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {B}Implementation Details}{31}{appendix.B}\protected@file@percent }
+\newlabel{app:implementation}{{B}{31}{}{appendix.B}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {C}Additional Experimental Results}{31}{appendix.C}\protected@file@percent }
+\newlabel{app:results}{{C}{31}{}{appendix.C}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {D}Key Algorithms}{32}{appendix.D}\protected@file@percent }
+\newlabel{app:algorithms}{{D}{32}{}{appendix.D}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.1}TR-Rational Layer Forward Pass}{32}{subsection.D.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.2}Tag-Aware Gradient Computation}{33}{subsection.D.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.3}Hybrid Switching Policy}{34}{subsection.D.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.4}Coverage Control Mechanism}{35}{subsection.D.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {E}Reproducibility Information}{35}{appendix.E}\protected@file@percent }
+\newlabel{app:reproducibility}{{E}{35}{}{appendix.E}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.1}Software Environment}{36}{subsection.E.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.2}Installation and Setup}{36}{subsection.E.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.3}Dataset Generation}{37}{subsection.E.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.4}Experiment Reproduction}{37}{subsection.E.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.5}Key Hyperparameters}{38}{subsection.E.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.6}Result Validation}{39}{subsection.E.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.7}Troubleshooting}{39}{subsection.E.7}\protected@file@percent }
+\gdef \@abspage@last{39}

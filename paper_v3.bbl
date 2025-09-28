@@ -1,0 +1,234 @@
+\begin{thebibliography}{36}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Anderson(2019)]{anderson2019transmathematics}
+James~AD Anderson.
+\newblock \emph{Transmathematics: A Total Mathematics for Computer Arithmetic}.
+\newblock Transmathematics Institute, 2019.
+
+\bibitem[Anderson et~al.(2006)Anderson, Volz, and Adams]{anderson2006perspex}
+James~AD Anderson, Norbert Volz, and Andrew~A Adams.
+\newblock Perspex machine viii: axioms of transreal arithmetic.
+\newblock \emph{Advances in Computer Science and Engineering}, 4\penalty0
+  (1):\penalty0 1--8, 2006.
+
+\bibitem[Ba et~al.(2016)Ba, Kiros, and Hinton]{ba2016layernorm}
+Jimmy~Lei Ba, Jamie~Ryan Kiros, and Geoffrey~E Hinton.
+\newblock Layer normalization.
+\newblock \emph{arXiv preprint arXiv:1607.06450}, 2016.
+
+\bibitem[Baker~Jr and Graves-Morris(1996)]{baker1996pade}
+George~A Baker~Jr and Peter Graves-Morris.
+\newblock \emph{Pad{\'e} approximants}.
+\newblock Cambridge University Press, 1996.
+
+\bibitem[Baydin et~al.(2017)Baydin, Pearlmutter, Radul, and
+  Siskind]{baydin2017automatic}
+Atilim~Gunes Baydin, Barak~A Pearlmutter, Alexey~Andreyevich Radul, and
+  Jeffrey~Mark Siskind.
+\newblock Automatic differentiation in machine learning: a survey.
+\newblock \emph{Journal of machine learning research}, 18, 2017.
+
+\bibitem[Bengio et~al.(1994)Bengio, Simard, and Frasconi]{bengio1994learning}
+Yoshua Bengio, Patrice Simard, and Paolo Frasconi.
+\newblock Learning long-term dependencies with gradient descent is difficult.
+\newblock \emph{IEEE transactions on neural networks}, 5\penalty0 (2):\penalty0
+  157--166, 1994.
+
+\bibitem[Boulle et~al.(2020)Boulle, Nakatsukasa, and
+  Townsend]{boulle2020rational}
+Nicolas Boulle, Yuji Nakatsukasa, and Alex Townsend.
+\newblock Rational neural networks.
+\newblock \emph{Advances in Neural Information Processing Systems},
+  33:\penalty0 14243--14253, 2020.
+
+\bibitem[Chiacchio et~al.(1990)Chiacchio, Chiaverini, Sciavicco, and
+  Siciliano]{chiacchio1990review}
+Pasquale Chiacchio, Stefano Chiaverini, Lorenzo Sciavicco, and Bruno Siciliano.
+\newblock A review of some techniques for the resolution of the inverse
+  kinematics problem.
+\newblock \emph{Robotics and Autonomous Systems}, 6\penalty0 (4):\penalty0
+  403--424, 1990.
+
+\bibitem[Cybenko(1989)]{cybenko1989approximation}
+George Cybenko.
+\newblock Approximation by superpositions of a sigmoidal function.
+\newblock \emph{Mathematics of control, signals and systems}, 2\penalty0
+  (4):\penalty0 303--314, 1989.
+
+\bibitem[dos Reis and Anderson(2016)]{reis2016transreal}
+Tiago~S dos Reis and James~AD Anderson.
+\newblock Transreal calculus.
+\newblock \emph{IAENG International Journal of Applied Mathematics},
+  46\penalty0 (1):\penalty0 1--26, 2016.
+
+\bibitem[Goldberg(1991)]{goldberg1991every}
+David Goldberg.
+\newblock What every computer scientist should know about floating-point
+  arithmetic.
+\newblock \emph{ACM computing surveys}, 23\penalty0 (1):\penalty0 5--48, 1991.
+
+\bibitem[Golub and Van~Loan(2013)]{golub2013matrix}
+Gene~H Golub and Charles~F Van~Loan.
+\newblock \emph{Matrix computations}.
+\newblock JHU press, 2013.
+
+\bibitem[Griewank and Walther(2008)]{griewank2008evaluating}
+Andreas Griewank and Andrea Walther.
+\newblock \emph{Evaluating derivatives: principles and techniques of
+  algorithmic differentiation}.
+\newblock SIAM, 2008.
+
+\bibitem[Higham(2002)]{higham2002accuracy}
+Nicholas~J Higham.
+\newblock \emph{Accuracy and stability of numerical algorithms}.
+\newblock SIAM, 2002.
+
+\bibitem[Hornik et~al.(1989)Hornik, Stinchcombe, and
+  White]{hornik1989multilayer}
+Kurt Hornik, Maxwell Stinchcombe, and Halbert White.
+\newblock Multilayer feedforward networks are universal approximators.
+\newblock \emph{Neural networks}, 2\penalty0 (5):\penalty0 359--366, 1989.
+
+\bibitem[{IEEE Computer Society}(2019)]{ieee754-2019}
+{IEEE Computer Society}.
+\newblock {IEEE} standard for floating-point arithmetic.
+\newblock Technical Report IEEE Std 754-2019, Institute of Electrical and
+  Electronics Engineers, 2019.
+
+\bibitem[Ioffe and Szegedy(2015)]{ioffe2015batchnorm}
+Sergey Ioffe and Christian Szegedy.
+\newblock Batch normalization: Accelerating deep network training by reducing
+  internal covariate shift.
+\newblock In \emph{International conference on machine learning}, pages
+  448--456. PMLR, 2015.
+
+\bibitem[Jagtap et~al.(2020)Jagtap, Kawaguchi, and
+  Karniadakis]{jagtap2020conservative}
+Ameya~D Jagtap, Kenji Kawaguchi, and George~Em Karniadakis.
+\newblock Conservative physics-informed neural networks on discrete domains for
+  conservation laws: Applications to forward and inverse problems.
+\newblock \emph{Computer Methods in Applied Mechanics and Engineering},
+  365:\penalty0 113028, 2020.
+
+\bibitem[Kahan(1996)]{kahan1996ieee}
+William Kahan.
+\newblock Ieee standard 754 for binary floating-point arithmetic.
+\newblock \emph{Lecture notes on the status of IEEE}, 754, 1996.
+
+\bibitem[Kingma and Ba(2015)]{kingma2015adam}
+Diederik~P Kingma and Jimmy Ba.
+\newblock Adam: A method for stochastic optimization.
+\newblock In \emph{International Conference on Learning Representations}, 2015.
+
+\bibitem[Krishnapriyan et~al.(2021)Krishnapriyan, Gholami, Zhe, Kirby, and
+  Mahoney]{krishnapriyan2021characterizing}
+Aditi Krishnapriyan, Amir Gholami, Shandian Zhe, Robert Kirby, and Michael~W
+  Mahoney.
+\newblock Characterizing possible failure modes in physics-informed neural
+  networks.
+\newblock \emph{Advances in Neural Information Processing Systems},
+  34:\penalty0 26548--26560, 2021.
+
+\bibitem[Levenberg(1944)]{dls1977damped}
+Kenneth Levenberg.
+\newblock A technique for the numerical solution of certain integral equations
+  of the first kind.
+\newblock \emph{Quarterly of applied mathematics}, 2\penalty0 (2):\penalty0
+  164--168, 1944.
+
+\bibitem[Molina et~al.(2020)Molina, Schramowski, and Kersting]{molina2020pade}
+Alejandro Molina, Patrick Schramowski, and Kristian Kersting.
+\newblock Pad{\'e} activation functions in neural networks.
+\newblock \emph{arXiv preprint arXiv:1906.06735}, 2020.
+
+\bibitem[Montanher et~al.(2020)Montanher, Zuben, and
+  Campello]{montanher2020pade}
+Thiago Montanher, Fernando J~Von Zuben, and Ricardo~JGB Campello.
+\newblock Pad{\'e} activation units: End-to-end learning of flexible activation
+  functions in deep networks.
+\newblock \emph{arXiv preprint arXiv:1907.06732}, 2020.
+
+\bibitem[Muller et~al.(2010)Muller, Brisebarre, De~Dinechin, Jeannerod,
+  Lef{\`e}vre, Melquiond, Revol, Stehl{\'e}, and Torres]{muller2010handbook}
+Jean-Michel Muller, Nicolas Brisebarre, Florent De~Dinechin, Claude-Pierre
+  Jeannerod, Vincent Lef{\`e}vre, Guillaume Melquiond, Nathalie Revol, Damien
+  Stehl{\'e}, and Serge Torres.
+\newblock Handbook of floating-point arithmetic.
+\newblock \emph{Springer}, 2010.
+
+\bibitem[Nakamura(1991)]{nakamura1991advanced}
+Yoshihiko Nakamura.
+\newblock \emph{Advanced robotics: redundancy and optimization}.
+\newblock Addison-Wesley, 1991.
+
+\bibitem[Pascanu et~al.(2013)Pascanu, Mikolov, and
+  Bengio]{pascanu2013difficulty}
+Razvan Pascanu, Tomas Mikolov, and Yoshua Bengio.
+\newblock On the difficulty of training recurrent neural networks.
+\newblock \emph{International conference on machine learning}, pages
+  1310--1318, 2013.
+
+\bibitem[Pinkus(1999)]{pinkus1999approximation}
+Allan Pinkus.
+\newblock Approximation theory of the mlp model in neural networks.
+\newblock \emph{Acta numerica}, 8:\penalty0 143--195, 1999.
+
+\bibitem[Rahaman et~al.(2019)Rahaman, Baratin, Arpit, Draxler, Lin, Hamprecht,
+  Bengio, and Courville]{rahaman2019spectral}
+Nasim Rahaman, Aristide Baratin, Devansh Arpit, Felix Draxler, Min Lin, Fred
+  Hamprecht, Yoshua Bengio, and Aaron Courville.
+\newblock On the spectral bias of neural networks.
+\newblock \emph{International Conference on Machine Learning}, pages
+  5301--5310, 2019.
+
+\bibitem[Siciliano et~al.(2016)Siciliano, Sciavicco, Villani, and
+  Oriolo]{siciliano2016robotics}
+Bruno Siciliano, Lorenzo Sciavicco, Luigi Villani, and Giuseppe Oriolo.
+\newblock \emph{Robotics: modelling, planning and control}.
+\newblock Springer, 2016.
+
+\bibitem[Sitzmann et~al.(2020)Sitzmann, Martel, Bergman, Lindell, and
+  Wetzstein]{sitzmann2020implicit}
+Vincent Sitzmann, Julien Martel, Alexander Bergman, David Lindell, and Gordon
+  Wetzstein.
+\newblock Implicit neural representations with periodic activation functions.
+\newblock \emph{Advances in Neural Information Processing Systems},
+  33:\penalty0 7462--7473, 2020.
+
+\bibitem[Telgarsky(2017)]{telgarsky2017neural}
+Matus Telgarsky.
+\newblock Neural networks and rational functions.
+\newblock \emph{International Conference on Machine Learning}, pages
+  3387--3393, 2017.
+
+\bibitem[Trefethen and Bau~III(1997)]{trefethen1997numerical}
+Lloyd~N Trefethen and David Bau~III.
+\newblock \emph{Numerical linear algebra}.
+\newblock SIAM, 1997.
+
+\bibitem[Wampler(1986)]{wampler1986manipulator}
+Charles~W Wampler.
+\newblock Manipulator inverse kinematic solutions based on vector formulations
+  and damped least-squares methods.
+\newblock \emph{IEEE Transactions on Systems, Man, and Cybernetics},
+  16\penalty0 (1):\penalty0 93--101, 1986.
+
+\bibitem[Wang et~al.(2021)Wang, Teng, and Perdikaris]{wang2021understanding}
+Sifan Wang, Yujun Teng, and Paris Perdikaris.
+\newblock Understanding and mitigating gradient flow pathologies in
+  physics-informed neural networks.
+\newblock \emph{SIAM Journal on Scientific Computing}, 43\penalty0
+  (5):\penalty0 A3055--A3081, 2021.
+
+\bibitem[Yoshikawa(1985)]{yoshikawa1985manipulability}
+Tsuneo Yoshikawa.
+\newblock Manipulability of robotic mechanisms.
+\newblock \emph{The international journal of Robotics Research}, 4\penalty0
+  (2):\penalty0 3--9, 1985.
+
+\end{thebibliography}

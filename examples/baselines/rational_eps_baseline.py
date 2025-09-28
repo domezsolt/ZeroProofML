@@ -31,6 +31,8 @@ class RationalEpsConfig:
     epochs: int = 100
     batch_size: int = 32
     l2_regularization: float = 1e-3
+    # Optional gradient clipping (global L2 norm)
+    clip_norm: Optional[float] = None
     
     def __post_init__(self):
         if self.epsilon_values is None:
@@ -153,6 +155,33 @@ class RationalEpsTrainer:
         self.nan_count = 0
         self.inf_count = 0
         self.numerical_issues = []
+
+    def _clip_gradients(self, max_norm: float) -> None:
+        """Scale parameter gradients if global L2 norm exceeds max_norm."""
+        if max_norm is None or max_norm <= 0:
+            return
+        grads: List[float] = []
+        params = self.model.parameters()
+        for p in params:
+            if p.gradient is not None and p.gradient.tag == TRTag.REAL:
+                try:
+                    grads.append(float(p.gradient.value))
+                except Exception:
+                    pass
+        if not grads:
+            return
+        import math as _m
+        norm = (_m.fsum(g*g for g in grads)) ** 0.5
+        if norm <= max_norm or norm == 0.0:
+            return
+        scale = max_norm / norm
+        for p in params:
+            if p.gradient is not None and p.gradient.tag == TRTag.REAL:
+                try:
+                    val = float(p.gradient.value)
+                    p.gradient._value = real(val * scale)
+                except Exception:
+                    pass
     
     def train_epoch(self, 
                    inputs: List[List[float]], 
@@ -220,6 +249,13 @@ class RationalEpsTrainer:
                                 break
                     
                     if gradient_ok:
+                        # Optional gradient clipping
+                        try:
+                            clip_norm = getattr(self.model.config, 'clip_norm', None)
+                            if clip_norm is not None:
+                                self._clip_gradients(float(clip_norm))
+                        except Exception:
+                            pass
                         # Optimizer step
                         self.optimizer.step(self.model)
                     

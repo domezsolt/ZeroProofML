@@ -1,5 +1,37 @@
-%% ZeroProofML — Theoretical Foundations (Merged Version v2 with Rebuttal Addenda)
-%% This file consolidates the full theory section and integrates positioning/scope/rebuttal edits.
+% ZeroProofML — Full Article (Theory + Empirics)
+% Standalone JMLR-style paper built around merged theory and new experiments.
+
+\documentclass[11pt,twoside]{article}
+\usepackage{jmlr2e}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+% Macros
+\newcommand{\tr}{\text{TR}}
+\newcommand{\real}{\mathbb{R}}
+\newcommand{\eps}{\varepsilon}
+
+\title{ZeroProofML: Epsilon-Free Rational Neural Layers via Transreal Arithmetic}
+
+\author{\name Zsolt D\"ome \email zpml.dome@outlook.com \\\\
+\addr Independent Researcher}
+\ShortHeadings{ZeroProofML}{D\"ome}
+\firstpageno{1}
+
+\editor{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We introduce ZeroProofML, a framework for deterministic, $\varepsilon$-free rational neural layers based on transreal (TR) arithmetic. By totalizing division (and other singular operations) with explicit tags (REAL, $\pm\infty$, $\Phi$), TR removes ad-hoc $\varepsilon$ knobs and yields reproducible semantics for singularities. We formalize TR autodiff (Mask-REAL) and give stability statements (bounded updates, batch-safe steps). On 2R inverse kinematics, TR matches overall accuracy and achieves 1.5--2.5$\times$ lower error in the closest near-singularity bins (B0--B1), modest improvements in B2 ($\sim$3--4\%), and near parity elsewhere, with stable closed-loop behavior. Results extend to planar 3R and synthetic 6R, supporting robustness near rank-deficient Jacobians.
+\end{abstract}
+
+\begin{keywords}
+transreal arithmetic, rational layers, singularities, robotics IK, reproducibility
+\end{keywords}
 
 % ==========================
 % 0. Notation & Domain
@@ -198,6 +230,68 @@ $\mathcal{L}(\theta_{t})-\mathcal{L}^*\le (1-\mu\eta)^{t-t_0}\,(\mathcal{L}(\the
 If $\sum_t\eta_t=\infty$, $\sum_t\eta_t^2<\infty$, then $\liminf_t\mathbb{E}\|\nabla\mathcal{L}(\theta_t)\|=0$. Under PL and constant $\eta\le c/\widehat L$:
 $\mathbb{E}[\mathcal{L}(\theta_t)-\mathcal{L}^*]\ \le\ (1-\mu\eta)^t(\mathcal{L}(\theta_0)-\mathcal{L}^*) + \tfrac{\eta\sigma^2}{2\mu}$.
 \end{theorem}
+
+% ==========================
+% D. Experimental Setup (Concise)
+% ==========================
+\section*{Experimental Setup}
+\label{sec:exp-setup}
+\paragraph{Tasks.} Planar 2R IK with $|\det J|\approx |\sin\theta_2|$ (primary), planar 3R (rank drop by alignment), and synthetic 6R (serial DH).
+\paragraph{Datasets.} 2R: stratified by $|\det J|$ with edges $[0,10^{-5},10^{-4},10^{-3},10^{-2},\infty)$; near-pole coverage ensured in train/test. 3R: stratified by manipulability ($\sigma_1\sigma_2$). 6R: stratified by $d_1=\sigma_{\min}(J)$.
+\paragraph{Baselines.} MLP; Rational+$\varepsilon$ (grid); smooth surrogate $P/\sqrt{Q^2+\alpha^2}$ (grid); learnable-$\varepsilon$; $\varepsilon$-ensemble. Reference: DLS.
+\paragraph{TR models.} TR--Basic (Mask-REAL only). TR--Full: shared-$Q$ TR--Rational heads with hybrid gradients, tag/pole heads, anti-illusion residual, coprime regularizer; coverage enforcement and TR policy hysteresis; batch-safe LR.
+\paragraph{Metrics.} Overall and per-bucket MSE (B0--B4); closed-loop tracking (task-space error, max $\|\Delta\theta\|$, failures). 3R: PLE, sign consistency across $\theta_2,\theta_3$, residual consistency. 6R: overall + selected bins.
+\paragraph{Aggregation.} 3 seeds (2R/6R), deterministic policy for TR; means$\pm$std reported across seeds. Scripts emit per-seed JSONs and LaTeX tables/figures used below.
+
+\section*{Related Work}
+Rational neural networks model functions as $P/Q$ with strong approximation guarantees \citep{boulle2020rational}; practical deployments often use $\varepsilon$-regularized denominators $Q+\varepsilon$ to avoid division-by-zero. Batch normalization and related techniques also rely on explicit $\varepsilon$ \citep{ioffe2015batchnorm}. Transreal arithmetic provides totalized operations with explicit tags for infinities and indeterminate forms \citep{dosreis2016transreal,anderson2019transmathematics}. Masking rules in autodiff have appeared in robust training and subgradient methods; our Mask-REAL rule formalizes tag-aware gradient flow, ensuring exact zeros through non-REAL nodes while preserving classical derivatives on REAL paths. Bounded (saturating) gradients near poles relate to gradient clipping and smooth surrogates, but here arise from a deterministic, tag-aware calculus under an explicit policy. We adopt standard optimizers (e.g., Adam \citep{kingma2015adam}) and normalization variants (e.g., LayerNorm \citep{ba2016layernorm}) as needed in controlled baselines.
+
+\section*{Limitations and Outlook}
+Our approach targets models with explicit singular structure (rational layers, Jacobian-based control) and declared tag policies; it is not a replacement for generic deep architectures without divisions. Extending empirical coverage to higher-DOF systems with full physics stacks (URDF/Pinocchio) and integrating TR policies with mainstream autodiff frameworks are promising directions.
+
+\section*{Code and Data Availability}
+All code, dataset generators, per-seed results, aggregated CSVs, and LaTeX tables/figures are available at \href{https://github.com/domezsolt/ZeroProofML}{github.com/domezsolt/ZeroProofML}. The repository records environment info and dataset hashes for reproducibility.
+
+\section*{Conclusion}
+ZeroProofML replaces $\varepsilon$-based numerical fixes with a principled, tag-aware calculus that is total by construction. Mask-REAL autodiff, hybrid switching with bounded surrogates, coverage control, and policy determinism translate into empirical advantages: decisive near-pole accuracy (B0--B1), bounded updates and stable rollouts, and low across-seed variance under a declared policy. We expect these guarantees to benefit rational and control-oriented models where explicit singular structure is intrinsic.
+
+\section*{Acknowledgments}
+We thank contributors to the open-source ZeroProofML codebase and reviewers for constructive feedback.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
+
+% ==========================
+% E. Empirical Validation
+% ==========================
+\section*{Empirical Validation}
+\label{sec:empirical}
+We validate the theory on a suite of IK tasks with explicit singular structure.
+Across seeds (2R), TR--Full matches or exceeds the strongest $\varepsilon$/smooth baselines in overall error and attains \emph{1.5--2.5$\times$ lower error in the tightest near--pole bins (B0--B1)}, with \(\sim\)3--4\% gains in B2 and near parity in B3 (Table~\ref{tab:near_pole_bins}; see also Table~\ref{tab:overall_mse}). Under closed--loop tracking, TR--Full yields the lowest task--space error and smallest joint steps (Table~\ref{tab:rollout}).
+
+These observations align with the bounded--update guarantee (Prop.~\ref{prop:bounded-update}) and the batch--safe step rules in Sec.~\ref{sec:global-convergence}: gradients remain bounded due to Mask--REAL on REAL paths and saturated surrogates otherwise; the controller enforces near--pole coverage without destabilizing steps. The deterministic policy (ULP--scaled guard bands, hysteresis, deterministic reductions) leads to essentially zero across--seed variance on TR bins, consistent with Sec.~\ref{sec:policy-determinism} and the guard--band analysis in Sec.~\ref{sec:precision-tags}.
+
+Beyond 2R, we probe multi--singularity structure on planar 3R: TR--Full exhibits finite pole--localization error (PLE), stable sign behavior across \(\theta_2,\theta_3\) singular lines, and small forward--kinematics residuals (Table~\ref{tab:e3r}), supporting robustness near rank--deficient Jacobians under the hybrid policy. Synthetic 6R results (Table~\ref{tab:ik6r}) further corroborate stability and accuracy in higher--DOF settings.
+
+In sum, the empirical outcomes mirror the theoretical picture: totalization and tag--aware autodiff prevent undefined behaviors; hybrid switching and coverage control prioritize learning near poles without compromising stability; policy determinism yields reproducible outcomes up to declared ULP bands.
+
+\paragraph{Tables and Figures.} For completeness, we include the tables and figure summarizing the empirical results used in this section.
+\begin{itemize}
+  \item Overall (across seeds): \input{results/robotics/paper_suite/latex/overall_table.tex}
+  \item Near--pole bins B0--B2 (across seeds): \input{results/robotics/paper_suite/latex/near_pole_table.tex}
+  \item Closed--loop tracking summary: \input{results/robotics/paper_suite/latex/rollout_table.tex}
+  \item 3R near--pole metrics (TR): \input{results/robotics/paper_suite/latex/e3r_table.tex}
+  \item 6R synthetic summary (TR): \input{results/robotics/paper_suite/latex/ik6r_table.tex}
+\end{itemize}
+Optionally, a compact bar plot for B0--B2 is shown in Fig.~\ref{fig:b012bars-theory}.
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.60\linewidth]{results/robotics/paper_suite/figures/b012_bars.png}
+  \caption{Near--pole MSE (B0--B2) by method (lower is better).}
+  \label{fig:b012bars-theory}
+\end{figure}
 \subsection*{Hybrid view \& $\varepsilon$-limit} Define Lyapunov $V=\mathcal{L}+\lambda_1[\alpha_1-\hat\pi_1]_++\lambda_2[\alpha_2-\hat\pi_2]_++\mu[\hat\rho_{\mathrm{flip}}-\rho_{\max}]_+$. Between switches $\dot V\le -c\|\nabla\mathcal{L}\|^2$; at switches $V$ is nonincreasing by hysteresis/hinges. On REAL regions, $\lim_{\varepsilon\to0^+}\nabla^k P/(Q+\varepsilon)=\nabla^k P/Q$ ($k=0,1,2$); at poles, MR uses tags/saturation to remain well-posed.
 
 % ==========================
