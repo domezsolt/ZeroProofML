@@ -5,9 +5,9 @@
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
 
-\bibitem[Anderson et~al.(2007)Anderson, V{"o}lker, and
+\bibitem[Anderson et~al.(2007)Anderson, Völker, and
   Adams]{anderson2006perspex}
-J.~A. D.~W. Anderson, Norbert V{"o}lker, and Andrew~A. Adams.
+J.~A. D.~W. Anderson, Norbert Völker, and Andrew~A. Adams.
 \newblock Perspex machine viii: Axioms of transreal arithmetic.
 \newblock In \emph{Vision Geometry XV}, volume 6499 of \emph{Proceedings of
   SPIE}, pages 649902--1--649902--12. SPIE, 2007.

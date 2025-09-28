@@ -328,7 +328,7 @@ Component & Primary Function & Importance & Impact without \\
 TR Arithmetic & Total operations & Critical & System failure \\
 TR-Rational Layers & Pole modeling & Critical & Cannot represent singularities \\
 Coverage Control & Anti-mode-collapse & High & 83--90\% B0--B1 degradation \\
-Hybrid Switching & Stability & High & 13.7\% worse rollout \\
+Hybrid Switching & Stability & High & 13.7\% lower rollout tracking error \\
 Tag-Aware Autodiff & Bounded updates & High & Training instability \\
 ULP Thresholds & Determinism & Medium & Non-reproducible results \\
 \bottomrule
@@ -547,7 +547,7 @@ ZeroProofML-Full & \textbf{0.0022} $\pm$ 0.000 & \textbf{0.0013} $\pm$ 0.000 & \
 $\varepsilon$-Ensemble & 0.0032 $\pm$ 0.000 & 0.0024 $\pm$ 0.000 & 0.0317 $\pm$ 0.000 & 0.142 \\
 Learnable-$\varepsilon$ & 0.0036 $\pm$ 0.000 & 0.0029 $\pm$ 0.000 & 0.0321 $\pm$ 0.000 & 0.142 \\
 Smooth Surrogate & 0.0036 $\pm$ 0.000 & 0.0029 $\pm$ 0.000 & 0.0321 $\pm$ 0.000 & 0.142 \\
-Standard MLP & 0.0053 $\pm$ 0.002 & 0.0071 $\pm$ 0.003 & 0.0363 $\pm$ 0.002 & 0.317 \\
+Standard MLP & 0.0053 $\pm$ 0.002 & 0.0071 $\pm$ 0.003 & 0.0363 $\pm$ 0.002 & 0.304 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -700,7 +700,7 @@ Deploying ZeroProofML in real robotic systems required addressing practical conc
 \section{Related Work Revisited}
 
 \textbf{Rational Neural Networks:}
-Recent work has explored rational activation functions and layers~\citep{boulle2020rational,montanher2020pade,molina2020pade} for their superior approximation properties. \citet{telgarsky2017neural} established theoretical connections between neural networks and rational functions, while \citet{boulle2020rational} demonstrated practical advantages of rational layers. However, these approaches still rely on $\varepsilon$-regularization to handle division by zero, inheriting the bias-variance trade-offs we eliminate.
+Recent work has explored rational activation functions and layers~\citep{boulle2020rational} for their superior approximation properties. \citet{telgarsky2017neural} established theoretical connections between neural networks and rational functions, while \citet{boulle2020rational} demonstrated practical advantages of rational layers. However, these approaches still rely on $\varepsilon$-regularization to handle division by zero, inheriting the bias-variance trade-offs we eliminate.
 
 \textbf{Physics-Informed Neural Networks:}
 The challenge of learning functions with singularities has been recognized in physics-informed neural networks (PINNs)~\citep{wang2021understanding,krishnapriyan2021characterizing}. \citet{jagtap2020conservative} noted difficulties near discontinuities, while \citet{sitzmann2020implicit} explored periodic activations to capture high-frequency features. Our work provides a principled solution to these challenges through transreal arithmetic.
