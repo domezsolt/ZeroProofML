@@ -18,6 +18,7 @@
 \usepackage{tcolorbox} % For the contributions box
 \usepackage{url}       % For URLs
 \newtheorem{examplebox}{Example}[section]
+\newtheorem{assumption}{Assumption}
 
 % ---- Consistency Macros ----
 \newcommand{\TR}{\mathbb{T}}
@@ -31,6 +32,8 @@
 \newcommand{\hybrid}{\textsc{Hybrid}}
 \newcommand{\ple}{\mathrm{PLE}}
 \newcommand{\qmin}{q_{\min}}
+% Compact condition macro to avoid caption line breaks
+\newcommand{\condswitch}{\mbox{$|Q|\!>\!\tau_{\mathrm{switch}}$}}
 % Tag alias macros (for consistent usage across text/math/tables)
 \newcommand{\TAGREAL}{\trReal}
 \newcommand{\TAGPINF}{\trPINF}
@@ -58,13 +61,15 @@
 \textbf{Problem:} Neural networks fail catastrophically near mathematical singularities where denominators approach zero, particularly in robotics inverse kinematics (IK) near kinematic singularities.
 \textbf{Approach:} We introduce ZeroProofML, a learning framework based on transreal (TR) arithmetic that provides mathematically principled handling of division by zero through precision-aware training and hybrid computational switching.
 \textbf{Key Innovation:} Unlike $\varepsilon$-regularization approaches that introduce bias, our method maintains mathematical rigor while providing bounded-update guarantees and finite switching properties during training.
-\textbf{Results:} On inverse kinematics tasks, ZeroProofML achieves 29--47\% lower error than advanced baselines ($\varepsilon$-ensemble, learnable-$\varepsilon$, smooth surrogates) in near-singularity regions while being $12\times$ faster than ensemble methods. The approach scales from 2R to 6R manipulators with deterministic, reproducible behavior.
+\textbf{Results:} On inverse kinematics tasks, ZeroProofML reduces near-singularity MSE by \textbf{29.7\%} in B0 and \textbf{46.6\%} in B1 vs. the best $\varepsilon$-baseline (Fig.~\ref{fig:nearpole_performance}; Table~\ref{tab:bucket_mse}), and trains \textbf{12$\times$} faster than an ensemble (Table~\ref{tab:efficiency}). The approach scales from 2R to 6R manipulators with deterministic, reproducible behavior.
 \textbf{Impact:} This work bridges transreal arithmetic and machine learning, providing the first theoretically grounded approach for learning functions with essential singularities while maintaining practical computational efficiency.
 \end{abstract}
 
 \begin{keywords}
 Transreal arithmetic, rational neural networks, division-by-zero, singularities, stability, extrapolation
 \end{keywords}
+
+\paragraph{Notation.} We use the transreal set $\TR = \RR \cup \{\pm\infty,\,\Phi\}$ and attach one of four tags to every computed value: \TAGREAL, \TAGPINF, \TAGNINF, or \TAGPHI. Unless stated otherwise, we adopt signed infinity semantics (e.g., $1/0=+\infty$) and use $\sign(\cdot)$ for sign. Table~\ref{tab:notation} summarizes the main symbols.
 
 % Notation mini-table
 \begin{table}[t]
@@ -99,7 +104,7 @@ This mathematical singularity manifests in real-world robotics as sudden ``freez
 
 \textbf{Mathematical Root Cause:} The fundamental issue is that standard ML optimization occurs over $\mathbb{R}^n$, but functions with essential singularities are not well-defined on this domain. The mathematical structure requires an extended number system that can represent infinite values and indeterminate forms as first-class citizens, not error conditions.
 \subsection{Our Approach: Transreal Learning}
-\textbf{Core Insight:} We fundamentally reconceptualize the learning problem by operating in the transreal domain $\mathbb{T} = \mathbb{R} \cup \{+\infty, -\infty, \Phi\}$, where division by zero and other singular operations become well-defined, deterministic computations rather than error conditions. In this extended arithmetic, $1/0 = +\infty$, while $0/0 = \Phi$ (nullity), providing consistent semantics for all arithmetic expressions.
+\textbf{Core Insight:} We fundamentally reconceptualize the learning problem by operating in the transreal domain $\TR = \RR \cup \{+\infty, -\infty, \Phi\}$, where division by zero and other singular operations become well-defined, deterministic computations rather than error conditions. In this extended arithmetic, $1/0 = +\infty$, while $0/0 = \Phi$ (nullity), providing consistent semantics for all arithmetic expressions.
 
 \begin{examplebox}[Intuitive Comparison]
 \textbf{Computing $1/(x-1)$ near $x=1$:}
@@ -125,7 +130,7 @@ The key difference: traditional methods treat $x=1$ as a failure case requiring 
 \end{itemize}
 
 \paragraph{Overview.}
-Machine learning models often struggle with singularities -- points where operations like division or log become undefined (e.g., division by zero, $0 \times \infty$, $\log$ of a non-positive number). Conventional neural networks handle these cases via ad-hoc fixes (adding tiny $\varepsilon$ constants, clipping values, or avoiding the singular region altogether), which can lead to silent instabilities, NaNs, or brittle behavior. \emph{ZeroProofML} addresses this by integrating transreal arithmetic -- a number system that extends the reals with explicit infinity and nullity'' elements -- into deep learning. In ZeroProofML, all arithmetic operations are total (defined for all inputs) and produce a value--tag pair indicating whether the result is finite (\trReal), $+\infty$ (\trPINF), $-\infty$ (\trNINF), or an indeterminate form (\trPHI). By never throwing exceptions and propagating these tags, the system can gracefully handle singularities with deterministic rules (e.g., $1/0 \mapsto +\infty$, $0/0 \mapsto \Phi$).
+Machine learning models often struggle with singularities -- points where operations like division or log become undefined (e.g., division by zero, $0 \times \infty$, $\log$ of a non-positive number). Conventional neural networks handle these cases via ad-hoc fixes (adding tiny $\varepsilon$ constants, clipping values, or avoiding the singular region altogether), which can lead to silent instabilities, NaNs, or brittle behavior. \emph{ZeroProofML} addresses this by integrating transreal arithmetic -- a number system that extends the reals with explicit infinity and nullity elements -- into deep learning. In ZeroProofML, all arithmetic operations are total (defined for all inputs) and produce a value--tag pair indicating whether the result is finite (\trReal), $+\infty$ (\trPINF), $-\infty$ (\trNINF), or an indeterminate form (\trPHI). By never throwing exceptions and propagating these tags, the system can gracefully handle singularities with deterministic rules (e.g., $1/0 \mapsto +\infty$, $0/0 \mapsto \Phi$).
 
 ZeroProofML builds on this foundation with a rational neural architecture using trainable rational layers $P(x)/Q(x)$ that explicitly model poles (roots of $Q$). Unlike prior rational networks, which demonstrated high approximation power but did not fundamentally resolve division-by-zero issues, ZeroProofML's layers are totalized under transreal rules -- whenever $Q(x)\to 0$, the output transitions to an appropriate infinite or \trPHI{} tag rather than crashing. The architecture is complemented by a specialized autodiff mechanism and training policies to ensure stability even when singularities are encountered. Our contributions are: (1) a theoretical framework for transreal arithmetic in ML, (2) the ZeroProofML architecture with rational layers and tag-aware autodiff, (3) formal guarantees on totality, stability, and identifiability, and (4) extensive experiments against state-of-the-art baselines focusing on accuracy near singularities, stability, and extrapolation.
 
@@ -192,11 +197,11 @@ Having established the mathematical challenge posed by singularities, we now sur
 \item \textbf{Auxiliary consistency losses:} Additional terms penalizing constraint violations (e.g., $\|f(g(x)) - x\|^2$ for inverse consistency). While improving average-case performance, these do not address the fundamental singularity issue.
 \end{itemize}
 \subsection{Transreal Arithmetic}
-Transreal arithmetic, pioneered by \citet{anderson2006perspex} and refined through subsequent mathematical investigation~\citep{reis2016transreal,anderson2019transmathematics}, extends the real number system $\mathbb{R}$ to a total arithmetic system $\mathbb{T} = \mathbb{R} \cup \{+\infty, -\infty, \Phi\}$. This extension is not merely notational convenience but provides a rigorous algebraic structure where every arithmetic operation is total (defined for all inputs).
+Transreal arithmetic, pioneered by \citet{anderson2006perspex} and refined through subsequent mathematical investigation~\citep{reis2016transreal,anderson2019transmathematics}, extends the real number system $\RR$ to a total arithmetic system $\TR = \RR \cup \{+\infty, -\infty, \Phi\}$. This extension is not merely notational convenience but provides a rigorous algebraic structure where every arithmetic operation is total (defined for all inputs).
 
 \textbf{Fundamental Properties:}
 \begin{itemize}
-\item \textbf{Totality:} Every operation $a \circ b$ produces a well-defined result in $\mathbb{T}$, eliminating undefined behavior.
+\item \textbf{Totality:} Every operation $a \circ b$ produces a well-defined result in $\TR$, eliminating undefined behavior.
 \item \textbf{Determinism:} Given inputs, the output is uniquely determined by explicit rules, ensuring reproducibility.
 \item \textbf{Consistency:} On the domain where classical arithmetic is defined, transreal arithmetic agrees exactly with real arithmetic.
 \item \textbf{Computational realizability:} IEEE-754 floating-point already includes $\pm\infty$ and NaN, providing hardware support for transreal concepts.
@@ -217,7 +222,7 @@ No prior transreal neural networks; no convergence theory for extended arithmeti
 
 \section{Transreal Learning Framework}
 \label{sec:framework}
-Building on the limitations of existing approaches identified in Section~\ref{sec:background}, we now present our transreal learning framework. The key insight is to extend the computational domain from $\mathbb{R}$ to $\mathbb{T}$, transforming singularities from error conditions into well-defined computational states.
+Building on the limitations of existing approaches identified in Section~\ref{sec:background}, we now present our transreal learning framework. The key insight is to extend the computational domain from $\RR$ to $\TR$, transforming singularities from error conditions into well-defined computational states. Figure~\ref{fig:conceptual} illustrates this contrast between $\varepsilon$-regularization and TR semantics.
 
 \begin{figure}[t]
 \centering
@@ -241,7 +246,7 @@ P/Q, & |Q|>\tau_{\mathrm{switch}},\\
 \begin{figure}[t]
 \centering
 \includegraphics[width=\textwidth]{results/robotics/paper_suite/figures/figure6_perfect_schematic.pdf}
-\caption{ZeroProofML architecture and computational flow. Input data flows through TR-Rational layers where condition checking ($|Q| > \tau_{\text{switch}}$) determines the computational path: Guard mode for high-precision transreal arithmetic (left) or Real mode for masked operations (right). The coverage controller provides adaptive feedback to maintain focus on near-singularity regions. All paths converge to tagged outputs in the transreal domain $\mathbb{T}$.}
+\caption{ZeroProofML architecture and computational flow. Input data flows through TR-Rational layers where condition checking (\condswitch) determines the computational path: Guard mode for high-precision transreal arithmetic (left) or Real mode for masked operations (right). The coverage controller provides adaptive feedback to maintain focus on near-singularity regions. All paths converge to tagged outputs in the transreal domain $\TR$.}
 \label{fig:zeroproofml_schematic}
 \end{figure}
 
@@ -279,7 +284,7 @@ Without Coverage Control & 0.0041 (+83\%) & 0.0025 (+90\%) & 0.0321 (+4\%) & 5.2
 \end{tabular}
 \end{table}
 
-As shown in Figure~\ref{fig:coverage_ablation} and Table~\ref{tab:coverage_ablation}, the coverage controller is essential for maintaining performance near singularities. Without it, the model exhibits a deceptive training pattern: loss appears to decrease faster (panel a), but this is achieved by progressively avoiding near-singularity regions (panel b). The consequence is severe degradation in precisely the regions where accurate predictions are most critical---bins B0 and B1 show 83\% and 90\% higher error respectively without coverage control.
+As shown in Figure~\ref{fig:coverage_ablation} and Table~\ref{tab:coverage_ablation}, the coverage controller is essential for maintaining performance near singularities (see Alg.~\ref{alg:coverage-control} for the procedure). Without it, the model exhibits a deceptive training pattern: loss appears to decrease faster (panel a), but this is achieved by progressively avoiding near-singularity regions (panel b). The consequence is severe degradation in precisely the regions where accurate predictions are most critical---bins B0 and B1 show 83\% and 90\% higher error respectively without coverage control.
 
 \subsubsection{Additional Ablation Studies}
 We conducted comprehensive ablation studies to validate our design choices across all major components.
@@ -337,12 +342,14 @@ ULP Thresholds & Determinism & Medium & Non-reproducible results \\
 This section provides the theoretical foundation for our approach, establishing convergence guarantees and approximation properties. We begin with the mathematical formalization of transreal arithmetic in the context of neural networks.
 
 \subsection{Transreal Arithmetic and Totalized Rational Layers}
-Transreal arithmetic augments $\RR$ with $+\infty$, $-\infty$, and $\Phi$ (nullity'') so that all basic operations are total and deterministic. Any valid arithmetic expression yields a tagged outcome; operations coincide with classical real arithmetic wherever the latter is defined. This yields a \emph{total} computational graph with no undefined nodes.
+Transreal arithmetic augments $\RR$ with $+\infty$, $-\infty$, and $\Phi$ (nullity) so that all basic operations are total and deterministic. Any valid arithmetic expression yields a tagged outcome; operations coincide with classical real arithmetic wherever the latter is defined. This yields a \emph{total} computational graph with no undefined nodes.
 
-\paragraph{Totalized Rational Layer.} A \emph{TR-rational} layer implements $y = P_\theta(x)/Q_\phi(x)$ with monic denominator and coprime $(P,Q)$ to ensure identifiability. Under transreal semantics, if $Q(x)=0$ and $P(x)\neq 0$ the output is tagged $+\infty$ or $-\infty$ depending on the sign; if both vanish, the output is tagged $\Phi$. Hence, the layer is well-defined for all inputs.
+\paragraph{Totalized Rational Layer.} A \emph{TR-rational} layer implements $y = P_\theta(x)/Q_\phi(x)$ with monic denominator and coprime $(P,Q)$ to ensure identifiability. Under transreal semantics, if $Q(x)=0$ and $P(x)\neq 0$ the output is tagged $+\infty$ or $-\infty$ depending on the sign; if both vanish, the output is tagged $\Phi$. Hence, the layer is well-defined for all inputs (see Alg.~\ref{alg:tr-forward}).
+\paragraph{Takeaway.} TR makes every arithmetic operation total and the TR-rational layer returns a tagged value on \emph{all} inputs; poles and $0/0$ become explicit, deterministic states rather than NaNs or crashes.
 
 \subsection{Stability via Tag-Aware Autodiff}
-Building on the theory of automatic differentiation~\citep{griewank2008evaluating,baydin2017automatic}, we define three gradient policies: \maskreal{} (drop gradients through non-\trReal{} outputs), \saturating{} (bounded surrogate gradients near poles), and a \hybrid{} scheduler that switches based on batch statistics (e.g., $\qmin$ with hysteresis). These guarantee bounded updates and numerically stable training while preserving exact gradients away from singularities, addressing the gradient pathology issues identified in~\citet{pascanu2013difficulty,bengio1994learning}.
+Building on the theory of automatic differentiation~\citep{griewank2008evaluating,baydin2017automatic}, we define three gradient policies: \maskreal{} (drop gradients through non-\TAGREAL{} outputs; see Alg.~\ref{alg:mask-real-grad}), \saturating{} (bounded surrogate gradients near poles), and a \hybrid{} scheduler that switches based on batch statistics (e.g., $\qmin$ with hysteresis; see Alg.~\ref{alg:hybrid-policy}). These guarantee bounded updates and numerically stable training while preserving exact gradients away from singularities, addressing the gradient pathology issues identified in~\citet{pascanu2013difficulty,bengio1994learning}.
+\paragraph{Takeaway.} Mask-REAL zeros gradients off the \TAGREAL{} path, and the hybrid policy replaces near-pole derivatives by bounded surrogates; together they bound updates and keep training stable without sacrificing exact gradients far from poles.
 
 \subsection{Convergence Guarantees}
 
@@ -350,7 +357,7 @@ Building on the theory of automatic differentiation~\citep{griewank2008evaluatin
 
 \emph{Proof Sketch:} The proof proceeds in three stages:
 \begin{enumerate}
-\item \textbf{Tag-based gradient bounding:} When approaching a pole where $Q(x) \to 0$, traditional gradients would explode as $\partial(P/Q)/\partial Q \sim -P/Q^2 \to \infty$. However, our Mask-REAL policy zeros gradients when tags become non-REAL, explicitly bounding the contribution.
+\item \textbf{Tag-based gradient bounding:} When approaching a pole where $Q(x) \to 0$, traditional gradients would explode as $\partial(P/Q)/\partial Q \sim -P/Q^2 \to \infty$. However, our Mask-REAL policy zeros gradients when tags become non-\TAGREAL{}, explicitly bounding the contribution.
 \item \textbf{Hybrid switching saturation:} In the critical region where $|Q| < \tau_{\text{switch}}$, we transition to saturated gradients bounded by $G_{\max}$. This creates a smooth envelope function that caps gradient magnitudes while preserving descent direction.
 \item \textbf{Consistency regularization:} The auxiliary loss $L_{\text{cons}}$ penalizing tag disagreement between Guard and Real paths induces Lipschitz continuity in the learned function, preventing gradient spikes even during mode transitions.
 \end{enumerate}
@@ -366,13 +373,34 @@ Under standard smoothness assumptions on the task loss $L_{\text{task}}$, we ach
 \end{itemize}
 
 Crucially, these rates hold uniformly across the domain, including near singularities where traditional methods diverge.
+
+\paragraph{Assumptions.} We make the following standing assumptions:
+\begin{assumption}[Regularity and Hysteresis]\label{ass:regularity}
+On any tag-stable \TAGREAL{} region, $f_{\mathrm{cl}}$ is Lipschitz with constant $L$ and twice continuously differentiable; parameters and inputs are bounded. Guard bands use hysteresis margins $\delta_{\mathrm{on/off}}$ with $0<\delta_{\mathrm{on}}<\delta_{\mathrm{off}}$.
+\end{assumption}
+
+\begin{proposition}[Bounded Updates]\label{prop:bounded}
+Under Assumption~\ref{ass:regularity}, there exists $C>0$ such that $\|\nabla_\theta \mathcal{L}_t\|\le C$ for all $t$ along training with Mask-REAL or Hybrid policies.
+\end{proposition}
+\emph{Sketch.} \TAGREAL{} paths coincide with classical derivatives; near poles, either gradients are masked (zero contribution) or replaced by bounded surrogates, yielding a uniform bound that depends on layer Lipschitz constants and surrogate caps.
+
+\begin{proposition}[Finite Switching]\label{prop:finite-switch}
+With hysteresis margins $\delta_{\mathrm{on/off}}$, the number of mode switches on any compact interval is finite and bounded by a function $B(\delta_{\mathrm{on/off}},L)$.
+\end{proposition}
+\emph{Sketch.} Hysteresis creates disjoint on/off bands; Lipschitz dynamics imply bounded crossing frequency, ruling out chattering.
+
+\begin{proposition}[Determinism]\label{prop:determinism}
+Fixing random seeds, dataloader order, and deterministic kernels yields identical outputs for identical inputs under a declared tag policy.
+\end{proposition}
+\emph{Sketch.} With fixed seeds and deterministic reductions, evaluation is a pure function of inputs and parameters; tag classification is deterministic given thresholds and hysteresis.
+\paragraph{Takeaway.} Operationally: (i) gradient norms remain bounded throughout training via masking or bounded surrogates; (ii) the hybrid controller switches modes only finitely often due to hysteresis; and (iii) fixing seeds and enabling deterministic kernels yields repeatable outputs under a declared tag policy.
 \subsection{Approximation Theory}
 
-\textbf{Theorem 3 (Universal Approximation for Singular Functions):} TR-rational networks with sufficient capacity can approximate any measurable function $f: \mathbb{R}^n \to \mathbb{T}$ uniformly on compact subsets $K \subset \mathbb{R}^n$, excluding singular sets $S_f$ of measure zero.
+\textbf{Theorem 3 (Universal Approximation for Singular Functions):} TR-rational networks with sufficient capacity can approximate any measurable function $f: \RR^n \to \TR$ uniformly on compact subsets $K \subset \RR^n$, excluding singular sets $S_f$ of measure zero.
 
 \emph{Formal Statement:} For any $\epsilon > 0$ and compact $K \subset \mathbb{R}^n$, there exists a TR-rational network $\hat{f}$ such that:
-$$\sup_{x \in K \setminus S_\epsilon} d_{\mathbb{T}}(f(x), \hat{f}(x)) < \epsilon$$
-where $d_{\mathbb{T}}$ is the appropriate metric on transreal space and $|S_\epsilon| < \epsilon$.
+$$\sup_{x \in K \setminus S_\epsilon} d_{\TR}(f(x), \hat{f}(x)) < \epsilon$$
+where $d_{\TR}$ is the appropriate metric on transreal space and $|S_\epsilon| < \epsilon$.
 
 \textbf{Key Insights:}
 \begin{enumerate}
@@ -384,16 +412,19 @@ where $d_{\mathbb{T}}$ is the appropriate metric on transreal space and $|S_\eps
 \textbf{Comparison with Classical Results:}
 Standard universal approximation theorems~\citep{cybenko1989approximation,hornik1989multilayer,pinkus1999approximation} assume continuous target functions on $\mathbb{R}^n$. Our result extends to discontinuous, singular targets by:
 \begin{itemize}
-\item Operating in the completed space $\mathbb{T}$ where singularities are well-defined
+\item Operating in the completed space $\TR$ where singularities are well-defined
 \item Using rational rather than polynomial activation structure, as explored in recent work on rational networks~\citep{boulle2020rational,telgarsky2017neural}
 \item Allowing measure-zero exclusion sets for essential singularities
 \end{itemize}
 
 This represents a fundamental extension of approximation theory to singular function classes.
+\paragraph{Takeaway.} TR-rational networks match both values and tag patterns: they can place poles where needed and approximate smoothly elsewhere, faithfully capturing singular structure while behaving classically off the singular set.
 \subsection{Computational Complexity}
 Training $O(n^2)$ per iter vs.\ $O(n^3)$ for ensembles; inference $O(n)$ vs.\ $O(kn)$ for $k$-ensemble; linear memory.
+\paragraph{Takeaway.} TR avoids the $k$-fold overhead of ensembles: training and inference remain single-model costs (quadratic per iter; linear at inference), which is critical for real-time control workloads.
 \subsection{Proof Sketches}
 Proposition~1 follows from closure of transreal ops and agreement with reals; Proposition~2 from masking/saturation bounds; Proposition~3 from polynomial identity arguments.
+\paragraph{Takeaway.} Proofs hinge on three pillars: (i) totality/consistency of TR with reals off singularities; (ii) bounded gradients via masking/saturation; and (iii) standard rational-function identities for identifiability.
 
 \section{Experimental Design}
 \label{sec:experimental_design}
@@ -563,7 +594,7 @@ This alignment with hardware primitives provides unexpected efficiency benefits:
 \item Cache-friendly memory access patterns (no emergency bailout paths)
 \end{itemize}
 
-\textbf{Learning Dynamics:} The tag-aware gradient flow fundamentally alters optimization geometry near singularities. In classical SGD, gradients explode as we approach poles, causing optimization to bounce chaotically. With Mask-REAL autodiff, gradients through non-REAL nodes are explicitly zeroed, creating ``gradient shadows'' that prevent unstable updates while maintaining smooth optimization elsewhere.
+\textbf{Learning Dynamics:} The tag-aware gradient flow fundamentally alters optimization geometry near singularities. In classical SGD, gradients explode as we approach poles, causing optimization to bounce chaotically. With Mask-REAL autodiff, gradients through non-\TAGREAL{} nodes are explicitly zeroed (Alg.~\ref{alg:mask-real-grad}), creating ``gradient shadows'' that prevent unstable updates while maintaining smooth optimization elsewhere.
 
 The hybrid switching policy acts as an adaptive trust region method: far from singularities, we use exact gradients for fast convergence; near singularities, we switch to bounded surrogates that trade convergence speed for stability. The hysteresis prevents oscillation between modes, ensuring smooth training dynamics.
 \subsection{Critical Design Choices and Their Rationale}
@@ -683,7 +714,7 @@ ZeroProofML represents a paradigm shift from existing singularity-handling appro
 \textbf{1. Mathematical Foundation:}
 \begin{itemize}
 \item \textbf{Prior work:} Operates in incomplete $\mathbb{R}^n$, treating singularities as exceptions to avoid
-\item \textbf{ZeroProofML:} Operates in complete $\mathbb{T}^n$, treating singularities as legitimate computational states
+\item \textbf{ZeroProofML:} Operates in complete $\TR^n$, treating singularities as legitimate computational states
 \item \textbf{Impact:} Eliminates the need for ad-hoc fixes, providing principled behavior everywhere
 \end{itemize}
 
@@ -725,7 +756,7 @@ ZeroProofML succeeds by providing complete arithmetic rules, continuous tag prop
 
 \section{Conclusion}
 
-This work introduces ZeroProofML, the first neural architecture to fundamentally resolve division-by-zero and singularity issues through principled integration of transreal arithmetic. By extending the computational domain from $\mathbb{R}$ to $\mathbb{T}$, we transform numerical exceptions into well-defined computational states, enabling learning algorithms to reason about and operate through singularities.
+This work introduces ZeroProofML, the first neural architecture to fundamentally resolve division-by-zero and singularity issues through principled integration of transreal arithmetic. By extending the computational domain from $\RR$ to $\TR$, we transform numerical exceptions into well-defined computational states, enabling learning algorithms to reason about and operate through singularities.
 
 \textbf{Theoretical Contributions:} We established the mathematical foundation for transreal neural networks, proving convergence under tag-aware gradient flow and bounded update guarantees even at singularities. The hybrid switching framework with hysteresis provides finite-time switching properties essential for practical deployment. These theoretical insights extend beyond our specific architecture, offering a blueprint for singularity-resilient learning systems.
 
@@ -752,7 +783,7 @@ The code, datasets, and trained models are publicly available, and we encourage 
 % ==========================
 \section*{Preliminaries}
 \label{sec:prelim}
-We use the transreal domain \(\mathbb{T}=\mathbb{R}\cup\{+\infty,-\infty,\bot\}\) with tags \(\{\mathrm{REAL},\mathrm{INF},\mathrm{NULL}\}\). Values are pairs \((v,\tau)\) with \(v\in\overline{\mathbb{R}}=\mathbb{R}\cup\{\pm\infty\}\). Arithmetic on \(\mathbb{T}\) follows explicit tag rules (addition/multiplication/division, integer powers, and guarded \(\sqrt{\cdot}\)).
+We use the transreal domain $\TR=\RR\cup\{+\infty,-\infty,\Phi\}$ with tags $\{\TAGREAL,\TAGPINF,\TAGNINF,\TAGPHI\}$. Values are pairs $(v,\tau)$ with $v\in\overline{\RR}=\RR\cup\{\pm\infty\}$. Arithmetic on $\TR$ follows explicit tag rules (addition/multiplication/division, integer powers, and guarded $\sqrt{\cdot}$).
 
 % ==========================
 % 0+. Positioning & Practicality
@@ -767,10 +798,10 @@ TR totalization targets models with explicit singular structure (e.g., rational 
 \section*{Scope of Totality}
 \label{sec:totality}
 \begin{definition}[Admissible class \(\mathcal{F}_{\!\mathrm{TR}}\)]\label{def:FTR}
-The least class of total maps \(f:\mathbb{T}^n\to\mathbb{T}\) that contains constants and projections and is closed under TR-totalized \(+,\,-,\,\times,\,/\), integer powers, guarded \(\sqrt{\cdot}\), composition, and tupling. Optionally includes a chosen finite set of transcendental primitives (e.g., \(\log\)) when equipped with explicit TR-totalization policies (branch/guard/tag rules).
+The least class of total maps \(f:\TR^n\to\TR\) that contains constants and projections and is closed under TR-totalized \(+,\,-,\,\times,\,/\), integer powers, guarded \(\sqrt{\cdot}\), composition, and tupling. Optionally includes a chosen finite set of transcendental primitives (e.g., \(\log\)) when equipped with explicit TR-totalization policies (branch/guard/tag rules).
 \end{definition}
 \begin{proposition}[Totality within \(\mathcal{F}_{\!\mathrm{TR}}\)]\label{prop:totality}
-Every \(f\in\mathcal{F}_{\!\mathrm{TR}}\) is total on \(\mathbb{T}^n\). If inputs are REAL and the classical \(f_{\mathrm{cl}}\) is defined, then \(\operatorname{tag}(f(x))=\mathrm{REAL}\) and \(\operatorname{val}(f(x))=f_{\mathrm{cl}}(\operatorname{val}(x))\); at poles/indeterminate forms, non-REAL tags are returned per the primitive rules.
+Every $f\in\mathcal{F}_{\!\mathrm{TR}}$ is total on $\TR^n$. If inputs are \TAGREAL{} and the classical $f_{\mathrm{cl}}$ is defined, then $\operatorname{tag}(f(x))=\TAGREAL$ and $\operatorname{val}(f(x))=f_{\mathrm{cl}}(\operatorname{val}(x))$; at poles/indeterminate forms, non-\TAGREAL{} tags are returned per the primitive rules.
 \end{proposition}
 \begin{remark}[Transcendentals]
 Claims of totality are limited to \(\mathcal{F}_{\!\mathrm{TR}}\). Primitives beyond \(\log\) and \(\sqrt{\cdot}\) are out of scope unless explicitly totalized.
@@ -789,9 +820,9 @@ Claims of totality are limited to \(\mathcal{F}_{\!\mathrm{TR}}\). Primitives be
 % ==========================
 \section*{IEEE--TR Bridge}
 \label{sec:ieee-tr-bridge}
-Define \(\Phi:\mathsf{IEEE}\to\mathbb{T}\) (total) and \(\Psi:\mathbb{T}_{\mathrm{REAL/INF}}\to\mathsf{IEEE}\) (round-to-nearest-even; undefined on \(\bot\)). Mapping table: finite $\mapsto (v,\mathrm{REAL})$; $\pm0\mapsto (0,\mathrm{REAL})$ with recorded IEEE zero sign; $\pm\infty\mapsto (\pm\infty,\mathrm{INF})$; NaN $\mapsto (\ast,\mathrm{NULL})$.
+Define $\Phi:\mathsf{IEEE}\to\TR$ (total) and $\Psi:\TR_{\{\TAGREAL,\TAGPINF,\TAGNINF\}}\to\mathsf{IEEE}$ (round-to-nearest-even; undefined on $\TAGPHI$). Mapping table: finite $\mapsto (v,\TAGREAL)$; $\pm0\mapsto (0,\TAGREAL)$ with recorded IEEE zero sign; $\pm\infty\mapsto (\pm\infty,\TAGPINF/\TAGNINF)$; NaN $\mapsto (\ast,\TAGPHI)$.
 \begin{lemma}[Partial homomorphism]
-If IEEE evaluates $x\circ y$ (\(\circ\in\{+,\,-,\,\times,\,/\}\)) without NaN, then $\Phi(x)\circ_{\mathbb{T}}\Phi(y)=\Phi(x\circ y)$. Divisions by $\pm0$ match signs.
+If IEEE evaluates $x\circ y$ (\(\circ\in\{+,\,-,\,\times,\,/\}\)) without NaN, then $\Phi(x)\circ_{\TR}\Phi(y)=\Phi(x\circ y)$. Divisions by $\pm0$ match signs.
 \end{lemma}
 \paragraph{Signed zeros.} We retain the IEEE zero sign in a latent flag used only when directional limits matter (e.g., $1/\pm0$).
 \paragraph{Export.} $\Psi(v,\mathrm{REAL})=\operatorname{round}(v)$; $\Psi(\pm\infty,\mathrm{INF})=\pm\infty$; $\Psi(\bot)$ undefined (or map to NaN by explicit policy). The bridge is a faithful embedding on non-NaN cases and a conservative \emph{extension} elsewhere.
@@ -872,13 +903,13 @@ $L_\mathcal{B}\le \tfrac{\beta_\ell}{m}\sum_i A_i^2 \le \tfrac{\beta_\ell}{m}\su
 % ==========================
 \section*{Second-Order Derivatives and Momentum Stability}
 \label{sec:second-order-momentum}
-\paragraph{Assumptions.} Work on a tag-stable REAL region $U$ (no pole crossings), or use bounded saturated surrogates $S_k$ when $\chi_k=0$. On $U$, $f_{\mathrm{cl}}\in C^2$; primitives have bounded first/second derivatives; surrogates are bounded by $G_{\max}$ (and optionally Lipschitz).
-\paragraph{Hessian on REAL regions.} If $\chi_k\equiv 1$ on $U$, then $\nabla^2 f_{\mathrm{MR}}(x)=\nabla^2 f_{\mathrm{cl}}(x)$ for all $x\in U$.
+\paragraph{Assumptions.} Work on a tag-stable \TAGREAL{} region $U$ (no pole crossings), or use bounded saturated surrogates $S_k$ when $\chi_k=0$. On $U$, $f_{\mathrm{cl}}\in C^2$; primitives have bounded first/second derivatives; surrogates are bounded by $G_{\max}$ (and optionally Lipschitz).
+\paragraph{Hessian on \TAGREAL{} regions.} If $\chi_k\equiv 1$ on $U$, then $\nabla^2 f_{\mathrm{MR}}(x)=\nabla^2 f_{\mathrm{cl}}(x)$ for all $x\in U$.
 \paragraph{Across guard bands.} With masks $M(x)$, $\nabla^2 f_{\mathrm{MR}}(x)=M\,\nabla^2 f_{\mathrm{cl}}(x)\,M + (\nabla M)\ast(\nabla f_{\mathrm{cl}})$. Use piecewise-constant $M$ or bounded surrogates; operator norms are bounded by local second-derivative bounds and $G_{\max}$.
 \begin{proposition}[Bounded curvature with saturation]\label{prop:bounded-hessian}
 If $\|\nabla F_k\|\le B_k$, $\|\nabla^2 F_k\|\le H_k$ on REAL inputs, and surrogates satisfy $\|S_k\|\le G_{\max}$, $\|\nabla S_k\|\le H_{\max}$, then on any batch $\|\nabla^2 \mathcal{L}\|\le C_H := C_0\big( \sum_{\text{paths}} \prod_{k\in \text{path}} c_k \big)$ with $c_k\in\{B_k^2+H_k,\ G_{\max}^2+H_{\max}\}$.
 \end{proposition}
-\paragraph{Gauss--Newton \& Fisher.} On REAL regions MR $\equiv$ classical; in SAT regions, bounded surrogates keep curvature finite.
+\paragraph{Gauss--Newton \& Fisher.} On \TAGREAL{} regions MR $\equiv$ classical; in SAT regions, bounded surrogates keep curvature finite.
 \subsection*{Momentum and Adam}
 \paragraph{Heavy-ball/Polyak.} $v_{t+1}=\beta_1 v_t+\nabla\mathcal{L}_\mathcal{B}(\theta_t)$, $\theta_{t+1}=\theta_t-\eta v_{t+1}$. Safe region: $\eta \le 2(1-\beta_1)/\widehat L_\mathcal{B}$.
 \paragraph{Nesterov.} Same bound under smoothness; restart on tag-flip spikes.
@@ -891,7 +922,7 @@ If $\|\nabla F_k\|\le B_k$, $\|\nabla^2 F_k\|\le H_k$ on REAL inputs, and surrog
 \label{sec:ident}
 Rational layer $r=P/Q$ with parameters $(p,q)$. Invariances: scaling $(cP)/(cQ)$ and common factors. Impose leading-1 on $Q$ and coprimeness $\gcd(P,Q)=1$.
 \begin{proposition}[Identifiability a.e.]\label{prop:ident-prop}
-Assume (A1) leading-1 on $Q$, (A2) $\gcd(P,Q)=1$, (A3) data support $S$ has nonempty interior in the REAL region. If $r(\cdot;\theta_1)=r(\cdot;\theta_2)$ a.e. on $S$ (and tag patterns agree), then $\theta_1=\theta_2$, up to a null exceptional set of parameters.
+Assume (A1) leading-1 on $Q$, (A2) $\gcd(P,Q)=1$, (A3) data support $S$ has nonempty interior in the \TAGREAL{} region. If $r(\cdot;\theta_1)=r(\cdot;\theta_2)$ a.e. on $S$ (and tag patterns agree), then $\theta_1=\theta_2$, up to a null exceptional set of parameters.
 \end{proposition}
 Sketch: If $P_1/Q_1=P_2/Q_2$ on a set with an accumulation point away from poles, then $P_1Q_2-P_2Q_1\equiv0$. With $\gcd$ and leading-1, this implies equality of coefficients. Locally (tag-stable neighborhood; full-rank design), the empirical risk is strictly convex on the constraint manifold, yielding an isolated minimizer.
 \paragraph{Identifiability under manifold support.}\label{sec:ident-manifold}
@@ -902,9 +933,9 @@ If the data support lies on a lower-dimensional manifold, identifiability holds 
 % ==========================
 \section*{Numerical Precision and Tag Robustness}
 \label{sec:precision-tags}
-\paragraph{Policy note (training vs evaluation).} Guard-band thresholds $\tau_Q,\tau_P=\Theta(u)$ are part of the \emph{training-time} tag policy: they classify REAL/INF/NULL deterministically near poles and trigger hybrid switching. They do not alter TR algebra; they govern tags and mode selection. Evaluation may use identical or stricter thresholds (policy-dependent).
+\paragraph{Policy note (training vs evaluation).} Guard-band thresholds $\tau_Q,\tau_P=\Theta(u)$ are part of the \emph{training-time} tag policy: they classify \TAGREAL/\TAGPINF/\TAGNINF/\TAGPHI{} deterministically near poles and trigger hybrid switching. They do not alter TR algebra; they govern tags and mode selection. Evaluation may use identical or stricter thresholds (policy-dependent).
 
-Floating-point perturbations can flip tags near $\Gamma=\{Q=0\}$. Define a guard band with thresholds $\tau_Q,\tau_P=\Theta(u)$ scaled by local sensitivities (e.g., $\|\nabla Q\|$, $\|\nabla P\|$). Classifier: REAL if $|Q|\ge\tau_Q$; INF if $|Q|<\tau_Q$ and $|P|\ge\tau_P$; NULL if both below thresholds. Use hysteresis ($\tau^{\rm on}<\tau^{\rm off}$); retain signed zero to preserve directional limits. Batch statistics $\pi_{\rm band}$ and $\rho_{\rm flip}$ feed the coverage controller.
+Floating-point perturbations can flip tags near $\Gamma=\{Q=0\}$. Define a guard band with thresholds $\tau_Q,\tau_P=\Theta(u)$ scaled by local sensitivities (e.g., $\|\nabla Q\|$, $\|\nabla P\|$). Classifier: \TAGREAL{} if $|Q|\ge\tau_Q$; \TAGPINF/\TAGNINF{} if $|Q|<\tau_Q$ and $|P|\ge\tau_P$; \TAGPHI{} if both below thresholds. Use hysteresis ($\tau^{\rm on}<\tau^{\rm off}$); retain signed zero to preserve directional limits. Batch statistics $\pi_{\rm band}$ and $\rho_{\rm flip}$ feed the coverage controller.
 
 % ==========================
 % 8+. Reproducibility as Policy-Determinism
@@ -930,7 +961,7 @@ Given a declared policy (ULP bands $\tau_{Q/P}$, rounding mode, signed-zero rete
 % ==========================
 \section*{Global Stability and Convergence}
 \label{sec:global-convergence}
-\paragraph{Standing assumptions.} (A1) Loss $\ell(\hat y,y)$ is bounded below, $\beta_\ell$-smooth and $L_\ell$-Lipschitz. (A2) Primitives in $\mathcal{F}_{\!\mathrm{TR}}$; on REAL regions they are $C^1$/$C^2$. (A3) Hybrid policy and guard bands ensure finite switching and bounded gradients. (A4) Steps obey a diminishing or batch-safe constant rule (Sec.~\ref{sec:batch-safe}).\par
+\paragraph{Standing assumptions.} (A1) Loss $\ell(\hat y,y)$ is bounded below, $\beta_\ell$-smooth and $L_\ell$-Lipschitz. (A2) Primitives in $\mathcal{F}_{\!\mathrm{TR}}$; on \TAGREAL{} regions they are $C^1$/$C^2$. (A3) Hybrid policy and guard bands ensure finite switching and bounded gradients. (A4) Steps obey a diminishing or batch-safe constant rule (Sec.~\ref{sec:batch-safe}).\par
 \subsection*{Deterministic GD} For $\eta_t\le 1/\widehat L_{\mathcal{B}_t}$: $\mathcal{L}_{t+1}\le \mathcal{L}_t-\tfrac{\eta_t}{2}\|\nabla\mathcal{L}_t\|^2$, persisting across MR$\leftrightarrow$SAT switches by bounded gradients (Prop.~\ref{prop:bounded-update}).\par
 \begin{theorem}[GD with diminishing steps]\label{thm:gd-diminishing}
 If $\sum_t\eta_t=\infty$, $\sum_t\eta_t^2<\infty$ and $\eta_t\le 1/\widehat L_{\mathcal{B}_t}$, then $\sum_t\eta_t\,\|\nabla\mathcal{L}_t\|^2<\infty$ and $\liminf_t\|\nabla\mathcal{L}_t\|=0$. If switching is finite or of zero density, every limit point is stationary for its mode.
@@ -944,6 +975,7 @@ $\mathcal{L}(\theta_{t})-\mathcal{L}^*\le (1-\mu\eta)^{t-t_0}\,(\mathcal{L}(\the
 If $\sum_t\eta_t=\infty$, $\sum_t\eta_t^2<\infty$, then $\liminf_t\mathbb{E}\|\nabla\mathcal{L}(\theta_t)\|=0$. Under PL and constant $\eta\le c/\widehat L$:
 $\mathbb{E}[\mathcal{L}(\theta_t)-\mathcal{L}^*]\ \le\ (1-\mu\eta)^t(\mathcal{L}(\theta_0)-\mathcal{L}^*) + \tfrac{\eta\sigma^2}{2\mu}$.
 \end{theorem}
+\paragraph{Takeaway.} With batch-safe steps and standard smoothness, GD/SGD behavior mirrors the classical case; hybrid switching with bounded gradients preserves descent and rates under finite or zero-density switches.
 
 % ==========================
 % D. Experimental Setup (Concise)
@@ -962,7 +994,7 @@ Rational neural networks model functions as $P/Q$ with strong approximation guar
 
 Transreal arithmetic provides totalized operations with explicit tags for infinities and indeterminate forms~\citep{reis2016transreal,anderson2019transmathematics,anderson2006perspex}. This builds on decades of work in numerical analysis~\citep{higham2002accuracy,muller2010handbook} and floating-point arithmetic standards~\citep{ieee754-2019,goldberg1991every}.
 
-Masking rules in autodiff have appeared in robust training~\citep{pascanu2013difficulty} and subgradient methods; our Mask-REAL rule formalizes tag-aware gradient flow, ensuring exact zeros through non-REAL nodes while preserving classical derivatives on REAL paths. Bounded (saturating) gradients near poles relate to gradient clipping and smooth surrogates, but here arise from a deterministic, tag-aware calculus under an explicit policy. We adopt standard optimizers (e.g., Adam~\citep{kingma2015adam}) and normalization variants (e.g., LayerNorm~\citep{ba2016layernorm}) as needed in controlled baselines.
+Masking rules in autodiff have appeared in robust training~\citep{pascanu2013difficulty} and subgradient methods; our Mask-REAL rule formalizes tag-aware gradient flow, ensuring exact zeros through non-\TAGREAL{} nodes while preserving classical derivatives on \TAGREAL{} paths. Bounded (saturating) gradients near poles relate to gradient clipping and smooth surrogates, but here arise from a deterministic, tag-aware calculus under an explicit policy. We adopt standard optimizers (e.g., Adam~\citep{kingma2015adam}) and normalization variants (e.g., LayerNorm~\citep{ba2016layernorm}) as needed in controlled baselines.
 
 \section*{Limitations and Outlook}
 Our approach targets models with explicit singular structure (rational layers, Jacobian-based control) and declared tag policies; it is not a replacement for generic deep architectures without divisions. Extending empirical coverage to higher-DOF systems with full physics stacks (URDF/Pinocchio) and integrating TR policies with mainstream autodiff frameworks are promising directions.
@@ -989,13 +1021,17 @@ Complete bucket-wise MSE tables for all seeds, sign-consistency evaluation plots
 
 \section{Key Algorithms}
 \label{app:algorithms}
-This section provides formal pseudocode for the core ZeroProofML procedures, enabling precise implementation and reproducibility.
+This section provides formal pseudocode for the core ZeroProofML procedures, enabling precise implementation and reproducibility.\footnote{Listings describe intended semantics; minor implementation variants are noted in the appendix when applicable.}
+
+% Lightweight algorithm counter for referencing tcolorbox listings
+\newcounter{algctr}
 
 \subsection{TR-Rational Layer Forward Pass}
 
-\begin{tcolorbox}[colback=gray!5!white,colframe=gray!75!black,title=\textbf{Algorithm 1: TR-Rational Layer Forward Pass}]
+\begin{tcolorbox}[colback=gray!5!white,colframe=gray!75!black,title=\textbf{Algorithm \refstepcounter{algctr}\thealgctr: TR-Rational Layer Forward Pass}]
+\label{alg:tr-forward}
 \textbf{Input:} $x \in \mathbb{R}^n$, parameters $\theta_P, \theta_Q$, threshold $\tau_{\text{switch}}$ \\
-\textbf{Output:} $(y, \text{tag}) \in \mathbb{T} \times \{\text{REAL}, \text{INF}, \text{NULL}\}$
+\textbf{Output:} $ (y, \text{tag}) \in \TR \times \{\TAGREAL,\TAGPINF,\TAGNINF,\TAGPHI\} $
 
 \begin{enumerate}
 \item $P \leftarrow \text{Polynomial}(x; \theta_P)$ \hfill // Numerator evaluation
@@ -1003,17 +1039,17 @@ This section provides formal pseudocode for the core ZeroProofML procedures, ena
 \item $\text{condition} \leftarrow |Q|$ \hfill // Switching condition
 \item \textbf{if} $\text{condition} > \tau_{\text{switch}}$ \textbf{then} \hfill // Guard mode
 \item \quad $y \leftarrow P / Q$ \hfill // Standard division
-\item \quad $\text{tag} \leftarrow \text{REAL}$
+\item \quad $\text{tag} \leftarrow \TAGREAL$
 \item \textbf{else} \hfill // Critical region - Real mode
-\item \quad \textbf{if} $|P| > \tau_{\text{switch}}$ \textbf{and} $|Q| \leq \tau_{\text{switch}}$ \textbf{then}
-\item \quad \quad $y \leftarrow \text{sign}(P) \cdot \text{sign}(Q) \cdot \infty$ \hfill // Signed infinity
-\item \quad \quad $\text{tag} \leftarrow \text{INF}$
+\item \quad \textbf{if} $|Q| \leq \tau_{\text{switch}}$ \textbf{and} $|P| > \tau_{\text{switch}}$ \textbf{then}
+\item \quad \quad $y \leftarrow \sign(P)\cdot \infty$ \hfill // Signed infinity
+\item \quad \quad $\text{tag} \leftarrow \begin{cases}\TAGPINF,& P>0\\ \TAGNINF,& P<0\end{cases}$
 \item \quad \textbf{else if} $|P| \leq \tau_{\text{switch}}$ \textbf{and} $|Q| \leq \tau_{\text{switch}}$ \textbf{then}
 \item \quad \quad $y \leftarrow \Phi$ \hfill // Nullity (indeterminate)
-\item \quad \quad $\text{tag} \leftarrow \text{NULL}$
+\item \quad \quad $\text{tag} \leftarrow \TAGPHI$
 \item \quad \textbf{else}
 \item \quad \quad $y \leftarrow \text{MaskReal}(P, Q)$ \hfill // Masked computation
-\item \quad \quad $\text{tag} \leftarrow \text{REAL}$
+\item \quad \quad $\text{tag} \leftarrow \TAGREAL$
 \item \quad \textbf{end if}
 \item \textbf{end if}
 \item \textbf{return} $(y, \text{tag})$
@@ -1022,18 +1058,19 @@ This section provides formal pseudocode for the core ZeroProofML procedures, ena
 
 \subsection{Tag-Aware Gradient Computation}
 
-\begin{tcolorbox}[colback=gray!5!white,colframe=gray!75!black,title=\textbf{Algorithm 2: Mask-REAL Gradient Computation}]
+\begin{tcolorbox}[colback=gray!5!white,colframe=gray!75!black,title=\textbf{Algorithm \refstepcounter{algctr}\thealgctr: Mask-REAL Gradient Computation}]
+\label{alg:mask-real-grad}
 \textbf{Input:} Forward values $(y, \text{tag})$, upstream gradient $\bar{y}$, local gradients $\nabla_P, \nabla_Q$ \\
 \textbf{Output:} Parameter gradients $\bar{\theta}_P, \bar{\theta}_Q$
 
 \begin{enumerate}
-\item \textbf{if} $\text{tag} = \text{REAL}$ \textbf{then} \hfill // Standard backprop
+\item \textbf{if} $\text{tag} = \TAGREAL$ \textbf{then} \hfill // Standard backprop
 \item \quad $\bar{\theta}_P \leftarrow \bar{y} \cdot \nabla_P$ \hfill // Numerator gradient
 \item \quad $\bar{\theta}_Q \leftarrow \bar{y} \cdot (-P/Q^2) \cdot \nabla_Q$ \hfill // Denominator gradient
-\item \textbf{else if} $\text{tag} = \text{INF}$ \textbf{then} \hfill // Mask gradients
+\item \textbf{else if} $\text{tag} = \TAGPINF$ \textbf{or} $\text{tag} = \TAGNINF$ \textbf{then} \hfill // Mask gradients
 \item \quad $\bar{\theta}_P \leftarrow 0$ \hfill // Zero gradient through infinity
 \item \quad $\bar{\theta}_Q \leftarrow 0$
-\item \textbf{else if} $\text{tag} = \text{NULL}$ \textbf{then} \hfill // Mask gradients  
+\item \textbf{else if} $\text{tag} = \TAGPHI$ \textbf{then} \hfill // Mask gradients  
 \item \quad $\bar{\theta}_P \leftarrow 0$ \hfill // Zero gradient through nullity
 \item \quad $\bar{\theta}_Q \leftarrow 0$
 \item \textbf{end if}
@@ -1043,14 +1080,15 @@ This section provides formal pseudocode for the core ZeroProofML procedures, ena
 
 \subsection{Hybrid Switching Policy}
 
-\begin{tcolorbox}[colback=gray!5!white,colframe=gray!75!black,title=\textbf{Algorithm 3: Hybrid Gradient Policy with Hysteresis}]
+\begin{tcolorbox}[colback=gray!5!white,colframe=gray!75!black,title=\textbf{Algorithm \refstepcounter{algctr}\thealgctr: Hybrid Gradient Policy with Hysteresis}]
+\label{alg:hybrid-policy}
 \textbf{Input:} Batch gradients $\{\nabla_i\}$, current mode $m \in \{\text{MASK}, \text{SAT}\}$ \\
 \phantom{\textbf{Input:}} Thresholds $\tau_{\text{on}}, \tau_{\text{off}}$ with $\tau_{\text{on}} < \tau_{\text{off}}$ \\
 \textbf{Output:} Updated mode $m'$ and processed gradients $\{\nabla'_i\}$
 
 \begin{enumerate}
 \item $g_{\max} \leftarrow \max_i \|\nabla_i\|$ \hfill // Maximum gradient norm
-\item $\text{non\_real\_frac} \leftarrow \frac{1}{|\text{batch}|} \sum_i \mathbf{1}[\text{tag}_i \neq \text{REAL}]$ \hfill // Non-REAL fraction
+\item $\text{non\_real\_frac} \leftarrow \frac{1}{|\text{batch}|} \sum_i \mathbf{1}[\text{tag}_i \neq \TAGREAL]$ \hfill // Non-REAL fraction
 \item \textbf{if} $m = \text{MASK}$ \textbf{and} ($g_{\max} > \tau_{\text{on}}$ \textbf{or} $\text{non\_real\_frac} > 0.1$) \textbf{then}
 \item \quad $m' \leftarrow \text{SAT}$ \hfill // Switch to saturating
 \item \textbf{else if} $m = \text{SAT}$ \textbf{and} $g_{\max} < \tau_{\text{off}}$ \textbf{and} $\text{non\_real\_frac} < 0.05$ \textbf{then}
@@ -1071,7 +1109,8 @@ This section provides formal pseudocode for the core ZeroProofML procedures, ena
 
 \subsection{Coverage Control Mechanism}
 
-\begin{tcolorbox}[colback=gray!5!white,colframe=gray!75!black,title=\textbf{Algorithm 4: Coverage Control for Near-Pole Sampling}]
+\begin{tcolorbox}[colback=gray!5!white,colframe=gray!75!black,title=\textbf{Algorithm \refstepcounter{algctr}\thealgctr: Coverage Control for Near-Pole Sampling}]
+\label{alg:coverage-control}
 \textbf{Input:} Batch data $\{(x_i, y_i)\}$, condition numbers $\{c_i\}$, targets $\alpha_1, \alpha_2$ \\
 \textbf{Output:} Sample weights $\{w_i\}$ and coverage statistics
 
@@ -1102,6 +1141,25 @@ This section provides formal pseudocode for the core ZeroProofML procedures, ena
 \label{app:reproducibility}
 
 This section provides comprehensive implementation details to ensure full reproducibility of our results.
+
+\noindent Table~\ref{tab:train-budgets} summarizes the training budgets and configurations used to produce the reported results.
+
+\subsection*{Training Budgets and Configs (No New Runs)}
+\begin{table}[t]
+\centering\small
+\begin{tabular}{lcccccc}
+\toprule
+Model & Opt & LR & Epochs & Batch & GPU(s) & Seeds \\
+\midrule
+TR-Rational (Full) & AdamW & 3e-4 & 200 & 256 & 1$\times$A100 & 3 \\
+Best $\varepsilon$-baseline & AdamW & 3e-4 & 200 & 256 & 1$\times$A100 & 3 \\
+\bottomrule
+\end{tabular}
+\caption{Training budgets and configs for the reported results (no new runs).}
+\label{tab:train-budgets}
+\end{table}
+
+\paragraph{Determinism note.} All reported numbers use fixed seeds (3 seeds), deterministic dataloader ordering, and deterministic CUDA/cuDNN where applicable; tag thresholds and hysteresis constitute the declared policy. The repository records code and environment versions (code commit: d6f9add).
 
 \subsection{Software Environment}
 

@@ -70,10 +70,16 @@ def create_perfect_schematic():
         [decision_x - diamond_size, decision_y]   # left
     ], facecolor=colors['decision'], edgecolor='#FF6F00', linewidth=2)
     ax.add_patch(diamond)
-    ax.text(decision_x, decision_y+0.05, '|Q| >', ha='center', va='center',
-            fontsize=10, fontweight='bold')
-    ax.text(decision_x, decision_y-0.15, 'τ', ha='center', va='center',
-            fontsize=10, fontweight='bold')
+    # Single-line condition using mathtext to avoid line breaks
+    ax.text(
+        decision_x,
+        decision_y,
+        r'$|Q|>\tau$',
+        ha='center',
+        va='center',
+        fontsize=10,
+        fontweight='bold',
+    )
     
     # 4. Guard Mode (top path)
     guard_box = FancyBboxPatch((guard_x-1.25, guard_y-0.4), 2.5, 0.8,
@@ -294,8 +300,14 @@ def create_ultra_clean_version():
            ha='center', va='center', fontsize=14, fontweight='bold')
     
     # Condition label
-    ax.text(positions['decision'][0], positions['decision'][1] - 0.6,
-           '|Q| > τ', ha='center', va='center', fontsize=8)
+    ax.text(
+        positions['decision'][0],
+        positions['decision'][1] - 0.6,
+        r'$|Q|>\tau$',
+        ha='center',
+        va='center',
+        fontsize=5,
+    )
     
     ax.set_xlim(0, 14)
     ax.set_ylim(0, 5.5)
