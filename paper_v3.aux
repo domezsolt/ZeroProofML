@@ -111,13 +111,12 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Critical Design Choices and Their Rationale}{19}{subsection.7.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Limitations and Future Work}{20}{subsection.7.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {7.4}Practical Implementation Insights}{21}{subsection.7.4}\protected@file@percent }
-\citation{boulle2020rational}
 \citation{telgarsky2017neural}
 \citation{boulle2020rational}
 \citation{wang2021understanding,krishnapriyan2021characterizing}
 \citation{jagtap2020conservative}
-\citation{sitzmann2020implicit}
 \citation{rahaman2019spectral}
+\citation{sitzmann2020implicit}
 \@writefile{toc}{\contentsline {section}{\numberline {8}Related Work Revisited}{22}{section.8}\protected@file@percent }
 \citation{higham2002accuracy,trefethen1997numerical}
 \@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{23}{section.9}\protected@file@percent }
@@ -157,7 +156,7 @@
 \@writefile{toc}{\contentsline {section}{\numberline {A}Transreal Arithmetic Details}{26}{appendix.A}\protected@file@percent }
 \newlabel{app:transreal}{{A}{26}{}{appendix.A}{}}
 \newlabel{sec:prelim}{{A}{26}{Preliminaries}{section*.15}{}}
-\newlabel{sec:positioning}{{A}{26}{Positioning \& Practicality}{section*.16}{}}
+\newlabel{sec:positioning}{{A}{27}{Positioning \& Practicality}{section*.16}{}}
 \newlabel{sec:totality}{{A}{27}{Scope of Totality}{section*.17}{}}
 \newlabel{def:FTR}{{4}{27}{Admissible class \(\mathcal {F}_{\!\mathrm {TR}}\)}{theorem.4}{}}
 \newlabel{prop:totality}{{5}{27}{Totality within \(\mathcal {F}_{\!\mathrm {TR}}\)}{theorem.5}{}}
@@ -168,16 +167,16 @@
 \@writefile{toc}{\contentsline {paragraph}{Signed zeros.}{27}{theorem.7}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Export.}{27}{theorem.7}\protected@file@percent }
 \newlabel{sec:autodiff}{{A}{27}{Autodiff with Tags: Mask-REAL}{section*.20}{}}
-\newlabel{def:mask-real}{{8}{27}{Mask-REAL gradient}{theorem.8}{}}
-\newlabel{lem:real}{{9}{27}{REAL-path equivalence}{theorem.9}{}}
-\newlabel{lem:chain}{{10}{27}{Chain rule with tag gating}{theorem.10}{}}
+\newlabel{def:mask-real}{{8}{28}{Mask-REAL gradient}{theorem.8}{}}
+\newlabel{lem:real}{{9}{28}{REAL-path equivalence}{theorem.9}{}}
+\newlabel{lem:chain}{{10}{28}{Chain rule with tag gating}{theorem.10}{}}
 \newlabel{prop:bounded-update}{{11}{28}{Bounded update under saturation}{theorem.11}{}}
 \newlabel{rem:sat}{{12}{28}{Saturation}{theorem.12}{}}
 \newlabel{sec:hybrid}{{A}{28}{Hybrid Switching: Mask-REAL $\leftrightarrow $ Saturated}{section*.21}{}}
 \@writefile{toc}{\contentsline {paragraph}{Aggregator choice.}{28}{section*.21}\protected@file@percent }
 \newlabel{sec:finite-switching}{{A}{28}{Sufficient Conditions for Finite Switching}{section*.22}{}}
 \newlabel{sec:coverage}{{A}{28}{Coverage Controller}{section*.23}{}}
-\@writefile{toc}{\contentsline {paragraph}{Distance estimator.}{28}{section*.23}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Distance estimator.}{29}{section*.23}\protected@file@percent }
 \newlabel{sec:batch-safe}{{A}{29}{Batch-Safe Learning Rate}{section*.24}{}}
 \newlabel{sec:second-order-momentum}{{A}{29}{Second-Order Derivatives and Momentum Stability}{section*.25}{}}
 \@writefile{toc}{\contentsline {paragraph}{Assumptions.}{29}{section*.25}\protected@file@percent }
@@ -190,8 +189,8 @@
 \@writefile{toc}{\contentsline {paragraph}{Adam/RMSProp.}{29}{section*.26}\protected@file@percent }
 \newlabel{sec:ident}{{A}{29}{Identifiability}{section*.27}{}}
 \newlabel{prop:ident-prop}{{18}{29}{Identifiability a.e}{theorem.18}{}}
-\newlabel{sec:ident-manifold}{{A}{29}{Identifiability}{theorem.18}{}}
-\@writefile{toc}{\contentsline {paragraph}{Identifiability under manifold support.}{29}{theorem.18}\protected@file@percent }
+\newlabel{sec:ident-manifold}{{A}{30}{Identifiability}{theorem.18}{}}
+\@writefile{toc}{\contentsline {paragraph}{Identifiability under manifold support.}{30}{theorem.18}\protected@file@percent }
 \newlabel{sec:precision-tags}{{A}{30}{Numerical Precision and Tag Robustness}{section*.28}{}}
 \@writefile{toc}{\contentsline {paragraph}{Policy note (training vs evaluation).}{30}{section*.28}\protected@file@percent }
 \newlabel{sec:policy-determinism}{{A}{30}{Reproducibility as Policy-Determinism}{section*.29}{}}
@@ -204,7 +203,6 @@
 \@writefile{toc}{\contentsline {paragraph}{Layer contracts.}{30}{section*.30}\protected@file@percent }
 \newlabel{sec:global-convergence}{{A}{30}{Global Stability and Convergence}{section*.31}{}}
 \@writefile{toc}{\contentsline {paragraph}{Standing assumptions.}{30}{section*.31}\protected@file@percent }
-\newlabel{thm:gd-diminishing}{{19}{30}{GD with diminishing steps}{theorem.19}{}}
 \citation{boulle2020rational,telgarsky2017neural}
 \citation{montanher2020pade}
 \citation{ioffe2015batchnorm}
@@ -214,6 +212,7 @@
 \citation{pascanu2013difficulty}
 \citation{kingma2015adam}
 \citation{ba2016layernorm}
+\newlabel{thm:gd-diminishing}{{19}{31}{GD with diminishing steps}{theorem.19}{}}
 \newlabel{thm:pl}{{20}{31}{Linear rate under PL}{theorem.20}{}}
 \newlabel{thm:sgd}{{21}{31}{SGD convergence}{theorem.21}{}}
 \@writefile{toc}{\contentsline {paragraph}{Takeaway.}{31}{theorem.21}\protected@file@percent }
@@ -228,26 +227,26 @@
 \newlabel{app:implementation}{{B}{32}{}{appendix.B}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {C}Additional Experimental Results}{32}{appendix.C}\protected@file@percent }
 \newlabel{app:results}{{C}{32}{}{appendix.C}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {D}Key Algorithms}{32}{appendix.D}\protected@file@percent }
-\newlabel{app:algorithms}{{D}{32}{}{appendix.D}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {D.1}TR-Rational Layer Forward Pass}{33}{subsection.D.1}\protected@file@percent }
-\newlabel{alg:tr-forward}{{D.1}{33}{}{algctr.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {D.2}Tag-Aware Gradient Computation}{34}{subsection.D.2}\protected@file@percent }
-\newlabel{alg:mask-real-grad}{{D.2}{34}{}{algctr.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {D.3}Hybrid Switching Policy}{35}{subsection.D.3}\protected@file@percent }
-\newlabel{alg:hybrid-policy}{{D.3}{35}{}{algctr.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {D.4}Coverage Control Mechanism}{36}{subsection.D.4}\protected@file@percent }
-\newlabel{alg:coverage-control}{{D.4}{36}{}{algctr.4}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {E}Reproducibility Information}{36}{appendix.E}\protected@file@percent }
-\newlabel{app:reproducibility}{{E}{36}{}{appendix.E}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Training budgets and configs for the reported results (no new runs).}}{37}{table.caption.41}\protected@file@percent }
-\newlabel{tab:train-budgets}{{8}{37}{Training budgets and configs for the reported results (no new runs)}{table.caption.41}{}}
-\@writefile{toc}{\contentsline {paragraph}{Determinism note.}{37}{table.caption.41}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.1}Software Environment}{37}{subsection.E.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.2}Installation and Setup}{37}{subsection.E.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.3}Dataset Generation}{38}{subsection.E.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.4}Experiment Reproduction}{39}{subsection.E.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.5}Key Hyperparameters}{39}{subsection.E.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.6}Result Validation}{40}{subsection.E.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.7}Troubleshooting}{40}{subsection.E.7}\protected@file@percent }
-\gdef \@abspage@last{41}
+\@writefile{toc}{\contentsline {section}{\numberline {D}Key Algorithms}{33}{appendix.D}\protected@file@percent }
+\newlabel{app:algorithms}{{D}{33}{}{appendix.D}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.1}TR-Rational Layer Forward Pass}{34}{subsection.D.1}\protected@file@percent }
+\newlabel{alg:tr-forward}{{D.1}{34}{}{algctr.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.2}Tag-Aware Gradient Computation}{35}{subsection.D.2}\protected@file@percent }
+\newlabel{alg:mask-real-grad}{{D.2}{35}{}{algctr.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.3}Hybrid Switching Policy}{36}{subsection.D.3}\protected@file@percent }
+\newlabel{alg:hybrid-policy}{{D.3}{36}{}{algctr.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.4}Coverage Control Mechanism}{37}{subsection.D.4}\protected@file@percent }
+\newlabel{alg:coverage-control}{{D.4}{37}{}{algctr.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {E}Reproducibility Information}{37}{appendix.E}\protected@file@percent }
+\newlabel{app:reproducibility}{{E}{37}{}{appendix.E}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Training budgets and configs for the reported results (no new runs).}}{38}{table.caption.41}\protected@file@percent }
+\newlabel{tab:train-budgets}{{8}{38}{Training budgets and configs for the reported results (no new runs)}{table.caption.41}{}}
+\@writefile{toc}{\contentsline {paragraph}{Determinism note.}{38}{table.caption.41}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.1}Software Environment}{38}{subsection.E.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.2}Installation and Setup}{38}{subsection.E.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.3}Dataset Generation}{39}{subsection.E.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.4}Experiment Reproduction}{40}{subsection.E.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.5}Key Hyperparameters}{40}{subsection.E.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.6}Result Validation}{41}{subsection.E.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {E.7}Troubleshooting}{41}{subsection.E.7}\protected@file@percent }
+\gdef \@abspage@last{42}

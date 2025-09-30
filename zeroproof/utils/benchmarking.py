@@ -267,11 +267,15 @@ class TRBenchmark:
             output_file: Save plot to file if provided
         """
         if not MATPLOTLIB_AVAILABLE or not NUMPY_AVAILABLE:
-            print("Plotting requires matplotlib and numpy. Install with: pip install matplotlib numpy")
+            import logging
+            logging.getLogger(__name__).warning(
+                "Plotting requires matplotlib and numpy. Install with: pip install matplotlib numpy"
+            )
             return
             
         if not self._results:
-            print("No benchmark results to plot")
+            import logging
+            logging.getLogger(__name__).info("No benchmark results to plot")
             return
         
         # Select results

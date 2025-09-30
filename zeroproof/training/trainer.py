@@ -31,6 +31,9 @@ class TrainingConfig:
     target_coverage: float = 0.95
     lambda_learning_rate: float = 0.01
     initial_lambda: float = 1.0
+    # Backward-compatibility alias used by some examples/tests
+    # This value mirrors initial_lambda if provided
+    lambda_rej: float = 1.0
     lambda_rej_min: float = 0.1  # Hard minimum rejection penalty
     adaptive_momentum: float = 0.9
     adaptive_warmup_steps: int = 100

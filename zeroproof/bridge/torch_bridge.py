@@ -288,7 +288,7 @@ if TORCH_AVAILABLE:
             raise NotImplementedError
         
         @staticmethod
-        def backward(ctx, grad_values: 'torch.Tensor', grad_tags: 'torch.Tensor'):
+        def backward(ctx, grad_values: 'torch.Tensor', _grad_tags: 'torch.Tensor'):
             """
             Backward pass with Mask-REAL rule.
             

@@ -128,12 +128,13 @@ class ChebyshevBasis:
     use linear transformation.
     """
     
-    def __init__(self, domain: tuple[float, float] = (-1.0, 1.0)):
+    def __init__(self, domain: tuple[float, float] = (-1.0, 1.0), degree: int | None = None):
         """
         Initialize Chebyshev basis.
         
         Args:
             domain: Input domain (a, b), will be mapped to [-1, 1]
+            degree: Optional degree hint for convenience; not required and not stored.
         """
         self.domain = domain
         self.a, self.b = domain

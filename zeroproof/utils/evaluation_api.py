@@ -10,11 +10,14 @@ from dataclasses import dataclass, asdict
 import json
 import time
 from pathlib import Path
+import logging
 
 from ..core import TRScalar, TRTag, real
 from ..autodiff import TRNode
 from .pole_metrics import PoleEvaluator, PoleMetrics
 from .pole_visualization import PoleVisualizer
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -298,29 +301,32 @@ class IntegratedEvaluator:
             json.dump(log_data, f, indent=2)
     
     def _print_summary(self, metrics: PoleMetrics) -> None:
-        """Print evaluation summary."""
-        print(f"\n{'='*60}")
-        print(f"Evaluation {self.evaluation_count} Summary")
-        print(f"{'='*60}")
+        """Log evaluation summary."""
+        sep = "=" * 60
+        logger.info("\n%s", sep)
+        logger.info("Evaluation %d Summary", self.evaluation_count)
+        logger.info("%s", sep)
         
-        print(f"\nPole Localization:")
-        print(f"  PLE: {metrics.ple:.4f}")
-        print(f"  Predicted poles: {metrics.predicted_pole_count}")
-        print(f"  True poles: {metrics.actual_pole_count}")
-        print(f"  Precision: {metrics.true_positive_poles / (metrics.true_positive_poles + metrics.false_positive_poles + 1e-10):.2%}")
-        print(f"  Recall: {metrics.true_positive_poles / (metrics.true_positive_poles + metrics.false_negative_poles + 1e-10):.2%}")
+        logger.info("\nPole Localization:")
+        logger.info("  PLE: %.4f", metrics.ple)
+        logger.info("  Predicted poles: %s", metrics.predicted_pole_count)
+        logger.info("  True poles: %s", metrics.actual_pole_count)
+        precision = metrics.true_positive_poles / (metrics.true_positive_poles + metrics.false_positive_poles + 1e-10)
+        recall = metrics.true_positive_poles / (metrics.true_positive_poles + metrics.false_negative_poles + 1e-10)
+        logger.info("  Precision: %.2f%%", precision * 100)
+        logger.info("  Recall: %.2f%%", recall * 100)
         
-        print(f"\nBehavior Metrics:")
-        print(f"  Sign consistency: {metrics.sign_consistency:.2%}")
-        print(f"  Asymptotic correlation: {metrics.slope_correlation:.3f}")
-        print(f"  Residual error: {metrics.residual_error:.4f}")
+        logger.info("\nBehavior Metrics:")
+        logger.info("  Sign consistency: %.2f%%", metrics.sign_consistency * 100)
+        logger.info("  Asymptotic correlation: %.3f", metrics.slope_correlation)
+        logger.info("  Residual error: %.4f", metrics.residual_error)
         
-        print(f"\nCoverage:")
-        print(f"  Near poles: {metrics.coverage_near:.2%}")
-        print(f"  Mid-range: {metrics.coverage_mid:.2%}")
-        print(f"  Far: {metrics.coverage_far:.2%}")
+        logger.info("\nCoverage:")
+        logger.info("  Near poles: %.2f%%", metrics.coverage_near * 100)
+        logger.info("  Mid-range: %.2f%%", metrics.coverage_mid * 100)
+        logger.info("  Far: %.2f%%", metrics.coverage_far * 100)
         
-        print(f"{'='*60}\n")
+        logger.info("%s\n", sep)
     
     def get_summary_statistics(self) -> Dict[str, Any]:
         """
@@ -397,7 +403,7 @@ class IntegratedEvaluator:
                     'summary': self.get_summary_statistics()
                 }, f, indent=2)
         
-        print(f"Metrics exported to {output_path}")
+        logger.info("Metrics exported to %s", output_path)
 
 
 def create_evaluator(true_poles: List[float],
@@ -483,7 +489,7 @@ class TrainingLogger:
         
         # Evaluate if needed
         if epoch % self.eval_frequency == 0:
-            print(f"\nEvaluating at epoch {epoch}...")
+            logger.info("Evaluating at epoch %d...", epoch)
             metrics = self.evaluator.evaluate_model(model, self.eval_samples)
             
             # Add to training history
@@ -496,7 +502,7 @@ class TrainingLogger:
         Args:
             model: Final trained model
         """
-        print("\nFinal evaluation...")
+        logger.info("Final evaluation...")
         metrics = self.evaluator.evaluate_model(model, self.eval_samples)
         
         # Plot progress
@@ -509,8 +515,8 @@ class TrainingLogger:
         
         # Print summary
         summary = self.evaluator.get_summary_statistics()
-        print(f"\nTraining Summary:")
-        print(f"  Total epochs: {self.epoch}")
-        print(f"  PLE improvement: {summary['improvements'].get('ple_improvement', 0):.4f}")
-        print(f"  Best PLE: {summary['best_ple']:.4f}")
-        print(f"  Best near-pole coverage: {summary['best_near_coverage']:.2%}")
+        logger.info("Training Summary:")
+        logger.info("  Total epochs: %d", self.epoch)
+        logger.info("  PLE improvement: %.4f", summary['improvements'].get('ple_improvement', 0))
+        logger.info("  Best PLE: %.4f", summary['best_ple'])
+        logger.info("  Best near-pole coverage: %.2f%%", summary['best_near_coverage'] * 100)

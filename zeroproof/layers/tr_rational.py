@@ -28,8 +28,8 @@ class TRRational:
     """
     
     def __init__(self,
-                 d_p: int,
-                 d_q: int,
+                 d_p: Optional[int] = None,
+                 d_q: Optional[int] = None,
                  basis: Optional[Basis] = None,
                  shared_Q: bool = False,
                  lambda_rej: float = 0.0,
@@ -37,6 +37,10 @@ class TRRational:
                  l1_projection: Optional[float] = None,
                  adaptive_loss_policy=None,
                  projection_index: Optional[int] = None,
+                 # Backward-compatibility aliases
+                 degree_p: Optional[int] = None,
+                 degree_q: Optional[int] = None,
+                 lambda_reg: Optional[float] = None,
                  # Coprime surrogate regularizer
                  enable_coprime_regularizer: bool = False,
                  lambda_coprime: float = 0.0,
@@ -54,16 +58,30 @@ class TRRational:
             alpha_phi: L2 regularization coefficient for φ (denominator)
             l1_projection: Optional L1 bound for φ to ensure stability
             adaptive_loss_policy: Optional adaptive loss policy for automatic lambda adjustment
+            degree_p: Alias for d_p (for backward compatibility)
+            degree_q: Alias for d_q (for backward compatibility)
+            lambda_reg: Alias for alpha_phi (for backward compatibility)
         """
+        # Resolve backward-compatible aliases
+        if d_p is None and degree_p is not None:
+            d_p = degree_p
+        if d_q is None and degree_q is not None:
+            d_q = degree_q
+        if d_p is None or d_q is None:
+            raise TypeError("TRRational requires d_p and d_q (or degree_p and degree_q)")
+
         if d_q < 1:
             raise ValueError("Denominator degree must be at least 1")
         
-        self.d_p = d_p
-        self.d_q = d_q
+        self.d_p = int(d_p)
+        self.d_q = int(d_q)
         self.basis = basis or MonomialBasis()
         self.shared_Q = shared_Q
         self.lambda_rej = lambda_rej
-        self.alpha_phi = alpha_phi
+        # Prefer explicit alpha_phi; else accept lambda_reg alias if provided
+        self.alpha_phi = float(alpha_phi)
+        if lambda_reg is not None:
+            self.alpha_phi = float(lambda_reg)
         self.l1_projection = l1_projection
         self.adaptive_loss_policy = adaptive_loss_policy
         # If set, allows selecting a component from vector inputs

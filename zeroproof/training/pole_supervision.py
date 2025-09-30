@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
@@ -672,7 +671,7 @@ class HybridTeacher:
 
 def create_pole_teacher(pole_head: EnhancedPoleDetectionHead,
                        supervision_types: List[str] = None,
-                       target_accuracy: float = 0.6,
+                       _target_accuracy: float = 0.6,
                        **kwargs) -> HybridTeacher:
     """
     Factory function to create pole teacher.

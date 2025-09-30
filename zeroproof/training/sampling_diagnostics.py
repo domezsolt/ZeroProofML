@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
 import torch
-import torch.nn as nn
 from collections import defaultdict, deque
 import json
 import pickle

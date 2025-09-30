@@ -9,25 +9,19 @@ import numpy as np
 import json
 import os
 from typing import List, Dict, Any, Optional, Tuple, Union
+import logging
 
 from ..core import TRTag
 
 # Optional plotting dependencies
 try:
     import matplotlib.pyplot as plt
-    import matplotlib.colors as mcolors
-    from matplotlib.patches import Circle
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
     plt = None
 
-try:
-    import seaborn as sns
-    SEABORN_AVAILABLE = True
-except ImportError:
-    SEABORN_AVAILABLE = False
-    sns = None
+logger = logging.getLogger(__name__)
 
 
 class TrainingCurvePlotter:
@@ -71,7 +65,7 @@ class TrainingCurvePlotter:
             Matplotlib figure or None if matplotlib not available
         """
         if not MATPLOTLIB_AVAILABLE:
-            print("Warning: Matplotlib not available, skipping plot")
+            logger.warning("Matplotlib not available, skipping plot")
             return None
             
         if metrics is None:
@@ -114,7 +108,7 @@ class TrainingCurvePlotter:
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Training curves saved to {save_path}")
+            logger.info("Training curves saved to %s", save_path)
         
         return fig
 
@@ -128,7 +122,7 @@ class TrainingCurvePlotter:
         Expects training_history as a list of epoch dicts.
         """
         if not MATPLOTLIB_AVAILABLE:
-            print("Warning: Matplotlib not available, skipping plot")
+            logger.warning("Matplotlib not available, skipping plot")
             return None
 
         metrics_groups = [
@@ -166,7 +160,7 @@ class TrainingCurvePlotter:
         plt.tight_layout()
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Q/D/smin curves saved to {save_path}")
+            logger.info("Q/D/smin curves saved to %s", save_path)
         return fig
 
     def plot_curvature_fisher(self,
@@ -177,7 +171,7 @@ class TrainingCurvePlotter:
         Plot curvature_proxy, grad_norm_epoch, and fisher_trace over epochs.
         """
         if not MATPLOTLIB_AVAILABLE:
-            print("Warning: Matplotlib not available, skipping plot")
+            logger.warning("Matplotlib not available, skipping plot")
             return None
 
         metrics = ["curvature_proxy", "grad_norm_epoch", "fisher_trace"]
@@ -210,7 +204,7 @@ class TrainingCurvePlotter:
         plt.tight_layout()
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Curvature/Fisher curves saved to {save_path}")
+            logger.info("Curvature/Fisher curves saved to %s", save_path)
         return fig
     
     def plot_tag_distribution(self,
@@ -276,7 +270,7 @@ class TrainingCurvePlotter:
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Tag distribution plot saved to {save_path}")
+            logger.info("Tag distribution plot saved to %s", save_path)
         
         return fig
 
@@ -355,7 +349,7 @@ class PoleVisualizationPlotter:
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Pole heatmap saved to {save_path}")
+            logger.info("Pole heatmap saved to %s", save_path)
         
         return fig
     
@@ -471,7 +465,7 @@ class PoleVisualizationPlotter:
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Sign consistency plot saved to {save_path}")
+            logger.info("Sign consistency plot saved to %s", save_path)
         
         return fig
     
@@ -545,7 +539,7 @@ class PoleVisualizationPlotter:
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Anti-illusion metrics plot saved to {save_path}")
+            logger.info("Anti-illusion metrics plot saved to %s", save_path)
         
         return fig
 
@@ -607,7 +601,7 @@ class ResidualAnalysisPlotter:
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Residual histogram saved to {save_path}")
+            logger.info("Residual histogram saved to %s", save_path)
         
         return fig
     
@@ -658,7 +652,7 @@ class ResidualAnalysisPlotter:
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Residual vs Q plot saved to {save_path}")
+            logger.info("Residual vs Q plot saved to %s", save_path)
         
         return fig
 
@@ -726,7 +720,7 @@ class ComparisonPlotter:
         
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Method comparison plot saved to {save_path}")
+            logger.info("Method comparison plot saved to %s", save_path)
         
         return fig
     
@@ -756,10 +750,10 @@ def create_paper_ready_figures(results_dir: str,
         List of created figure paths
     """
     if not MATPLOTLIB_AVAILABLE:
-        print("Warning: Matplotlib not available, skipping paper figures")
+        logger.warning("Matplotlib not available, skipping paper figures")
         return []
     
-    print("=== Creating Paper-Ready Figures ===")
+    logger.info("Creating Paper-Ready Figures")
     
     os.makedirs(output_dir, exist_ok=True)
     figure_paths = []
@@ -882,11 +876,11 @@ def create_paper_ready_figures(results_dir: str,
             plt.close()
     
     except Exception as e:
-        print(f"Failed to create method comparison figure: {e}")
+        logger.exception("Failed to create method comparison figure: %s", e)
     
-    print(f"Created {len(figure_paths)} paper-ready figures")
+    logger.info("Created %d paper-ready figures", len(figure_paths))
     for path in figure_paths:
-        print(f"  - {path}")
+        logger.info("  - %s", path)
     
     return figure_paths
 
@@ -912,7 +906,7 @@ def save_all_plots(run_dir: str,
         List of saved plot paths
     """
     if not MATPLOTLIB_AVAILABLE:
-        print("Warning: Matplotlib not available, skipping all plots")
+        logger.warning("Matplotlib not available, skipping all plots")
         return []
     
     plots_dir = os.path.join(run_dir, "plots")
@@ -950,7 +944,7 @@ def save_all_plots(run_dir: str,
             saved_plots.append(path_qd)
             plt.close(fig_qd)
         except Exception as e:
-            print(f"Failed to create Q/D/smin plot: {e}")
+            logger.exception("Failed to create Q/D/smin plot: %s", e)
 
         # Curvature / Fisher proxies
         try:
@@ -960,10 +954,10 @@ def save_all_plots(run_dir: str,
             saved_plots.append(path_cf)
             plt.close(fig_cf)
         except Exception as e:
-            print(f"Failed to create curvature/fisher plot: {e}")
+            logger.exception("Failed to create curvature/fisher plot: %s", e)
         
     except Exception as e:
-        print(f"Failed to create training plots: {e}")
+        logger.exception("Failed to create training plots: %s", e)
     
     # Pole visualization
     if model and hasattr(model, 'pole_head'):
@@ -976,7 +970,7 @@ def save_all_plots(run_dir: str,
             plt.close(fig3)
             
         except Exception as e:
-            print(f"Failed to create pole heatmap: {e}")
+            logger.exception("Failed to create pole heatmap: %s", e)
     
     # Anti-illusion metrics
     if ai_metrics:
@@ -989,7 +983,7 @@ def save_all_plots(run_dir: str,
             plt.close(fig4)
             
         except Exception as e:
-            print(f"Failed to create anti-illusion plots: {e}")
+            logger.exception("Failed to create anti-illusion plots: %s", e)
     
     # Residual analysis
     if residuals:
@@ -1012,8 +1006,8 @@ def save_all_plots(run_dir: str,
                 plt.close(fig6)
             
         except Exception as e:
-            print(f"Failed to create residual plots: {e}")
+            logger.exception("Failed to create residual plots: %s", e)
     
-    print(f"Saved {len(saved_plots)} plots to {plots_dir}")
+    logger.info("Saved %d plots to %s", len(saved_plots), plots_dir)
     
     return saved_plots

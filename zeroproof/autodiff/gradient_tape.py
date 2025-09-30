@@ -42,7 +42,7 @@ class TRGradientTape:
         self._is_recording = True
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, _exc_type, _exc_val, _exc_tb) -> None:
         """Exit the gradient tape context."""
         # Pop this tape from the stack
         if TRNode._gradient_tape_stack and TRNode._gradient_tape_stack[-1] is self:

@@ -8,10 +8,12 @@ between a Mask‑REAL baseline and the current Hybrid configuration.
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
+import logging
 
 from ..autodiff.grad_mode import GradientMode, GradientModeConfig
 from ..autodiff.hybrid_gradient import HybridGradientContext
 
+logger = logging.getLogger(__name__)
 
 def _collect_learning_rates(trainer) -> Dict[str, float]:
     lrs: Dict[str, float] = {}
@@ -189,8 +191,9 @@ def overhead_report(trainer, data_loader: List[Tuple[List, List]] ) -> Dict[str,
         sat_part = f" sat={sat_ratio:.3f}"
         if isinstance(sat_acts, (int, float)) and isinstance(total_calls, (int, float)):
             sat_part += f" ({sat_acts}/{total_calls})"
-        print(
-            f"Overhead: baseline={b_ms:.2f}ms hybrid={h_ms:.2f}ms slowdown={slowdown:.2f}x;" + sat_part
+        logger.info(
+            "Overhead: baseline=%.2fms hybrid=%.2fms slowdown=%.2fx;%s",
+            b_ms, h_ms, slowdown, sat_part
         )
     except Exception:
         pass

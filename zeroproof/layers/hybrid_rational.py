@@ -271,11 +271,7 @@ class HybridRationalWithPoleHead(HybridTRRational):
         for k in range(1, min(self.d_pole + 1, len(psi))):
             pole_score = pole_score + self.pole_params[k] * psi[k]
         
-        # Apply sigmoid to get probability
-        from ..core import tr_div, tr_add
-        from ..autodiff import tr_exp
-        # Simplified sigmoid: 1 / (1 + exp(-x))
-        # For now, just return raw score (sigmoid would need exp implementation)
+        
         
         return y, tag, pole_score
     

@@ -34,8 +34,7 @@ from ..utils.metrics import (
     ResidualConsistencyLoss
 )
 from ..utils.logging import (
-    StructuredLogger,
-    log_training_step
+    StructuredLogger
 )
 
 

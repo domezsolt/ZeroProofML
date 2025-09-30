@@ -170,6 +170,6 @@ class precision_context:
         PrecisionConfig.set_precision(self.new_mode)
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
         PrecisionConfig.set_precision(self.old_mode)
         PrecisionConfig.set_enforcement(self.old_enforcement)

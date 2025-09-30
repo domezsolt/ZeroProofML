@@ -7,7 +7,6 @@ by avoiding redundant computations.
 
 import functools
 import weakref
-import hashlib
 import pickle
 from typing import Dict, Any, Optional, Callable, Tuple, Union
 from collections import OrderedDict

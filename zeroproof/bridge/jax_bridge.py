@@ -98,7 +98,7 @@ if JAX_AVAILABLE:
         """Flatten TRJaxArray for pytree."""
         return (tr_array.values, tr_array.tags), None
     
-    def _tr_unflatten(aux_data, children):
+    def _tr_unflatten(_aux_data, children):
         """Unflatten TRJaxArray from pytree."""
         values, tags = children
         return TRJaxArray(values, tags)
@@ -314,7 +314,7 @@ def tr_mul_jax(a: TRJaxArray, b: TRJaxArray) -> TRJaxArray:
 
 
 # Utility functions for JAX
-def vmap_tr_scalar_fn(fn, in_axes=0, out_axes=0):
+def vmap_tr_scalar_fn(fn, _in_axes=0, _out_axes=0):
     """
     Vectorize a function that operates on TRScalars.
     

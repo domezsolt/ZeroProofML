@@ -7,7 +7,7 @@ across multiple cores or threads.
 
 import multiprocessing as mp
 import threading
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import weakref
 from typing import List, Callable, Any, Optional, Tuple, Union, Iterable, Dict
 import functools
@@ -20,7 +20,7 @@ except ImportError:
     np = None
 
 from ..core import TRScalar, TRTag, real, pinf, ninf, phi
-from ..autodiff import TRNode, tr_add as ad_add, tr_mul as ad_mul, tr_div as ad_div
+from ..autodiff import TRNode
 
 PARALLEL_AVAILABLE = True
 
@@ -67,7 +67,7 @@ class TRThreadPool:
     def __enter__(self):
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
         self.shutdown()
     
     def map(self, func: Callable, items: Iterable, 
@@ -152,7 +152,7 @@ class TRProcessPool:
     def __enter__(self):
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
         self.shutdown()
     
     def map(self, func: Callable, items: Iterable,

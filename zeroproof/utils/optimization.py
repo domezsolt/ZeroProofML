@@ -146,7 +146,6 @@ class TROptimizer:
             return ('constant', node.value, node.tag)
         if not node._grad_info:
             return ('constant', node.value.value, node.value.tag)
-            return ('constant', node.value.value, node.value.tag)
         
         inputs = [inp() for inp in node._grad_info.inputs if inp() is not None]
         input_sigs = tuple(self._get_expression_signature(inp) for inp in inputs)

@@ -9,11 +9,14 @@ import json
 import os
 import time
 from datetime import datetime
+import logging
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass, asdict
 import csv
 
 from ..core import TRTag
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -95,8 +98,8 @@ class StructuredLogger:
         self.current_step = 0
         self.last_save_time = time.time()
         
-        print(f"Structured logger initialized: {self.session_id}")
-        print(f"Log directory: {run_dir}")
+        logger.info("Structured logger initialized: %s", self.session_id)
+        logger.info("Log directory: %s", run_dir)
     
     def set_config(self, config: Dict[str, Any]) -> None:
         """Set training configuration."""
@@ -403,7 +406,7 @@ class MetricsAggregator:
         search_pattern = os.path.join(self.base_dir, "**", pattern)
         log_files = glob.glob(search_pattern, recursive=True)
         
-        print(f"Found {len(log_files)} log files")
+        logger.info("Found %d log files", len(log_files))
         return log_files
     
     def aggregate_metrics(self, log_files: List[str]) -> Dict[str, Any]:
@@ -424,7 +427,7 @@ class MetricsAggregator:
                     session_data = json.load(f)
                 all_sessions.append(session_data)
             except Exception as e:
-                print(f"Failed to load {log_file}: {e}")
+                logger.exception("Failed to load %s: %s", log_file, e)
                 continue
         
         if not all_sessions:
@@ -527,22 +530,22 @@ class ExperimentTracker:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         exp_dir = os.path.join(self.base_dir, f"{timestamp}_{name}")
         
-        # Create logger
-        logger = StructuredLogger(exp_dir)
-        logger.set_config(config)
-        logger.set_model_info(model_info)
+        # Create structured logger for this experiment
+        slogger = StructuredLogger(exp_dir)
+        slogger.set_config(config)
+        slogger.set_model_info(model_info)
         
         self.current_experiment = {
             'name': name,
             'directory': exp_dir,
-            'logger': logger,
+            'logger': slogger,
             'start_time': time.time()
         }
         
-        print(f"Started experiment: {name}")
-        print(f"Directory: {exp_dir}")
+        logger.info("Started experiment: %s", name)
+        logger.info("Directory: %s", exp_dir)
         
-        return logger
+        return slogger
     
     def finish_experiment(self) -> Optional[str]:
         """
@@ -554,12 +557,12 @@ class ExperimentTracker:
         if not self.current_experiment:
             return None
         
-        logger = self.current_experiment['logger']
+        slogger = self.current_experiment['logger']
         
         # Save final logs
-        log_file = logger.save()
-        csv_file = logger.save_csv()
-        summary_file = logger.export_summary()
+        log_file = slogger.save()
+        csv_file = slogger.save_csv()
+        summary_file = slogger.export_summary()
         
         # Add to history
         self.experiment_history.append({
@@ -574,11 +577,11 @@ class ExperimentTracker:
         exp_name = self.current_experiment['name']
         self.current_experiment = None
         
-        print(f"Finished experiment: {exp_name}")
-        print(f"Files saved:")
-        print(f"  - Logs: {log_file}")
-        print(f"  - CSV: {csv_file}")
-        print(f"  - Summary: {summary_file}")
+        logger.info("Finished experiment: %s", exp_name)
+        logger.info("Files saved:")
+        logger.info("  - Logs: %s", log_file)
+        logger.info("  - CSV: %s", csv_file)
+        logger.info("  - Summary: %s", summary_file)
         
         return summary_file
     

@@ -6,6 +6,7 @@ pole locations, and gradient behavior near singularities.
 """
 
 from typing import List, Dict, Tuple, Optional, Union, Any, Callable
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
@@ -13,6 +14,8 @@ import matplotlib.patches as mpatches
 
 from ..core import TRScalar, TRTag, real
 from ..autodiff import TRNode
+
+logger = logging.getLogger(__name__)
 
 
 class PoleVisualizer:
@@ -386,7 +389,7 @@ class PoleVisualizer:
                                    near_pole_mask[i] if near_pole_mask else True))
         
         if not valid_points:
-            print("No valid points for asymptotic plot")
+            logger.warning("No valid points for asymptotic plot")
             return
         
         log_y = [p[0] for p in valid_points]
@@ -455,7 +458,7 @@ class PoleVisualizer:
             save_path: Optional path to save
         """
         if not metrics_history:
-            print("No metrics history to plot")
+            logger.warning("No metrics history to plot")
             return
         
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))

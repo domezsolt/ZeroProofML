@@ -14,11 +14,14 @@ from collections import defaultdict
 import tracemalloc
 import gc
 import sys
+import logging
 
 from ..core import TRScalar, TRTag
 from ..autodiff import TRNode, OpType
 
 PROFILING_AVAILABLE = True
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -69,7 +72,7 @@ class TRProfiler:
         self.start()
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
         """Exit profiling context."""
         self.stop()
     
@@ -260,15 +263,15 @@ def memory_profile(func: Callable) -> Callable:
             # Compute statistics
             stats = snapshot_after.compare_to(snapshot_before, 'lineno')
             
-            print(f"\nMemory Profile for {func.__name__}:")
-            print(f"  Current memory: {end_current / 1024 / 1024:.2f} MB")
-            print(f"  Peak memory: {end_peak / 1024 / 1024:.2f} MB")
-            print(f"  Memory allocated: {(end_current - start_current) / 1024 / 1024:.2f} MB")
+            logger.info("Memory Profile for %s:", func.__name__)
+            logger.info("  Current memory: %.2f MB", end_current / 1024 / 1024)
+            logger.info("  Peak memory: %.2f MB", end_peak / 1024 / 1024)
+            logger.info("  Memory allocated: %.2f MB", (end_current - start_current) / 1024 / 1024)
             
             # Top allocations
-            print("\n  Top memory allocations:")
+            logger.info("Top memory allocations:")
             for stat in stats[:5]:
-                print(f"    {stat}")
+                logger.info("    %s", stat)
             
             return result
             
