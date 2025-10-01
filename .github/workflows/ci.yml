@@ -200,20 +200,20 @@ jobs:
       - name: Run license header checker
         run: |
           python - <<'PY'
-import sys, pathlib
-ROOT = pathlib.Path('zeroproof')
-missing = []
-for p in ROOT.rglob('*.py'):
-    text = p.read_text(encoding='utf-8', errors='ignore')
-    head = '\n'.join(text.splitlines()[:5])
-    if 'MIT License' not in head and 'OSI Approved :: MIT' not in text:
-        missing.append(str(p))
-if missing:
-    print('Files missing MIT license header (count=%d):' % len(missing))
-    for f in missing[:50]:
-        print(' -', f)
-    sys.exit(1)
-PY
+          import sys, pathlib
+          ROOT = pathlib.Path('zeroproof')
+          missing = []
+          for p in ROOT.rglob('*.py'):
+              text = p.read_text(encoding='utf-8', errors='ignore')
+              head = '\n'.join(text.splitlines()[:5])
+              if 'MIT License' not in head and 'OSI Approved :: MIT' not in text:
+                  missing.append(str(p))
+          if missing:
+              print('Files missing MIT license header (count=%d):' % len(missing))
+              for f in missing[:50]:
+                  print(' -', f)
+              sys.exit(1)
+          PY
 
   property-suite:
     name: Property Test Suite
@@ -331,46 +331,46 @@ PY
       - name: Seed-fixed mini-training loop
         run: |
           python - <<'PY'
-import math
-import zeroproof as zp
+          import math
+          import zeroproof as zp
 
-def build_data(center=0.5, exclude=0.05):
-    xs = [-1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-    xs = [x for x in xs if abs(x - center) >= exclude]
-    def f(x):
-        return 1.0/(x - center)
-    batch = ([zp.real(float(x)) for x in xs], [zp.real(float(f(x))) for x in xs])
-    return [batch]
+          def build_data(center=0.5, exclude=0.05):
+              xs = [-1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+              xs = [x for x in xs if abs(x - center) >= exclude]
+              def f(x):
+                  return 1.0/(x - center)
+              batch = ([zp.real(float(x)) for x in xs], [zp.real(float(f(x))) for x in xs])
+              return [batch]
 
-def run_once():
-    # Deterministic reductions on
-    zp.TRPolicyConfig.set_policy(zp.TRPolicy(deterministic_reduction=True))
-    basis = zp.layers.ChebyshevBasis()
-    model = zp.layers.TRRational(d_p=2, d_q=1, basis=basis, alpha_phi=1e-3)
-    cfg = zp.training.TrainingConfig(learning_rate=0.01, max_epochs=5, use_adaptive_loss=False, verbose=False)
-    trainer = zp.training.TRTrainer(model, config=cfg)
-    data = build_data()
-    hist = trainer.train(data, data)
-    # Evaluate tags on the same data deterministically
-    y_tags = []
-    for (inputs, _) in data:
-        for x in inputs:
-            y, tag = model.forward(x)
-            y_tags.append(tag)
-    counts = {
-        'REAL': sum(1 for t in y_tags if t == zp.TRTag.REAL),
-        'PINF': sum(1 for t in y_tags if t == zp.TRTag.PINF),
-        'NINF': sum(1 for t in y_tags if t == zp.TRTag.NINF),
-        'PHI':  sum(1 for t in y_tags if t == zp.TRTag.PHI),
-    }
-    return hist['loss'][-1], counts
+          def run_once():
+              # Deterministic reductions on
+              zp.TRPolicyConfig.set_policy(zp.TRPolicy(deterministic_reduction=True))
+              basis = zp.layers.ChebyshevBasis()
+              model = zp.layers.TRRational(d_p=2, d_q=1, basis=basis, alpha_phi=1e-3)
+              cfg = zp.training.TrainingConfig(learning_rate=0.01, max_epochs=5, use_adaptive_loss=False, verbose=False)
+              trainer = zp.training.TRTrainer(model, config=cfg)
+              data = build_data()
+              hist = trainer.train(data, data)
+              # Evaluate tags on the same data deterministically
+              y_tags = []
+              for (inputs, _) in data:
+                  for x in inputs:
+                      y, tag = model.forward(x)
+                      y_tags.append(tag)
+              counts = {
+                  'REAL': sum(1 for t in y_tags if t == zp.TRTag.REAL),
+                  'PINF': sum(1 for t in y_tags if t == zp.TRTag.PINF),
+                  'NINF': sum(1 for t in y_tags if t == zp.TRTag.NINF),
+                  'PHI':  sum(1 for t in y_tags if t == zp.TRTag.PHI),
+              }
+              return hist['loss'][-1], counts
 
-loss1, c1 = run_once()
-loss2, c2 = run_once()
-print('loss1', loss1, 'loss2', loss2, 'counts1', c1, 'counts2', c2)
-assert not (math.isnan(loss1) or math.isnan(loss2))
-assert abs(loss1 - loss2) < 1e-12
-assert c1 == c2
-PY
+          loss1, c1 = run_once()
+          loss2, c2 = run_once()
+          print('loss1', loss1, 'loss2', loss2, 'counts1', c1, 'counts2', c2)
+          assert not (math.isnan(loss1) or math.isnan(loss2))
+          assert abs(loss1 - loss2) < 1e-12
+          assert c1 == c2
+          PY
 
   
