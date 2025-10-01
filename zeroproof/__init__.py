@@ -10,7 +10,10 @@ __version__ = "0.1.0"
 __author__ = "ZeroProof Team"
 __email__ = "zeroproof@example.com"
 
-# Core imports
+# Keep top-level import lightweight: only expose core types and operations which
+# have no optional heavy dependencies. Subpackages (autodiff, layers, training,
+# utils, etc.) can be imported explicitly (e.g., `from zeroproof.layers import TRRational`).
+
 from .core import (
     TRScalar,
     TRTag,
@@ -26,13 +29,6 @@ from .core import (
     is_bottom,
     is_finite,
     is_infinite,
-    PrecisionConfig,
-    PrecisionMode,
-    precision_context,
-)
-
-# Arithmetic operations (public API returns TRScalar; autodiff ops live under zeroproof.autodiff)
-from .core import (
     tr_add,
     tr_sub,
     tr_mul,
@@ -48,59 +44,40 @@ from .core import (
     tr_prod,
     tr_min,
     tr_max,
+    ReductionMode,
+    PrecisionConfig,
+    PrecisionMode,
+    precision_context,
+    ArithmeticMode,
+    wheel_mode,
+    arithmetic_mode,
+    use_transreal,
+    use_wheel,
 )
 
 # Bridge functions (framework-agnostic imports only)
-from .bridge.ieee_tr import (
-    from_ieee,
-    to_ieee,
-)
+from .bridge.ieee_tr import from_ieee, to_ieee
 
-# NumPy bridge is optional but lightweight; import directly to avoid torch/jax side-effects
-try:
-    from .bridge.numpy_bridge import (
-        from_numpy,
-        to_numpy,
-    )
+# NumPy bridge is optional; import guarded to keep minimal installs working
+try:  # pragma: no cover - optional dependency
+    from .bridge.numpy_bridge import from_numpy, to_numpy  # type: ignore
 except Exception:  # NumPy not available or optional
     from_numpy = None  # type: ignore
-    to_numpy = None    # type: ignore
-
-# Reduction modes
-from .core import ReductionMode
-
-# Import submodules to make them accessible
-from . import autodiff
-from . import layers
-# Do not import heavy/optional bridges (torch/jax) at top level to keep core framework-agnostic
-from . import utils
-from . import training
-from . import policy as _policy_mod  # side-effect-free access
-from .protocols import PolicyLike, ForwardModel
-from . import optim_utils as _optim_utils
-from . import optim_utils_second_order as _optim2
+    to_numpy = None  # type: ignore
 
 __all__ = [
     # Version info
     "__version__",
     "__author__",
     "__email__",
-    
-    # Core types
+    # Core types and checks
     "TRScalar",
     "TRTag",
-    "PrecisionConfig",
-    "PrecisionMode",
-    "precision_context",
-    
-        # Factory functions
     "real",
     "pinf",
     "ninf",
     "phi",
     "bottom",
-    
-    # Type checking
     "is_real",
     "is_pinf",
     "is_ninf",
@@ -108,7 +85,6 @@ __all__ = [
     "is_bottom",
     "is_finite",
     "is_infinite",
-    
     # Arithmetic
     "tr_add",
     "tr_sub",
@@ -125,79 +101,19 @@ __all__ = [
     "tr_prod",
     "tr_min",
     "tr_max",
-    
-    # Bridge
-    "from_ieee",
-    "to_ieee",
-    "from_numpy",
-    "to_numpy",
-    
-    # Enums
+    # Precision and modes
     "ReductionMode",
-    
-    # Submodules
-    "autodiff",
-    "layers",
-    "utils",
-    "training",
-    
-    # Policy
-    "TRPolicy",
-    "TRPolicyConfig",
-    "PolicyLike",
-    "ForwardModel",
-    
-    # Optim utils
-    "BatchCurvatureProxy",
-    "batch_safe_lr",
-    "eta_sgd",
-    "eta_heavy_ball",
-    "eta_adam",
-    
-    # Re-export gradient modes for convenience
-    "GradientMode",
-    "gradient_mode",
-    "use_mask_real",
-    "use_saturating",
-    
-    # Wheel mode
+    "PrecisionConfig",
+    "PrecisionMode",
+    "precision_context",
     "ArithmeticMode",
     "wheel_mode",
     "arithmetic_mode",
     "use_transreal",
     "use_wheel",
-    
-    # Second-order safeguards
-    "SecondOrderContract",
-    "saturating_surrogate_bounds",
-    "combine_path_bound",
-    "estimate_contract_for_tr_rational",
-    "curvature_bound_for_batch",
-    "gauss_newton_bound",
+    # Bridges
+    "from_ieee",
+    "to_ieee",
+    "from_numpy",
+    "to_numpy",
 ]
-
-# Import gradient mode functionality for re-export
-from .autodiff import GradientMode, gradient_mode, use_mask_real, use_saturating
-
-# Import wheel mode functionality for re-export
-from .core import ArithmeticMode, wheel_mode, arithmetic_mode, use_transreal, use_wheel
-
-# Re-export policy and optim utils
-from .policy import TRPolicy, TRPolicyConfig
-from .optim_utils import (
-    BatchCurvatureProxy,
-    batch_safe_lr,
-    eta_sgd,
-    eta_heavy_ball,
-    eta_adam,
-)
-
-# Re-export second-order utilities
-from .optim_utils_second_order import (
-    SecondOrderContract,
-    saturating_surrogate_bounds,
-    combine_path_bound,
-    estimate_contract_for_tr_rational,
-    curvature_bound_for_batch,
-    gauss_newton_bound,
-)

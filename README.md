@@ -1,7 +1,7 @@
 # ZeroProof
 
-[![Build](https://img.shields.io/github/actions/workflow/status/zsemed/ZeroProofML/ci.yml?branch=main)](https://github.com/zsemed/ZeroProofML/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/codecov/c/github/zsemed/ZeroProofML?branch=main)](https://codecov.io/gh/zsemed/ZeroProofML)
+[![Build](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/domezsolt/zeroproofml?branch=main)](https://codecov.io/gh/domezsolt/zeroproofml)
 [![Property Suite](https://img.shields.io/badge/property%20tests-passing-brightgreen)](#)
 [![E2E No‑NaN](https://img.shields.io/badge/e2e%20no‑NaN-✔-brightgreen)](#)
 
@@ -69,7 +69,7 @@ ZeroProof targets Python 3.9+ and keeps heavy backends optional.
 Until the first PyPI release, install from source:
 
 ```bash
-git clone https://github.com/zeroproof/zeroproof.git
+git clone https://github.com/domezsolt/zeroproofml.git
 cd zeroproof
 
 # Minimal install (no optional backends)
@@ -473,7 +473,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ```bash
 # Clone the repository
-git clone https://github.com/zeroproof/zeroproof.git
+git clone https://github.com/domezsolt/zeroproofml.git
 cd zeroproof
 
 # Install in development mode

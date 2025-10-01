@@ -29,10 +29,10 @@ dependencies = []
 dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/zeroproof/zeroproof"
-Repository = "https://github.com/zeroproof/zeroproof"
-Documentation = "https://github.com/zeroproof/zeroproof/tree/main/docs"
-Issues = "https://github.com/zeroproof/zeroproof/issues"
+Homepage = "https://zeroproofml.com"
+Repository = "https://github.com/domezsolt/zeroproofml"
+Documentation = "https://github.com/domezsolt/zeroproofml/tree/main/docs"
+Issues = "https://github.com/domezsolt/zeroproofml/issues"
 
 [tool.setuptools.dynamic]
 version = {attr = "zeroproof.__init__.__version__"}
