@@ -1,0 +1,25 @@
+# ZeroProof dark plotting style
+axes.facecolor: #222831
+figure.facecolor: #222831
+savefig.facecolor: #222831
+axes.edgecolor: #EEEEEE
+axes.labelcolor: #EEEEEE
+text.color: #EEEEEE
+xtick.color: #EEEEEE
+ytick.color: #EEEEEE
+grid.color: #444444
+axes.titlesize: 12
+axes.labelsize: 11
+axes.grid: True
+grid.alpha: 0.35
+grid.linestyle: --
+figure.figsize: 10, 6
+lines.linewidth: 2
+font.size: 10
+legend.frameon: False
+legend.fontsize: 10
+xtick.labelsize: 10
+ytick.labelsize: 10
+axes.prop_cycle: cycler('color', ['#00A6FB', '#F5B700', '#9BC53D', '#FF4F58', '#B497D6'])
+savefig.dpi: 150
+savefig.bbox: tight

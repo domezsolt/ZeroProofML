@@ -6,12 +6,12 @@ sign-flip visualizations, and residual histograms.
 """
 
 import numpy as np
-import json
 import os
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Optional, Tuple
+import importlib.resources as importlib_resources
 import logging
 
-from ..core import TRTag
+from ..core import TRTag, real
 
 # Optional plotting dependencies
 try:
@@ -39,10 +39,10 @@ class TrainingCurvePlotter:
         
         try:
             plt.style.use(style)
-        except:
+        except Exception:
             try:
                 plt.style.use('default')
-            except:
+            except Exception:
                 pass  # Use whatever default is available
         
         self.colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
@@ -111,6 +111,23 @@ class TrainingCurvePlotter:
             logger.info("Training curves saved to %s", save_path)
         
         return fig
+
+
+def use_zeroproof_style(theme: str = "light") -> None:
+    """Activate bundled ZeroProof Matplotlib style.
+
+    Args:
+        theme: "light" or "dark"
+    """
+    if not MATPLOTLIB_AVAILABLE:
+        raise ImportError("Matplotlib is required for plotting functionality")
+
+    fname = "zeroproof-light.mplstyle" if theme.lower() != "dark" else "zeroproof-dark.mplstyle"
+    try:
+        with importlib_resources.path("zeroproof.assets.mplstyles", fname) as p:
+            plt.style.use(str(p))
+    except Exception as e:
+        logger.warning("Failed to load ZeroProof style %s: %s", theme, e)
 
     def plot_qd_smin(self,
                       training_history: List[Dict[str, Any]],
@@ -326,7 +343,7 @@ class PoleVisualizationPlotter:
                             q_val = model.get_Q_value()
                             if q_val is not None:
                                 Z[i, j] = 1.0 / (1.0 + q_val)  # Sigmoid-like
-                except:
+                except Exception:
                     Z[i, j] = 0.0
         
         # Create heatmap
@@ -412,7 +429,7 @@ class PoleVisualizationPlotter:
                     y_values.append(float('nan'))
                     signs.append(0)
             
-            except:
+            except Exception:
                 y_values.append(float('nan'))
                 tags.append(TRTag.PHI)
                 signs.append(0)
@@ -806,7 +823,7 @@ def create_paper_ready_figures(results_dir: str,
                             continue
             
             if len(mse_data) > 0:
-                bars1 = axes[0].bar(range(len(mse_data)), mse_data, alpha=0.7)
+                axes[0].bar(range(len(mse_data)), mse_data, alpha=0.7)
                 axes[0].set_xticks(range(len(mse_data)))
                 axes[0].set_xticklabels(methods, rotation=45, ha='right')
                 axes[0].set_ylabel('Test MSE')
@@ -831,7 +848,7 @@ def create_paper_ready_figures(results_dir: str,
                         continue
             
             if len(time_data) > 0:
-                bars2 = axes[1].bar(range(len(time_data)), time_data, alpha=0.7, color='orange')
+                axes[1].bar(range(len(time_data)), time_data, alpha=0.7, color='orange')
                 axes[1].set_xticks(range(len(time_data)))
                 axes[1].set_xticklabels(time_methods, rotation=45, ha='right')
                 axes[1].set_ylabel('Training Time (s)')
@@ -855,7 +872,7 @@ def create_paper_ready_figures(results_dir: str,
                         continue
             
             if len(param_data) > 0:
-                bars3 = axes[2].bar(range(len(param_data)), param_data, alpha=0.7, color='green')
+                axes[2].bar(range(len(param_data)), param_data, alpha=0.7, color='green')
                 axes[2].set_xticks(range(len(param_data)))
                 axes[2].set_xticklabels(param_methods, rotation=45, ha='right')
                 axes[2].set_ylabel('Number of Parameters')

@@ -1285,7 +1285,10 @@ class HybridTRTrainer(TRTrainer):
         t0 = time.time()
         self.zero_grad_all()
 
-        total_loss = TRNode.constant(real(0.0))
+        # Collect per-sample losses to avoid deep linear graphs that can
+        # blow recursion limits during backprop. We'll reduce them via a
+        # balanced pairwise tree.
+        sample_losses: List[TRNode] = []
         valid_samples = 0
 
         for tr_inp, tr_tgt in zip(batch_inputs, batch_targets):
@@ -1309,14 +1312,24 @@ class HybridTRTrainer(TRTrainer):
             if valid == 0:
                 continue
             sample_loss = sample_loss / TRNode.constant(real(float(valid)))
-            total_loss = total_loss + sample_loss
+            sample_losses.append(sample_loss)
             valid_samples += 1
 
         if valid_samples == 0:
             return {'loss': float('inf'), 'optim_ms': 0.0}
 
-        # Mean loss across samples
-        total_loss = total_loss / TRNode.constant(real(float(valid_samples)))
+        # Balanced pairwise sum to reduce graph depth
+        def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
+            if not nodes:
+                return TRNode.constant(real(0.0))
+            if len(nodes) == 1:
+                return nodes[0]
+            mid = len(nodes) // 2
+            left = _pairwise_sum(nodes[:mid])
+            right = _pairwise_sum(nodes[mid:])
+            return left + right
+
+        total_loss = _pairwise_sum(sample_losses) / TRNode.constant(real(float(valid_samples)))
 
         # Add regularization if available
         if hasattr(self.model, 'regularization_loss'):

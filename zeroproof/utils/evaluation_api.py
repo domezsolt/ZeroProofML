@@ -5,19 +5,24 @@ This module provides a unified interface for evaluating models with
 pole-related metrics and integrating them into training logs.
 """
 
-from typing import List, Dict, Tuple, Optional, Union, Any, Callable
-from dataclasses import dataclass, asdict
+from typing import List, Dict, Tuple, Optional, Union, Any
+from dataclasses import dataclass, asdict, is_dataclass
 import json
 import time
 from pathlib import Path
 import logging
+import numpy as np
 
-from ..core import TRScalar, TRTag, real
+from ..core import TRTag, real
+from ..protocols import ForwardModel
 from ..autodiff import TRNode
 from .pole_metrics import PoleEvaluator, PoleMetrics
 from .pole_visualization import PoleVisualizer
 
 logger = logging.getLogger(__name__)
+
+# Public type alias for metrics payloads
+MetricsMapping = Dict[str, Any]
 
 
 @dataclass
@@ -79,28 +84,28 @@ class IntegratedEvaluator:
             self.visualizer = PoleVisualizer()
         
         # Tracking
-        self.evaluation_count = 0
-        self.metrics_history = []
-        self.time_history = []
+        self.evaluation_count: int = 0
+        self.metrics_history: List[MetricsMapping] = []
+        self.time_history: List[float] = []
         
         # Create plot directory if needed
         if self.config.save_plots:
             Path(self.config.plot_dir).mkdir(parents=True, exist_ok=True)
     
     def evaluate_model(self,
-                       model: Any,
+                       model: ForwardModel,
                        x_values: List[float],
-                       return_intermediates: bool = False) -> Union[PoleMetrics, Tuple[PoleMetrics, Dict]]:
+                       return_intermediates: bool = False) -> Union[MetricsMapping, Tuple[MetricsMapping, MetricsMapping]]:
         """
         Evaluate a model on given inputs.
-        
+
         Args:
             model: Model with forward() method
             x_values: Input values for evaluation
             return_intermediates: Whether to return intermediate values
             
         Returns:
-            PoleMetrics or tuple of (PoleMetrics, intermediates)
+            Metrics mapping or (metrics mapping, intermediates)
         """
         start_time = time.time()
         
@@ -140,7 +145,7 @@ class IntegratedEvaluator:
             predicted_poles = [x for x, p in zip(x_values, pole_probs) if p > 0.5]
         
         # Compute metrics
-        metrics = self.pole_evaluator.evaluate(
+        metrics_raw = self.pole_evaluator.evaluate(
             x_values=x_values,
             y_values=y_values,
             Q_values=Q_values if Q_values else [1.0] * len(x_values),
@@ -154,7 +159,16 @@ class IntegratedEvaluator:
         self.time_history.append(elapsed_time)
         
         # Convert to dictionary for history
-        metrics_dict = self._metrics_to_dict(metrics)
+        if isinstance(metrics_raw, dict):
+            metrics_dict = metrics_raw
+        elif is_dataclass(metrics_raw):
+            metrics_dict = self._metrics_to_dict(metrics_raw)  # type: ignore[arg-type]
+        else:
+            # Best-effort: try asdict, else empty dict
+            try:
+                metrics_dict = asdict(metrics_raw)  # type: ignore[arg-type]
+            except Exception:
+                metrics_dict = {}
         metrics_dict['evaluation_time'] = elapsed_time
         metrics_dict['evaluation_count'] = self.evaluation_count
         self.metrics_history.append(metrics_dict)
@@ -168,25 +182,25 @@ class IntegratedEvaluator:
             self._log_metrics(metrics_dict)
         
         if self.config.verbose:
-            self._print_summary(metrics)
+            self._print_summary(metrics_raw)
         
         if return_intermediates:
-            intermediates = {
+            intermediates: MetricsMapping = {
                 'y_values': y_values,
                 'Q_values': Q_values,
                 'P_values': P_values,
                 'tags': tags,
                 'predicted_poles': predicted_poles
             }
-            return metrics, intermediates
+            return metrics_raw, intermediates
         
-        return metrics
+        return metrics_raw
     
     def evaluate_checkpoint(self,
                            checkpoint_path: str,
                            x_values: List[float],
                            model_class: type,
-                           **model_kwargs) -> PoleMetrics:
+                           **model_kwargs) -> MetricsMapping:
         """
         Evaluate a saved model checkpoint.
         
@@ -215,7 +229,7 @@ class IntegratedEvaluator:
         # Evaluate
         return self.evaluate_model(model, x_values)
     
-    def _metrics_to_dict(self, metrics: PoleMetrics) -> Dict[str, Any]:
+    def _metrics_to_dict(self, metrics: PoleMetrics) -> MetricsMapping:
         """Convert PoleMetrics to dictionary."""
         # Use dataclass asdict but handle non-serializable types
         d = asdict(metrics)
@@ -230,11 +244,11 @@ class IntegratedEvaluator:
         return d
     
     def _create_visualizations(self,
-                             x_values: List[float],
-                             y_values: List[Any],
-                             Q_values: List[float],
-                             tags: List[TRTag],
-                             predicted_poles: Optional[List[float]]) -> None:
+                               x_values: List[float],
+                               y_values: List[Any],
+                               Q_values: List[float],
+                               tags: List[TRTag],
+                               predicted_poles: Optional[List[float]]) -> None:
         """Create and save visualizations."""
         if not self.config.enable_visualization:
             return
@@ -300,35 +314,41 @@ class IntegratedEvaluator:
         with open(log_path, 'w') as f:
             json.dump(log_data, f, indent=2)
     
-    def _print_summary(self, metrics: PoleMetrics) -> None:
+    def _print_summary(self, metrics: MetricsMapping) -> None:
         """Log evaluation summary."""
         sep = "=" * 60
         logger.info("\n%s", sep)
         logger.info("Evaluation %d Summary", self.evaluation_count)
         logger.info("%s", sep)
-        
+        # Helper to access keys/attrs uniformly
+        def get(m: Dict[str, Any], key: str, default: Any = 0) -> Any:
+            return m.get(key, default)
+
         logger.info("\nPole Localization:")
-        logger.info("  PLE: %.4f", metrics.ple)
-        logger.info("  Predicted poles: %s", metrics.predicted_pole_count)
-        logger.info("  True poles: %s", metrics.actual_pole_count)
-        precision = metrics.true_positive_poles / (metrics.true_positive_poles + metrics.false_positive_poles + 1e-10)
-        recall = metrics.true_positive_poles / (metrics.true_positive_poles + metrics.false_negative_poles + 1e-10)
+        logger.info("  PLE: %.4f", float(get(metrics, 'ple', 0.0)))
+        logger.info("  Predicted poles: %s", get(metrics, 'predicted_pole_count', 0))
+        logger.info("  True poles: %s", get(metrics, 'actual_pole_count', 0))
+        tp = float(get(metrics, 'true_positive_poles', 0.0))
+        fp = float(get(metrics, 'false_positive_poles', 0.0))
+        fn = float(get(metrics, 'false_negative_poles', 0.0))
+        precision = tp / (tp + fp + 1e-10)
+        recall = tp / (tp + fn + 1e-10)
         logger.info("  Precision: %.2f%%", precision * 100)
         logger.info("  Recall: %.2f%%", recall * 100)
         
         logger.info("\nBehavior Metrics:")
-        logger.info("  Sign consistency: %.2f%%", metrics.sign_consistency * 100)
-        logger.info("  Asymptotic correlation: %.3f", metrics.slope_correlation)
-        logger.info("  Residual error: %.4f", metrics.residual_error)
+        logger.info("  Sign consistency: %.2f%%", float(get(metrics, 'sign_consistency', 0.0)) * 100)
+        logger.info("  Asymptotic correlation: %.3f", float(get(metrics, 'slope_correlation', 1.0)))
+        logger.info("  Residual error: %.4f", float(get(metrics, 'residual_error', 0.0)))
         
         logger.info("\nCoverage:")
-        logger.info("  Near poles: %.2f%%", metrics.coverage_near * 100)
-        logger.info("  Mid-range: %.2f%%", metrics.coverage_mid * 100)
-        logger.info("  Far: %.2f%%", metrics.coverage_far * 100)
+        logger.info("  Near poles: %.2f%%", float(get(metrics, 'coverage_near', 0.0)) * 100)
+        logger.info("  Mid-range: %.2f%%", float(get(metrics, 'coverage_mid', 0.0)) * 100)
+        logger.info("  Far: %.2f%%", float(get(metrics, 'coverage_far', 0.0)) * 100)
         
         logger.info("%s\n", sep)
     
-    def get_summary_statistics(self) -> Dict[str, Any]:
+    def get_summary_statistics(self) -> MetricsMapping:
         """
         Get summary statistics over all evaluations.
         
@@ -344,7 +364,7 @@ class IntegratedEvaluator:
         # Compute improvements
         if len(self.metrics_history) > 1:
             first = self.metrics_history[0]
-            improvements = {
+            improvements: MetricsMapping = {
                 'ple_improvement': first['ple'] - latest['ple'],
                 'coverage_near_improvement': latest['coverage_near'] - first['coverage_near'],
                 'sign_consistency_improvement': latest['sign_consistency'] - first['sign_consistency'],
@@ -379,7 +399,7 @@ class IntegratedEvaluator:
                 save_path=save_path
             )
     
-    def export_metrics(self, output_path: str) -> None:
+    def export_metrics(self, output_path: Union[str, Path]) -> None:
         """
         Export all metrics to file.
         
@@ -394,16 +414,64 @@ class IntegratedEvaluator:
             df = pd.DataFrame(self.metrics_history)
             df.to_csv(output_path, index=False)
         else:
-            # Export as JSON
+            # Export as JSON (include environment/policy metadata)
+            payload: MetricsMapping = {
+                'configuration': asdict(self.config),
+                'true_poles': self.true_poles,
+                'metrics_history': self.metrics_history,
+                'summary': self.get_summary_statistics(),
+                'environment': self._gather_environment_info(),
+            }
             with open(output_path, 'w') as f:
-                json.dump({
-                    'configuration': asdict(self.config),
-                    'true_poles': self.true_poles,
-                    'metrics_history': self.metrics_history,
-                    'summary': self.get_summary_statistics()
-                }, f, indent=2)
+                json.dump(payload, f, indent=2)
         
         logger.info("Metrics exported to %s", output_path)
+
+    def _gather_environment_info(self) -> MetricsMapping:
+        """Collect policy flags, seed, and device info for logs."""
+        info: Dict[str, Any] = {}
+        # Policy flags
+        try:
+            from ..policy import TRPolicyConfig
+            pol = TRPolicyConfig.get_policy()
+            if pol is not None:
+                info['policy'] = {
+                    'tau_Q_on': getattr(pol, 'tau_Q_on', None),
+                    'tau_Q_off': getattr(pol, 'tau_Q_off', None),
+                    'tau_P_on': getattr(pol, 'tau_P_on', None),
+                    'tau_P_off': getattr(pol, 'tau_P_off', None),
+                    'deterministic_reduction': getattr(pol, 'deterministic_reduction', None),
+                    'softmax_one_hot_infinity': getattr(pol, 'softmax_one_hot_infinity', None),
+                }
+        except Exception:
+            pass
+
+        # Seed (best-effort from environment variables)
+        import os
+        info['seed'] = os.environ.get('ZPM_TEST_SEED') or os.environ.get('PYTHONHASHSEED')
+
+        # Gradient mode info
+        try:
+            from ..autodiff.grad_mode import GradientModeConfig
+            mode = GradientModeConfig.get_mode()
+            info['gradient_mode'] = getattr(mode, 'name', str(mode))
+            info['local_threshold'] = GradientModeConfig.get_local_threshold()
+            try:
+                info['saturation_bound'] = GradientModeConfig.get_saturation_bound()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        # Device/platform info
+        import platform
+        import sys
+        info['device'] = {
+            'platform': platform.system(),
+            'machine': platform.machine(),
+            'python': sys.version.split()[0],
+        }
+        return info
 
 
 def create_evaluator(true_poles: List[float],
@@ -490,7 +558,7 @@ class TrainingLogger:
         # Evaluate if needed
         if epoch % self.eval_frequency == 0:
             logger.info("Evaluating at epoch %d...", epoch)
-            metrics = self.evaluator.evaluate_model(model, self.eval_samples)
+            self.evaluator.evaluate_model(model, self.eval_samples)
             
             # Add to training history
             self.training_history[-1]['pole_metrics'] = self.evaluator.metrics_history[-1]
@@ -503,7 +571,7 @@ class TrainingLogger:
             model: Final trained model
         """
         logger.info("Final evaluation...")
-        metrics = self.evaluator.evaluate_model(model, self.eval_samples)
+        self.evaluator.evaluate_model(model, self.eval_samples)
         
         # Plot progress
         self.evaluator.plot_training_progress(

@@ -1,7 +1,7 @@
 # ZeroProof
 
 [![Build](https://img.shields.io/github/actions/workflow/status/zeroproof/zeroproof/ci.yml?branch=main)](https://github.com/zeroproof/zeroproof/actions)
-[![Coverage](https://img.shields.io/badge/coverage-unknown-lightgrey)](#)
+[![Coverage](https://img.shields.io/codecov/c/github/zeroproof/zeroproof)](https://codecov.io/gh/zeroproof/zeroproof)
 [![Property Suite](https://img.shields.io/badge/property%20tests-passing-brightgreen)](#)
 [![E2E No‑NaN](https://img.shields.io/badge/e2e%20no‑NaN-✔-brightgreen)](#)
 
@@ -14,6 +14,11 @@
 ![License](https://img.shields.io/github/license/zeroproof/zeroproof)
 
 **Transreal arithmetic for stable machine learning without epsilon hacks**
+
+ZeroProof replaces epsilon hacks with a principled number system that makes
+all operations total (no NaNs), keeps gradients stable at singularities, and
+stays deterministic by design. Drop it into your stack to train near poles
+without fragile thresholds.
 
 [Getting Started](docs/topics/00_getting_started.md) | [Docs Index](docs/index.md) | [Examples](examples/)
 
@@ -63,17 +68,38 @@ y_node, tag = layer.forward(x_node)
 
 ## Installation
 
+ZeroProof targets Python 3.9+ and keeps heavy backends optional.
+
+Until the first PyPI release, install from source:
+
 ```bash
-# Basic installation
-pip install zeroproof
+git clone https://github.com/zeroproof/zeroproof.git
+cd zeroproof
+
+# Minimal install (no optional backends)
+pip install -e .
+
+# Development (tests, linters, typing)
+pip install -e .[dev]
+# or install tooling from requirements file
+# pip install -r requirements-dev.txt && pip install -e .
 
 # With PyTorch support
+pip install -e .[torch]
+
+# With JAX support
+pip install -e .[jax]
+
+# All optional features
+pip install -e .[all]
+```
+
+Once published on PyPI, installation will be as simple as:
+
+```bash
+pip install zeroproof
 pip install zeroproof[torch]
-
-# With JAX support  
 pip install zeroproof[jax]
-
-# All features
 pip install zeroproof[all]
 ```
 
@@ -295,9 +321,21 @@ ieee_value = zp.to_ieee(zp.phi())       # → NaN
 
 Browse runnable scripts in `examples/`:
 - examples/complete_demo.py — end‑to‑end showcase
+- examples/pole_1d_tutorial.py — 1D pole tutorial (y = 1/(x−a))
 - examples/hybrid_gradient_demo.py — Hybrid gradient schedule
 - examples/coverage_control_demo.py — adaptive coverage (λ_rej)
 - examples/layers_demo.py — layer basics (TR‑Rational, TR‑Norm)
+- examples/evaluator_cli.py — run integrated evaluator on a simple model
+- examples/robotics/rr_ik_quick.py — quick RR IK run (dataset + baselines)
+
+### Plot Styles
+
+ZeroProof ships light/dark Matplotlib styles. Use them via:
+
+```python
+from zeroproof.utils.plotting import use_zeroproof_style
+use_zeroproof_style("light")  # or "dark"
+```
 
 ### Robotics IK (RR arm) — Parity Runner
 
@@ -339,6 +377,38 @@ Outputs include bucketed MSE (with counts) and 2D pole metrics; a compact consol
 - Sampling: docs/topics/06_sampling_curriculum.md
 - Evaluation: docs/topics/07_evaluation_metrics.md
 - How‑To Checklists: docs/topics/08_howto_checklists.md
+
+## Backend Status
+
+| Backend | Status        | Extra           | Minimal Version(s)          |
+|---------|---------------|-----------------|-----------------------------|
+| NumPy   | Supported     | —               | —                           |
+| PyTorch | Supported     | `[torch]`       | torch >= 1.12               |
+| JAX     | Experimental  | `[jax]`         | jax >= 0.4.14, jaxlib >= 0.4.14 |
+
+## System Requirements
+
+- Python: 3.9 or newer (tested on 3.9–3.13)
+- CPU: Any 64‑bit CPU; GPU not required
+- RAM: 1–2 GB sufficient for examples; robotics demos may benefit from 4+ GB
+- Disk: < 200 MB for repository checkout; datasets generated on‑the‑fly unless specified
+
+## Comparison (When to Use ZeroProof)
+
+- Standard autodiff with epsilons
+  - Pros: widely supported, fast
+  - Cons: requires arbitrary epsilon thresholds; NaNs/Inf can propagate; behavior near poles is non‑deterministic
+- Symbolic/interval approaches
+  - Pros: rigorous bounds, formal guarantees
+  - Cons: heavy/slow for ML workloads; integration friction
+- ZeroProof (Transreal arithmetic)
+  - Pros: total operations (no exceptions), deterministic tag semantics, stable gradients (Mask‑REAL/Saturating/Hybrid), epsilon‑free normalization
+  - Cons: new number system and policies to learn; some backend features are experimental
+
+## Documentation Hosting
+
+- Short‑form docs are in `docs/` within this repo.
+- Full documentation site to be hosted on GitHub Pages/ReadTheDocs in a future release.
 
 ## Reproducibility & Bench Metrics
 
@@ -437,5 +507,117 @@ Use the compact utility to visualize flip rate, thresholds, and curvature over e
 ```bash
 python scripts/plot_training_curves.py \
   --results runs/ik_experiment/results_tr_rat.json \
-  --outdir runs/ik_experiment
+    --outdir runs/ik_experiment
+```
+
+## Dependency Policy
+
+- Runtime dependencies: kept minimal and specified as version ranges to allow
+  compatibility with distro and cloud environments.
+- Optional backends (PyTorch/JAX): provided via extras; not required for
+  `import zeroproof`.
+- Development tooling (tests/linters/typing): grouped under the `dev` extra.
+  Use `pip install -e .[dev]`.
+  
+We aim to test Python 3.9–3.13 in CI. If an upper Python version shows issues,
+we will document it in the changelog and README until resolved.
+
+## Backward Compatibility & Deprecation
+
+- Versioning: We follow SemVer pre‑1.0 conventions. Patch releases in the
+  `0.1.x` line aim to be backward compatible; breaking changes, if any, land in
+  the next minor `0.x` release with notes in the changelog.
+- Public API: The stable surface is what `import zeroproof as zp` re‑exports
+  from `zeroproof/__init__.py` (types, factory functions, core ops, modes,
+  selected utilities, and protocols). Internal modules may change without
+  notice.
+- Deprecations: We announce deprecations in the changelog and README. Where
+  feasible, runtime warnings are issued before removal.
+
+## Troubleshooting
+
+- Externally managed environment (PEP 668): If `pip install -e .` fails with
+  “externally managed environment”, create a virtual environment:
+  `python3 -m venv .venv && . .venv/bin/activate && pip install -e .[dev]`.
+- Optional backends missing: Importing `zeroproof` does not require torch/jax.
+  Backend‑specific features need the corresponding extra: `pip install -e .[torch]`
+  or `pip install -e .[jax]`.
+- Python version: Ensure Python ≥ 3.9. Check with `python -V`.
+- Apple Silicon (JAX): Some JAX/JAXLIB versions may not be available for your
+  platform. Consult JAX’s installation guide for platform‑specific wheels.
+- NumPy bridge: If `from_numpy` is `None`, NumPy isn’t available in your env.
+  Install it explicitly or use the IEEE bridge (`from_ieee`/`to_ieee`).
+- CI import failures: Verify you can `python -c "import zeroproof"` in a fresh
+  environment without extras before enabling optional backends.
+ - RecursionError during training: Very deep linear graphs (e.g., summing many
+   per‑sample losses) can overflow recursion limits during backprop. ZeroProof’s
+   trainer aggregates per‑sample losses with a pairwise (tree) reduction to bound
+   graph depth; if writing custom loops, use a balanced sum for loss aggregation.
+
+## FAQ
+
+- What does `1/0`, `-1/0`, and `0/0` return?
+  - `zp.real(1)/zp.real(0)` → `PINF` (+∞)
+  - `zp.real(-1)/zp.real(0)` → `NINF` (−∞)
+  - `zp.real(0)/zp.real(0)` → `PHI` (nullity)
+  - Examples follow TR division tables; no exceptions are raised.
+
+- What about domain errors like `log(x≤0)` or `sqrt(x<0)`?
+  - `zp.tr_log(zp.real(0.0))` → `PHI`
+  - `zp.tr_log(zp.pinf())` → `PINF`
+  - `zp.tr_sqrt(zp.real(-1.0))` → `PHI`
+
+- How do tags propagate through computations and gradients?
+  - Forward: `PHI` propagates; `±∞` obeys TR tag tables deterministically.
+  - Gradients (default Mask‑REAL): paths that produce non‑REAL tags contribute zero gradient.
+  - Deterministic reductions: when enabled in policy, sums/products use pairwise trees for stable results.
+
+- When should I pick Hybrid or Saturating gradients instead of Mask‑REAL?
+  - Hybrid: when you want zero gradients exactly at singularities but smooth, bounded gradients near them (with hysteresis control).
+  - Saturating: when you need bounded, continuous gradients across singular regions (e.g., for continuous control).
+  - Default Mask‑REAL is recommended for strict stability and identifiability.
+
+- Do you respect IEEE signed zero (−0.0 vs +0.0)?
+  - Yes. Division by `+0.0` vs `−0.0` yields opposite infinities in accordance with IEEE sign rules.
+  - Policy has `keep_signed_zero` to preserve signed zero in backends that expose it.
+
+- How do I convert to/from IEEE NaN/Inf?
+  - `zp.from_ieee(float('nan'))` → `PHI`; `zp.from_ieee(float('inf'))` → `PINF`.
+  - `zp.to_ieee(zp.phi())` → `nan`; `zp.to_ieee(zp.pinf())` → `inf`.
+
+- What’s different in Wheel mode?
+  - Stricter algebra with a `BOTTOM (⊥)` element: `0×∞=⊥`, `∞+∞=⊥`; `⊥` propagates.
+  - Enable with `with zp.wheel_mode(): ...` when you need formal‑verification‑style behavior.
+### Evaluator CLI
+
+You can also run the integrated evaluator via module invocation:
+
+```bash
+python -m zeroproof.eval --xmin -2 --xmax 2 --n 201 --true-pole 0.5 --out results/eval.json
+```
+### Evaluator CLI
+
+You can also run the integrated evaluator via module invocation:
+
+```bash
+python -m zeroproof.eval --xmin -2 --xmax 2 --n 201 --true-pole 0.5 --out results/eval.json
+```
+
+### RR‑IK Quick Runner
+
+The quick runner generates a bucketed RR‑IK dataset and trains selected models.
+On constrained environments, use small sizes to keep runtimes short:
+
+```bash
+python examples/robotics/rr_ik_quick.py \
+  --out runs/rr_ik_quick \
+  --models tr_rat \
+  --profile quick \
+  --n 1000
+
+# Or drive training directly with tighter limits
+python examples/robotics/rr_ik_dataset.py --n_samples 800 --stratify_by_detj --output data/rr_quick.json
+python examples/robotics/rr_ik_train.py \
+  --dataset data/rr_quick.json --model tr_rat --profile quick \
+  --epochs 3 --limit_train 300 --limit_test 100 --output_dir runs/rr_quick
 ```

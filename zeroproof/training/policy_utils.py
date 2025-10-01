@@ -7,7 +7,7 @@ precision (float32/float64) and a scale factor for ULP-based guard bands.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Protocol, Tuple, Any
 
 from ..core import PrecisionConfig
 from ..policy import TRPolicy, TRPolicyConfig
@@ -46,8 +46,13 @@ def enable_default_tr_policy(
     return pol
 
 
+class _SupportsLocalScales(Protocol):
+    def estimate_local_scales(self) -> Tuple[float, float]:
+        ...
+
+
 def enable_policy_from_model(
-    model,
+    model: Any,
     ulp_scale: float = 4.0,
     deterministic_reduction: bool = True,
     g_on: Optional[float] = None,
@@ -74,7 +79,8 @@ def enable_policy_from_model(
 
     # Fallback scales when model lacks estimator
     try:
-        local_scale_q, local_scale_p = model.estimate_local_scales()
+        # Try Protocol method if available
+        local_scale_q, local_scale_p = getattr(model, 'estimate_local_scales')()
     except Exception:
         local_scale_q, local_scale_p = 1.0, 1.0
 

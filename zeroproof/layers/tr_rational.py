@@ -209,12 +209,22 @@ class TRRational:
     def forward(self, x: Union[TRScalar, TRNode]) -> Tuple[TRNode, TRTag]:
         """
         Forward pass computing y = P(x) / Q(x).
-        
+
+        Contracts and semantics:
+        - Values follow TR algebra exactly; the returned `TRNode` `y` is computed
+          under total operations (no exceptions).
+        - The returned `TRTag` reflects either the TR tag of `y` or, when a
+          `TRPolicy` is active, the policy-based classification using guard bands
+          and hysteresis (|Q| vs τ_Q_on/off; |P| vs τ_P_on/off) to decide between
+          REAL/±INF/PHI deterministically near poles.
+
         Args:
-            x: Input value (scalar)
-            
+            x: Input scalar (TRScalar or TRNode). Vector-like inputs should be
+               passed via `forward_batch` or with `projection_index` set to pick
+               a component.
+
         Returns:
-            Tuple of (output_node, output_tag)
+            (y, tag) where y is a TRNode and tag is TRTag.
         """
         # Handle vector-like input with optional projection
         if not isinstance(x, (TRScalar, TRNode)):

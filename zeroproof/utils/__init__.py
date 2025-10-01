@@ -170,6 +170,7 @@ try:
         ComparisonPlotter,
         create_paper_ready_figures,
         save_all_plots,
+        use_zeroproof_style,
         MATPLOTLIB_AVAILABLE,
         SEABORN_AVAILABLE,
     )
@@ -180,6 +181,7 @@ try:
         "ComparisonPlotter",
         "create_paper_ready_figures",
         "save_all_plots",
+        "use_zeroproof_style",
         "MATPLOTLIB_AVAILABLE",
         "SEABORN_AVAILABLE",
     ])

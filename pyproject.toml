@@ -1,0 +1,120 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "build"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zeroproof"
+description = "Transreal arithmetic for stable machine learning without epsilon hacks"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+  { name = "ZeroProof Team", email = "zeroproof@example.com" },
+]
+keywords = ["transreal", "machine-learning", "numerical-stability", "autodiff", "robustness"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/zeroproof/zeroproof"
+Repository = "https://github.com/zeroproof/zeroproof"
+Documentation = "https://github.com/zeroproof/zeroproof/tree/main/docs"
+Issues = "https://github.com/zeroproof/zeroproof/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "zeroproof.__init__.__version__"}
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["zeroproof*"]
+exclude = [
+  "tests*",
+  "examples*",
+  "scripts*",
+  "docs*",
+  "results*",
+  "runs*",
+  "experiments*",
+  "data*",
+  "benchmarks*",
+  "diagnostics*",
+  "test_diagnostics*",
+]
+
+[tool.setuptools.package-data]
+zeroproof = [
+  "py.typed",
+  "assets/mplstyles/*.mplstyle",
+]
+
+[project.optional-dependencies]
+torch = [
+  "torch>=1.12; platform_system != 'Darwin' or platform_machine != 'arm64'",
+]
+jax = [
+  "jax>=0.4.14",
+  "jaxlib>=0.4.14; platform_machine != 'arm64' or platform_system != 'Darwin'",
+]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "hypothesis>=6.88",
+  "black>=23.7",
+  "ruff>=0.4.0",
+  "isort>=5.12",
+  "mypy>=1.4",
+  "pre-commit>=3.3",
+]
+all = [
+  # Aggregate all optional backends
+  "torch>=1.12; platform_system != 'Darwin' or platform_machine != 'arm64'",
+  "jax>=0.4.14",
+  "jaxlib>=0.4.14; platform_machine != 'arm64' or platform_system != 'Darwin'",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.mypy]
+python_version = "3.9"
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+no_implicit_optional = true
+strict_optional = true
+ignore_missing_imports = true
+exclude = [
+  "tests",
+  "examples",
+]
+files = [
+  "zeroproof/__init__.py",
+  "zeroproof/protocols.py",
+  "zeroproof/utils/evaluation_api.py",
+  "zeroproof/training/policy_utils.py",
+]

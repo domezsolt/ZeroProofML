@@ -308,7 +308,7 @@ class IKTrainer:
             return
         
         # ZeroProof enhanced training
-    hybrid_config = HybridTrainingConfig(
+        hybrid_config = HybridTrainingConfig(
             learning_rate=self.config.learning_rate,
             max_epochs=self.config.epochs,  # map local 'epochs' to base TrainingConfig field
             

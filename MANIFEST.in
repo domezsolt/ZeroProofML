@@ -5,6 +5,8 @@ include setup.py
 include MANIFEST.in
 
 recursive-include zeroproof *.py
+include zeroproof/py.typed
+recursive-include zeroproof/assets *
 recursive-include tests *.py
 recursive-include examples *.py
 recursive-include docs *.md *.rst *.txt

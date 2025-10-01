@@ -1,0 +1,134 @@
+[
+  {
+    "timestamp": "2025-10-01 19:05:06",
+    "evaluation": 1,
+    "metrics": {
+      "ple": 1.0,
+      "ple_breakdown": {
+        "pole_0": 1.0
+      },
+      "sign_consistency": 0.0,
+      "sign_flip_errors": [
+        [
+          0.5,
+          "No sign flip: REAL -> REAL"
+        ]
+      ],
+      "asymptotic_slope_error": 0.0,
+      "slope_correlation": 1.0,
+      "residual_error": 0.0,
+      "residual_max": 0.0,
+      "actual_pole_count": 1,
+      "predicted_pole_count": 0,
+      "true_positive_poles": 0,
+      "false_positive_poles": 0,
+      "false_negative_poles": 1,
+      "coverage_near": 1.0,
+      "coverage_mid": 1.0,
+      "coverage_far": 1.0,
+      "mean_q_at_poles": 0.0,
+      "min_q_at_poles": 0.0,
+      "evaluation_time": 0.2874433994293213,
+      "evaluation_count": 1
+    }
+  },
+  {
+    "timestamp": "2025-10-01 19:05:48",
+    "evaluation": 1,
+    "metrics": {
+      "ple": 1.0,
+      "ple_breakdown": {
+        "pole_0": 1.0
+      },
+      "sign_consistency": 0.0,
+      "sign_flip_errors": [
+        [
+          0.5,
+          "No sign flip: REAL -> REAL"
+        ]
+      ],
+      "asymptotic_slope_error": 0.0,
+      "slope_correlation": 1.0,
+      "residual_error": 0.0,
+      "residual_max": 0.0,
+      "actual_pole_count": 1,
+      "predicted_pole_count": 0,
+      "true_positive_poles": 0,
+      "false_positive_poles": 0,
+      "false_negative_poles": 1,
+      "coverage_near": 1.0,
+      "coverage_mid": 1.0,
+      "coverage_far": 1.0,
+      "mean_q_at_poles": 0.0,
+      "min_q_at_poles": 0.0,
+      "evaluation_time": 0.2557191848754883,
+      "evaluation_count": 1
+    }
+  },
+  {
+    "timestamp": "2025-10-01 19:06:18",
+    "evaluation": 1,
+    "metrics": {
+      "ple": 1.0,
+      "ple_breakdown": {
+        "pole_0": 1.0
+      },
+      "sign_consistency": 0.0,
+      "sign_flip_errors": [
+        [
+          0.5,
+          "No sign flip: REAL -> REAL"
+        ]
+      ],
+      "asymptotic_slope_error": 0.0,
+      "slope_correlation": 1.0,
+      "residual_error": 0.0,
+      "residual_max": 0.0,
+      "actual_pole_count": 1,
+      "predicted_pole_count": 0,
+      "true_positive_poles": 0,
+      "false_positive_poles": 0,
+      "false_negative_poles": 1,
+      "coverage_near": 1.0,
+      "coverage_mid": 1.0,
+      "coverage_far": 1.0,
+      "mean_q_at_poles": 0.0,
+      "min_q_at_poles": 0.0,
+      "evaluation_time": 0.2661733627319336,
+      "evaluation_count": 1
+    }
+  },
+  {
+    "timestamp": "2025-10-01 19:06:35",
+    "evaluation": 1,
+    "metrics": {
+      "ple": 1.0,
+      "ple_breakdown": {
+        "pole_0": 1.0
+      },
+      "sign_consistency": 0.0,
+      "sign_flip_errors": [
+        [
+          0.5,
+          "No sign flip: REAL -> REAL"
+        ]
+      ],
+      "asymptotic_slope_error": 0.0,
+      "slope_correlation": 1.0,
+      "residual_error": 0.0,
+      "residual_max": 0.0,
+      "actual_pole_count": 1,
+      "predicted_pole_count": 0,
+      "true_positive_poles": 0,
+      "false_positive_poles": 0,
+      "false_negative_poles": 1,
+      "coverage_near": 1.0,
+      "coverage_mid": 1.0,
+      "coverage_far": 1.0,
+      "mean_q_at_poles": 0.0,
+      "min_q_at_poles": 0.0,
+      "evaluation_time": 0.07917404174804688,
+      "evaluation_count": 1
+    }
+  }
+]

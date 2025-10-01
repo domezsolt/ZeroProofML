@@ -457,6 +457,30 @@ results = batch_tr_operation(
     batch_size=1000,
     parallel=True
 )
+
+### 7. Prefer Pairwise (Tree) Reductions
+
+When aggregating many terms (e.g., per‑sample losses), avoid linear left‑fold
+accumulation like `total = total + term`. This builds deep computation graphs
+that can degrade numerical behavior and stress the backward pass (Python
+recursion limits).
+
+Instead, reduce via a balanced pairwise tree:
+
+```python
+def pairwise_sum(nodes: list[TRNode]) -> TRNode:
+    if not nodes:
+        return TRNode.constant(real(0.0))
+    if len(nodes) == 1:
+        return nodes[0]
+    mid = len(nodes) // 2
+    return pairwise_sum(nodes[:mid]) + pairwise_sum(nodes[mid:])
+
+avg_loss = pairwise_sum(sample_losses) / TRNode.constant(real(float(len(sample_losses))))
+```
+
+ZeroProof’s trainer uses a pairwise reduction for loss aggregation and honors
+policy‑controlled deterministic reductions for numeric determinism.
 ```
 
 ### 7. Use Mixed Precision

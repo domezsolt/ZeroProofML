@@ -21,11 +21,20 @@ class TRPolicy:
     """
     Tagging and numerical policy for TR layers.
 
-    Thresholds use an ON/OFF convention (hysteresis):
-    - Enter non-REAL region when |Q| <= tau_Q_on
-    - Return to REAL region only when |Q| >= tau_Q_off (tau_Q_off > tau_Q_on)
-    Similarly for |P| against tau_P_* to distinguish INF vs NULL within the
-    non-REAL region.
+    Contracts and semantics:
+    - Tags: REAL, PINF, NINF, PHI. Forward computations obey TR algebra; policy
+      only classifies between these where guard bands apply.
+    - Guard bands (hysteresis):
+      - Enter non-REAL region when |Q| <= tau_Q_on
+      - Return to REAL region only when |Q| >= tau_Q_off (tau_Q_off > tau_Q_on)
+      - Within the band, choose INF vs PHI via |P| thresholds (tau_P_on/off)
+    - Reduction modes: Core reductions support STRICT (default) and DROP_NULL
+      behaviors. STRICT propagates PHI/⊥ and enforces ∞ + (−∞) = PHI; DROP_NULL
+      ignores PHI/⊥ and reduces over remaining values. Deterministic reductions
+      (pairwise trees/compensated sums) can be toggled via this policy.
+    - Hybrid schedule knobs: Hysteresis can be extended with extra on/off
+      thresholds (τ_on/τ_off) and schedule deltas (δ) at higher levels; this
+      policy exposes tau_* and plugs into layers that consult it.
 
     Rounding/reduction flags are placeholders for backends; classification
     itself only uses the tau_* thresholds.

@@ -76,6 +76,7 @@ from . import layers
 from . import utils
 from . import training
 from . import policy as _policy_mod  # side-effect-free access
+from .protocols import PolicyLike, ForwardModel
 from . import optim_utils as _optim_utils
 from . import optim_utils_second_order as _optim2
 
@@ -143,6 +144,8 @@ __all__ = [
     # Policy
     "TRPolicy",
     "TRPolicyConfig",
+    "PolicyLike",
+    "ForwardModel",
     
     # Optim utils
     "BatchCurvatureProxy",

@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: If you use ZeroProof in your research, please cite it as below.
+title: ZeroProof — Transreal Arithmetic for Stable Machine Learning
+authors:
+  - family-names: ZeroProof Team
+repository-code: https://github.com/zeroproof/zeroproof
+license: MIT
+version: 0.1.0
+date-released: 2025-10-01
+preferred-citation:
+  type: article
+  title: ZeroProof — Transreal Arithmetic for Stable Machine Learning
+  authors:
+    - family-names: ZeroProof Team
+  year: 2024
+  journal: arXiv preprint
+  notes: arXiv:xxxx.xxxxx
