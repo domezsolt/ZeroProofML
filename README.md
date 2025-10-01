@@ -1,7 +1,7 @@
 # ZeroProof
 
-[![Build](https://img.shields.io/github/actions/workflow/status/zeroproof/zeroproof/ci.yml?branch=main)](https://github.com/zeroproof/zeroproof/actions)
-[![Coverage](https://img.shields.io/codecov/c/github/zeroproof/zeroproof)](https://codecov.io/gh/zeroproof/zeroproof)
+[![Build](https://img.shields.io/github/actions/workflow/status/zsemed/ZeroProofML/ci.yml?branch=main)](https://github.com/zsemed/ZeroProofML/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/zsemed/ZeroProofML?branch=main)](https://codecov.io/gh/zsemed/ZeroProofML)
 [![Property Suite](https://img.shields.io/badge/property%20tests-passing-brightgreen)](#)
 [![E2E No‑NaN](https://img.shields.io/badge/e2e%20no‑NaN-✔-brightgreen)](#)
 
