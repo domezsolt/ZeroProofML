@@ -225,3 +225,5 @@ mlruns/
 
 # Keep empty directories with .gitkeep
 !**/.gitkeep
+# Benchmark outputs (avoid Windows-incompatible filenames)
+benchmark_results/

@@ -1,16 +1,10 @@
-"""Utilities for transreal arithmetic."""
+"""Utilities for transreal arithmetic.
 
-from .optimization import *
-from .profiling import *
-from .caching import *
-from .parallel import *
-from .benchmarking import *
-from .metrics import *
-from .logging import *
-from .plotting import *
-from .dataset_generation import *
+This package exposes submodules in a best-effort manner to keep optional
+dependencies optional. Do not import heavy/optional modules unconditionally.
+"""
 
-__all__ = []
+__all__: list[str] = []
 
 # Export optimization utilities
 try:

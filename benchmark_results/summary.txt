@@ -1,4 +1,0 @@
-ZeroProof Bench Summary
-============================
-
-[near_pole]
