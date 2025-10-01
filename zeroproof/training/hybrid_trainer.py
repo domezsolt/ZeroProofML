@@ -722,6 +722,16 @@ class HybridTRTrainer(TRTrainer):
             if 'tau_q_on' in hybrid_stats or 'tau_q_off' in hybrid_stats:
                 avg_metrics['tau_q_on'] = hybrid_stats.get('tau_q_on')
                 avg_metrics['tau_q_off'] = hybrid_stats.get('tau_q_off')
+            # Also export P-thresholds from the active TRPolicy, if any
+            try:
+                from ..policy import TRPolicyConfig
+                pol = TRPolicyConfig.get_policy()
+                if pol is not None:
+                    # Use lower-case keys for consistency with tau_q_* in metrics
+                    avg_metrics['tau_p_on'] = float(getattr(pol, 'tau_P_on', 0.0))
+                    avg_metrics['tau_p_off'] = float(getattr(pol, 'tau_P_off', 0.0))
+            except Exception:
+                pass
             # Copy flip statistics to monitor finite/low-density switching
             if 'policy_flip_count' in hybrid_stats:
                 avg_metrics['policy_flip_count'] = hybrid_stats.get('policy_flip_count')
@@ -1442,6 +1452,19 @@ class HybridTRTrainer(TRTrainer):
             'final_metrics': self.history,
             'bench_history': self.bench_history
         }
+        # Attach active policy thresholds (if any) for ease of inspection
+        try:
+            from ..policy import TRPolicyConfig
+            pol = TRPolicyConfig.get_policy()
+            if pol is not None:
+                summary['policy_thresholds'] = {
+                    'tau_q_on': float(getattr(pol, 'tau_Q_on', 0.0)),
+                    'tau_q_off': float(getattr(pol, 'tau_Q_off', 0.0)),
+                    'tau_p_on': float(getattr(pol, 'tau_P_on', 0.0)),
+                    'tau_p_off': float(getattr(pol, 'tau_P_off', 0.0)),
+                }
+        except Exception:
+            pass
         # Publish layer contract if available (B_k, H_k, G_max, H_max)
         try:
             if hasattr(self.model, 'get_layer_contract'):

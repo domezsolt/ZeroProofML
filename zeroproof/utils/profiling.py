@@ -9,6 +9,7 @@ import time
 import functools
 import threading
 from typing import Dict, List, Any, Optional, Callable, Tuple
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from collections import defaultdict
 import tracemalloc
@@ -279,6 +280,57 @@ def memory_profile(func: Callable) -> Callable:
             tracemalloc.stop()
     
     return wrapper
+
+
+@contextmanager
+def timer(name: str) -> Any:
+    """Simple timing context that logs elapsed milliseconds.
+
+    Usage:
+        with timer("forward-pass"):
+            y = model.forward(x)
+    """
+    import time
+    t0 = time.perf_counter()
+    try:
+        yield
+    finally:
+        t1 = time.perf_counter()
+        logger.info("[%s] %.3f ms", name, (t1 - t0) * 1000.0)
+
+
+def time_function(func: Callable[..., Any], *args: Any, repeats: int = 5, iterations: int = 100, **kwargs: Any) -> Dict[str, Any]:
+    """Micro-benchmark a function with repeats × iterations.
+
+    Returns a dictionary with mean/std/min/max (seconds) and ops/sec.
+    """
+    import time
+    times: List[float] = []
+    for _ in range(repeats):
+        t0 = time.perf_counter()
+        for _ in range(iterations):
+            func(*args, **kwargs)
+        t1 = time.perf_counter()
+        times.append(t1 - t0)
+    mean = sum(times) / len(times)
+    std = (sum((t - mean) ** 2 for t in times) / len(times)) ** 0.5 if len(times) > 1 else 0.0
+    return {
+        'mean_s': mean,
+        'std_s': std,
+        'min_s': min(times),
+        'max_s': max(times),
+        'repeats': repeats,
+        'iterations': iterations,
+        'ops_per_sec': (iterations / mean) if mean > 0 else float('inf'),
+    }
+
+
+def benchmark_sizes(operation: Callable[[int], Any], sizes: List[int], repeats: int = 3, iterations: int = 100) -> Dict[int, Dict[str, Any]]:
+    """Run a size-scaling micro-benchmark and return a mapping size->timing dict."""
+    results: Dict[int, Dict[str, Any]] = {}
+    for n in sizes:
+        results[n] = time_function(operation, n, repeats=repeats, iterations=iterations)
+    return results
 
 
 def tag_statistics(nodes: List[TRNode]) -> Dict[str, Any]:

@@ -7,11 +7,7 @@
 
 <div align="center">
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/zeroproof/zeroproof/ci.yml?branch=main)
-![Coverage](https://img.shields.io/codecov/c/github/zeroproof/zeroproof)
-![PyPI](https://img.shields.io/pypi/v/zeroproof)
-![Python Version](https://img.shields.io/pypi/pyversions/zeroproof)
-![License](https://img.shields.io/github/license/zeroproof/zeroproof)
+ 
 
 **Transreal arithmetic for stable machine learning without epsilon hacks**
 
@@ -223,6 +219,54 @@ with zp.wheel_mode():
 # - Bottom propagates through all operations
 ```
 
+### Result Verification (Defaults)
+
+Use the verification helper to enforce paper‑parity metrics on seed runs:
+
+```bash
+# Verify across seeds (90th percentile aggregation) for the 2R RR dataset
+python3 scripts/verify_results.py \
+  --path results/robotics/paper_suite \
+  --method "ZeroProofML-Full" \
+  --max-ple 0.30 \
+  --max-b0 0.010 \
+  --max-b1 0.010 \
+  --percentile 90 \
+  --require-nonempty-b03
+
+# Strict per-run bounds (no percentile aggregation)
+python3 scripts/verify_results.py \
+  --glob 'results/robotics/paper_suite/seed_*/comprehensive_comparison.json' \
+  --method "ZeroProofML-Full" \
+  --max-ple 0.30 \
+  --max-b0 0.010 \
+  --max-b1 0.010 \
+  --no-percentile \
+  --require-nonempty-b03
+```
+
+Notes:
+- Recommended defaults above target the CPU‑friendly RR 2R suite in this repo.
+- Thresholds are dataset‑dependent; tighten/relax as appropriate for your setup.
+- The guardrail `--require-nonempty-b03` promotes empty near‑pole buckets (B0–B3) to failures.
+
+### Debug Logging
+
+Enable console logging and capture structured training metrics for
+troubleshooting and reproducibility:
+
+```python
+import logging
+from zeroproof.utils.logging import StructuredLogger
+
+logging.basicConfig(level=logging.INFO)
+logger = StructuredLogger(run_dir="runs/demo")
+# ... log per‑step metrics and save JSON/CSV/summary
+```
+
+See docs/debug_logging.md for details, per‑module log levels, and field
+reference.
+
 ## Advanced Features
 
 ### TR-Rational Layers
@@ -377,6 +421,7 @@ Outputs include bucketed MSE (with counts) and 2D pole metrics; a compact consol
 - Sampling: docs/topics/06_sampling_curriculum.md
 - Evaluation: docs/topics/07_evaluation_metrics.md
 - How‑To Checklists: docs/topics/08_howto_checklists.md
+- Benchmarks: docs/benchmarks.md
 
 ## Backend Status
 
@@ -620,4 +665,46 @@ python examples/robotics/rr_ik_dataset.py --n_samples 800 --stratify_by_detj --o
 python examples/robotics/rr_ik_train.py \
   --dataset data/rr_quick.json --model tr_rat --profile quick \
   --epochs 3 --limit_train 300 --limit_test 100 --output_dir runs/rr_quick
+```
+### Benchmarks
+
+Run a small benchmark suite and save JSON results:
+
+```bash
+python -m zeroproof.bench --suite all --out benchmark_results
+```
+
+For a larger suite with more scenarios, see `benchmarks/run_benchmarks.py`.
+
+Render a compact summary from a JSON result:
+
+```bash
+python -m zeroproof.bench_summary benchmark_results/bench_....json
+```
+
+### Hybrid Overhead
+
+Compare Mask‑REAL vs Hybrid per‑batch timing and activation stats:
+
+```bash
+python -m zeroproof.overhead_cli --out runs/overhead.json
+```
+
+Outputs include baseline/hybrid avg_step_ms, slowdown_x, and hybrid mode stats.
+
+### Compare Benchmark JSONs
+
+Detect regressions between two benchmark runs (returns non‑zero on slowdown):
+
+```bash
+python -m zeroproof.bench_compare \
+  --baseline benchmark_results/bench_old.json \
+  --candidate benchmark_results/bench_new.json \
+  --max-slowdown 1.15
+```
+
+Update CI baseline from latest local run:
+
+```bash
+python scripts/update_benchmark_baseline.py --src benchmark_results
 ```

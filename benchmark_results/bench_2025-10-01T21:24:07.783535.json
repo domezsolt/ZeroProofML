@@ -1,0 +1,20 @@
+{
+  "timestamp": "2025-10-01T21:24:07.783535",
+  "results": {
+    "reductions_policy": {
+      "tr_sum": {
+        "disabled_s": 0.035996132995933294,
+        "enabled_s": 0.006460753997089341,
+        "slowdown_x": 0.17948466847311773,
+        "n": 5000
+      }
+    }
+  },
+  "system_info": {
+    "platform": "Linux-6.14.0-29-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "cpu": "x86_64",
+    "cpu_count": 4,
+    "memory_gb": "7.6"
+  }
+}

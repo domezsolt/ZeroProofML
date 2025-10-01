@@ -1,0 +1,44 @@
+{
+  "timestamp": "2025-10-01T20:30:39.887080",
+  "results": {
+    "arithmetic": {
+      "add_real": "BenchmarkResult(name='add_real', mean_time=0.09136836490142741, std_time=0.011942475587702929, min_time=0.07556012400164036, max_time=0.11772847000247566, median_time=0.08961959700172883, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "sub_real": "BenchmarkResult(name='sub_real', mean_time=0.1350636202005262, std_time=0.017341654473146163, min_time=0.11402497000381118, max_time=0.16427151999960188, median_time=0.12821573900146177, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "mul_real": "BenchmarkResult(name='mul_real', mean_time=0.10046812179934932, std_time=0.029571752446574204, min_time=0.06819994399847928, max_time=0.15237547799915774, median_time=0.09267996649941779, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "div_real": "BenchmarkResult(name='div_real', mean_time=0.11270662630122388, std_time=0.016694493152355275, min_time=0.08900432500377065, max_time=0.13486628299870063, median_time=0.11459932350044255, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "mul_zero_inf": "BenchmarkResult(name='mul_zero_inf', mean_time=0.05245119590035756, std_time=0.005926553773226351, min_time=0.04331134300446138, max_time=0.06144930799928261, median_time=0.0520515090029221, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "div_by_zero": "BenchmarkResult(name='div_by_zero', mean_time=0.057055893399956405, std_time=0.00813005561664792, min_time=0.043305036997480784, max_time=0.06587741900148103, median_time=0.05827629499981413, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})"
+    },
+    "autodiff": {
+      "simple_derivative": "BenchmarkResult(name='simple_derivative', mean_time=0.05423006380078732, std_time=0.030269329625329203, min_time=0.039296461996855214, max_time=0.1393800799996825, median_time=0.045092907501384616, samples=10, iterations_per_sample=500, total_iterations=5000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': 'simple_derivative', 'args_length': 0})",
+      "chain_rule": "BenchmarkResult(name='chain_rule', mean_time=0.037805051701434424, std_time=0.004958368543737166, min_time=0.03222571500373306, max_time=0.04508324900234584, median_time=0.037020823001512326, samples=10, iterations_per_sample=200, total_iterations=2000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': 'chain', 'args_length': 0})"
+    },
+    "layers": {
+      "tr_rational_forward": "BenchmarkResult(name='tr_rational_forward', mean_time=0.15285239599907072, std_time=0.026143518396915914, min_time=0.11735262499860255, max_time=0.18752051900082733, median_time=0.1572281374974409, samples=10, iterations_per_sample=500, total_iterations=5000, memory_usage_mb=0.125, tag_distribution={}, metadata={'function': 'rat_forward', 'args_length': 0})",
+      "tr_norm_forward_b16_f8": "BenchmarkResult(name='tr_norm_forward_b16_f8', mean_time=1.5299549172996194, std_time=0.0760776526419299, min_time=1.3686370209979941, max_time=1.6277701790022547, median_time=1.5425122199994803, samples=10, iterations_per_sample=50, total_iterations=500, memory_usage_mb=0.75, tag_distribution={}, metadata={'function': 'norm_forward', 'args_length': 0})"
+    },
+    "parallel": {
+      "sequential": "BenchmarkResult(name='sequential_400', mean_time=2.609804227669277, std_time=0.14621115072987517, min_time=2.452843502003816, max_time=2.7421380820014747, median_time=2.6344310990025406, samples=3, iterations_per_sample=1, total_iterations=3, memory_usage_mb=67.59375, tag_distribution={}, metadata={'function': 'seq', 'args_length': 0})",
+      "parallel_2": "BenchmarkResult(name='parallel_2', mean_time=2.6899503036668952, std_time=0.3372715178338255, min_time=2.431352120001975, max_time=3.071434468998632, median_time=2.5670643220000784, samples=3, iterations_per_sample=1, total_iterations=3, memory_usage_mb=59.8046875, tag_distribution={}, metadata={'function': 'par', 'args_length': 0})",
+      "parallel_4": "BenchmarkResult(name='parallel_4', mean_time=2.8717432976676114, std_time=0.3607159170343315, min_time=2.4603417050020653, max_time=3.133813588996418, median_time=3.0210745990043506, samples=3, iterations_per_sample=1, total_iterations=3, memory_usage_mb=57.67578125, tag_distribution={}, metadata={'function': 'par', 'args_length': 0})"
+    },
+    "memory": {
+      "graph_100": {
+        "memory_mb": 0.0
+      },
+      "graph_1000": {
+        "memory_mb": 0.0
+      },
+      "graph_5000": {
+        "memory_mb": 0.375
+      }
+    }
+  },
+  "system_info": {
+    "platform": "Linux-6.14.0-29-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "cpu": "x86_64",
+    "cpu_count": 4,
+    "memory_gb": "7.6"
+  }
+}

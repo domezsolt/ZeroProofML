@@ -273,6 +273,42 @@ PY
         run: |
           pytest tests/e2e -v -k "no_nan" --tb=short
 
+  benchmarks:
+    name: Benchmarks (mini suite)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Run mini benchmark suite
+        run: |
+          python -m zeroproof.bench --suite all --out benchmark_results --iterations 300 --samples 3
+          python -m zeroproof.overhead_cli --out benchmark_results/overhead.json
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mini-benchmarks
+          path: |
+            benchmark_results/*.json
+            benchmark_results/summary.txt
+      - name: Compare against baseline (if present)
+        run: |
+          if [ -f benchmarks/baseline.json ]; then \
+            python -m zeroproof.bench_compare \
+              --baseline benchmarks/baseline.json \
+              --candidate $(ls -1 benchmark_results/*.json | tail -n1) \
+              --max-slowdown 1.20 ; \
+          else \
+            echo "No baseline found at benchmarks/baseline.json; skipping compare." ; \
+          fi
+
   determinism-safety:
     name: Determinism & Safety
     runs-on: ubuntu-latest

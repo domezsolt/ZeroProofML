@@ -1,0 +1,81 @@
+{
+  "timestamp": "2025-10-01T21:06:13.466784",
+  "results": {
+    "arithmetic": {
+      "add_real": "BenchmarkResult(name='add_real', mean_time=0.13477842899956158, std_time=0.0297508827882703, min_time=0.09422496899787802, max_time=0.17881520700029796, median_time=0.13324075249693124, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "sub_real": "BenchmarkResult(name='sub_real', mean_time=0.20069265139973141, std_time=0.043439056412038865, min_time=0.14640263399633113, max_time=0.2721946609963197, median_time=0.18979023549763951, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "mul_real": "BenchmarkResult(name='mul_real', mean_time=0.12156926430106978, std_time=0.02446273301639192, min_time=0.08875339299993357, max_time=0.1833614750066772, median_time=0.11762339400229394, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "div_real": "BenchmarkResult(name='div_real', mean_time=0.16155571269919164, std_time=0.020273305209536484, min_time=0.12849756200012052, max_time=0.19950120800058357, median_time=0.16288810599871795, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "mul_zero_inf": "BenchmarkResult(name='mul_zero_inf', mean_time=0.06000877060068888, std_time=0.009343958600919399, min_time=0.05156839099799981, max_time=0.08202510899718618, median_time=0.05725444900235743, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})",
+      "div_by_zero": "BenchmarkResult(name='div_by_zero', mean_time=0.06499247469982947, std_time=0.012277583218446205, min_time=0.04884568900160957, max_time=0.08532622500206344, median_time=0.06308645299941418, samples=10, iterations_per_sample=10000, total_iterations=100000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': '<lambda>', 'args_length': 0})"
+    },
+    "autodiff": {
+      "simple_derivative": "BenchmarkResult(name='simple_derivative', mean_time=0.13062851280046744, std_time=0.04927967884276001, min_time=0.11150996200012742, max_time=0.2707693230040604, median_time=0.11522022999997716, samples=10, iterations_per_sample=500, total_iterations=5000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': 'simple_derivative', 'args_length': 0})",
+      "chain_rule": "BenchmarkResult(name='chain_rule', mean_time=0.08613213019780233, std_time=0.014245868499647832, min_time=0.060005396997439675, max_time=0.09722374799457612, median_time=0.09340718049861607, samples=10, iterations_per_sample=200, total_iterations=2000, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': 'chain', 'args_length': 0})"
+    },
+    "layers": {
+      "tr_rational_forward": "BenchmarkResult(name='tr_rational_forward', mean_time=0.2409495447995141, std_time=0.11263274619352123, min_time=0.11772047099657357, max_time=0.42110254100407474, median_time=0.2515748324985907, samples=10, iterations_per_sample=500, total_iterations=5000, memory_usage_mb=0.125, tag_distribution={}, metadata={'function': 'rat_forward', 'args_length': 0})",
+      "tr_norm_forward_b16_f8": "BenchmarkResult(name='tr_norm_forward_b16_f8', mean_time=1.492606848399737, std_time=0.2799258756340057, min_time=1.2909260349988472, max_time=2.1952428689983208, median_time=1.3889815580005234, samples=10, iterations_per_sample=50, total_iterations=500, memory_usage_mb=0.75, tag_distribution={}, metadata={'function': 'norm_forward', 'args_length': 0})"
+    },
+    "parallel": {
+      "sequential": "BenchmarkResult(name='sequential_400', mean_time=4.519116816334038, std_time=0.34560084567958377, min_time=4.135780909993628, max_time=4.806858344003558, median_time=4.614711195004929, samples=3, iterations_per_sample=1, total_iterations=3, memory_usage_mb=67.8359375, tag_distribution={}, metadata={'function': 'seq', 'args_length': 0})",
+      "parallel_2": "BenchmarkResult(name='parallel_2', mean_time=2.5856464550015517, std_time=0.2857702207241922, min_time=2.3392922610000824, max_time=2.898946742003318, median_time=2.5187003620012547, samples=3, iterations_per_sample=1, total_iterations=3, memory_usage_mb=60.7421875, tag_distribution={}, metadata={'function': 'par', 'args_length': 0})",
+      "parallel_4": "BenchmarkResult(name='parallel_4', mean_time=2.5857490496661435, std_time=0.1961992025985969, min_time=2.3806829239983927, max_time=2.7716789960031747, median_time=2.6048852289968636, samples=3, iterations_per_sample=1, total_iterations=3, memory_usage_mb=45.98828125, tag_distribution={}, metadata={'function': 'par', 'args_length': 0})"
+    },
+    "memory": {
+      "graph_100": {
+        "memory_mb": 0.0
+      },
+      "graph_1000": {
+        "memory_mb": 0.0
+      },
+      "graph_5000": {
+        "memory_mb": 0.375
+      }
+    },
+    "overhead": {
+      "add": {
+        "tr_sec": 0.08851461800077232,
+        "py_sec": 0.003038306997041218,
+        "slowdown_x": 29.132875014595346
+      },
+      "mul": {
+        "tr_sec": 0.0649123100010911,
+        "py_sec": 0.0034986669998033904,
+        "slowdown_x": 18.553440497406264
+      },
+      "div": {
+        "tr_sec": 0.07822133900481276,
+        "py_sec": 0.003297862996987533,
+        "slowdown_x": 23.71879580087616
+      }
+    },
+    "reductions": {
+      "n100": {
+        "sequential_s": 0.0006477699935203418,
+        "pairwise_s": 0.0006832030048826709,
+        "slowdown_x": 0.9481369210774854,
+        "equal": false
+      },
+      "n1000": {
+        "sequential_s": 0.005111452999699395,
+        "pairwise_s": 0.007369705999735743,
+        "slowdown_x": 0.6935762430526642,
+        "equal": false
+      },
+      "n5000": {
+        "sequential_s": 0.03222859399829758,
+        "pairwise_s": 0.03858371000387706,
+        "slowdown_x": 0.8352901780326235,
+        "equal": false
+      }
+    }
+  },
+  "system_info": {
+    "platform": "Linux-6.14.0-29-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "cpu": "x86_64",
+    "cpu_count": 4,
+    "memory_gb": "7.6"
+  }
+}

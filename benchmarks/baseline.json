@@ -1,0 +1,10 @@
+{
+  "timestamp": "baseline",
+  "results": {
+    "note": {
+      "info": "Baseline placeholder; mini-bench compare will skip if no common mean_time/ops entries"
+    }
+  },
+  "system_info": {}
+}
+

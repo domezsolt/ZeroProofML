@@ -173,6 +173,36 @@ The implementation is production-ready for the core transreal arithmetic system 
 - Bench transparency
   - Per‑epoch timings recorded in training summaries: avg_step_ms, data_time_ms, optim_time_ms, batches (bench_history)
 
+## Automated Verification (Defaults)
+
+For end‑to‑end parity checks on the RR 2R experiments, use the verifier:
+
+```bash
+# Aggregate across seeds (90th percentile) with recommended thresholds
+python3 scripts/verify_results.py \
+  --path results/robotics/paper_suite \
+  --method "ZeroProofML-Full" \
+  --max-ple 0.30 \
+  --max-b0 0.010 \
+  --max-b1 0.010 \
+  --percentile 90 \
+  --require-nonempty-b03
+
+# Strict per-seed bounds
+python3 scripts/verify_results.py \
+  --glob 'results/robotics/paper_suite/seed_*/comprehensive_comparison.json' \
+  --method "ZeroProofML-Full" \
+  --max-ple 0.30 \
+  --max-b0 0.010 \
+  --max-b1 0.010 \
+  --no-percentile \
+  --require-nonempty-b03
+```
+
+Notes:
+- These defaults are calibrated for the CPU‑friendly configs in this repo; adapt for different datasets/hyperparameters.
+- `--require-nonempty-b03` promotes the near‑pole bucket coverage guardrail (B0–B3) to a hard failure.
+
 ## Updates Since Initial Report
 
 - Saturating gradients and Hybrid schedules are implemented (`grad_mode.py`, `hybrid_gradient.py`), with schedule‑driven δ and near‑pole exploration.

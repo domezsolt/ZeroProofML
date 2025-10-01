@@ -7,7 +7,7 @@ between a Mask‑REAL baseline and the current Hybrid configuration.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Callable, Optional
 import logging
 
 from ..autodiff.grad_mode import GradientMode, GradientModeConfig
@@ -199,3 +199,36 @@ def overhead_report(trainer, data_loader: List[Tuple[List, List]] ) -> Dict[str,
         pass
 
     return report
+
+
+def compare_tr_vs_float(
+    name: str,
+    tr_func: Callable[[], Any],
+    float_func: Callable[[], Any],
+    iterations: int = 10000,
+    repeats: int = 3,
+) -> Dict[str, Any]:
+    """Compare runtime of a TR function vs a pure-float function.
+
+    Returns a dict with mean runtimes and slowdown factor.
+    """
+    import time
+    def timeit(fn: Callable[[], Any]) -> float:
+        times: List[float] = []
+        for _ in range(repeats):
+            t0 = time.perf_counter()
+            for _ in range(iterations):
+                fn()
+            t1 = time.perf_counter()
+            times.append(t1 - t0)
+        return sum(times) / len(times)
+    tr_s = timeit(tr_func)
+    fl_s = timeit(float_func)
+    return {
+        'name': name,
+        'tr_sec': tr_s,
+        'float_sec': fl_s,
+        'slowdown_x': (tr_s / fl_s) if fl_s > 0 else float('inf'),
+        'iterations': iterations,
+        'repeats': repeats,
+    }

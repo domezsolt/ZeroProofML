@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-10-01T22:28:17.600260",
+  "results": {
+    "near_pole": {
+      "near_pole": "BenchmarkResult(name='near_pole', mean_time=0.08362259199930122, std_time=0.0, min_time=0.08362259199930122, max_time=0.08362259199930122, median_time=0.08362259199930122, samples=1, iterations_per_sample=100, total_iterations=100, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': 'near_once', 'args_length': 0})",
+      "far_from_pole": "BenchmarkResult(name='far_from_pole', mean_time=0.029285095995874144, std_time=0.0, min_time=0.029285095995874144, max_time=0.029285095995874144, median_time=0.029285095995874144, samples=1, iterations_per_sample=100, total_iterations=100, memory_usage_mb=0.0, tag_distribution={}, metadata={'function': 'far_once', 'args_length': 0})"
+    }
+  },
+  "system_info": {
+    "platform": "Linux-6.14.0-29-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "cpu": "x86_64",
+    "cpu_count": 4,
+    "memory_gb": "7.6"
+  }
+}
