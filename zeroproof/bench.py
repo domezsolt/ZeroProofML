@@ -463,13 +463,16 @@ class MiniBench:
         return res
 
     def save(self) -> str:
-        ts = datetime.now().isoformat()
+        # Use an ISO timestamp in the JSON content, but a filesystem-safe
+        # variant for the filename (colons are not allowed by artifact upload).
+        ts_iso = datetime.now().isoformat()
+        ts_safe = ts_iso.replace(":", "-")
         out = {
-            "timestamp": ts,
+            "timestamp": ts_iso,
             "results": self.results,
             "system_info": TRBenchmark()._collect_system_info(),
         }
-        path = os.path.join(self.out_dir, f"bench_{ts}.json")
+        path = os.path.join(self.out_dir, f"bench_{ts_safe}.json")
         with open(path, "w") as f:
             json.dump(out, f, indent=2, default=str)
         return path
