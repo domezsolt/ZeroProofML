@@ -10,7 +10,7 @@ minimal dependencies. Functions that require non-float64 precisions will
 raise informative errors when NumPy is not installed.
 """
 
-from typing import Type, Union
+from typing import Union
 from enum import Enum
 import sys
 

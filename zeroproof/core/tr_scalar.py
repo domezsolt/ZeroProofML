@@ -6,7 +6,7 @@ special values for infinity and undefined forms, making all operations total.
 """
 
 from __future__ import annotations
-from enum import IntEnum, auto
+from enum import IntEnum
 from typing import Union, Optional, Any
 import math
 

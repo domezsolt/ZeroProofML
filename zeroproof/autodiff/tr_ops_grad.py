@@ -10,7 +10,7 @@ from typing import Union, Optional
 import weakref
 
 from ..core import (
-    TRScalar, TRTag, real,
+    TRScalar, real,
     tr_add as core_add,
     tr_sub as core_sub,
     tr_mul as core_mul,

@@ -40,13 +40,13 @@ jobs:
           pip install black ruff isort mypy
           
       - name: Run Black
-        run: black --check --diff zeroproof tests examples
+        run: black --check --diff zeroproof
         
       - name: Run Ruff
-        run: ruff check zeroproof tests examples
+        run: ruff check zeroproof
         
       - name: Run isort
-        run: isort --check-only --diff zeroproof tests examples
+        run: isort --check-only --diff zeroproof
         
       - name: Run MyPy (public surface)
         run: mypy

@@ -1,4 +1,5 @@
 """Bridges for transreal arithmetic with various numerical libraries."""
+# ruff: noqa: F401
 
 # Core IEEE bridge
 from .ieee_tr import from_ieee, to_ieee, from_numpy, to_numpy

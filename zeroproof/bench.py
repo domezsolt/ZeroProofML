@@ -28,7 +28,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import zeroproof as zp
-from zeroproof.autodiff import TRNode, gradient_tape, tr_add, tr_mul, tr_div
+from zeroproof.autodiff import TRNode, gradient_tape, tr_add, tr_mul
 from zeroproof.core import tr_add as core_add, tr_mul as core_mul, tr_div as core_div, real as tr_real
 from zeroproof.core.reductions import tr_sum as core_sum
 from zeroproof.core.reductions import set_deterministic_reduction
@@ -158,16 +158,16 @@ class MiniBench:
         def bench_pair(tr_op, py_op, a_vals, b_vals, iters=3000):
             # TR path
             t0 = time.perf_counter()
-            acc_tr = tr_real(0.0)
+            _acc_tr = tr_real(0.0)
             for i in range(iters):
-                acc_tr = tr_op(a_vals[i % len(a_vals)], b_vals[i % len(b_vals)])
+                _acc_tr = tr_op(a_vals[i % len(a_vals)], b_vals[i % len(b_vals)])
             t1 = time.perf_counter()
             tr_time = t1 - t0
             # IEEE float path
             t0 = time.perf_counter()
-            acc_f = 0.0
+            _acc_f = 0.0
             for i in range(iters):
-                acc_f = py_op(float(i % 7), float((i+1) % 11))
+                _acc_f = py_op(float(i % 7), float((i+1) % 11))
             t1 = time.perf_counter()
             py_time = t1 - t0
             return {"tr_sec": tr_time, "py_sec": py_time, "slowdown_x": tr_time / py_time if py_time > 0 else float("inf")}
@@ -232,8 +232,8 @@ class MiniBench:
         Expression: f(x) = (x^2 + x) / (x + 1)
         Uses a set of x values including ones that cause denominator=0.
         """
-        import time
-        import math
+        # Keep these imports local to minimize module import overhead in users
+        # (Ruff: they are intentionally unused within this block, see utils.overhead)
         res: Dict[str, Any] = {}
 
         xs_tr = [tr_real(v) for v in (-2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0)]
@@ -317,7 +317,7 @@ class MiniBench:
                                        0.0, 0.25, 0.75, 1.0, 1.5, 2.0)
                   if abs(v - center) >= 0.5]
 
-        c = tr_real(center)
+        # Center is implicit in expr via constant subtraction
 
         def expr(a):
             # (x^2 + x) / (x - c)

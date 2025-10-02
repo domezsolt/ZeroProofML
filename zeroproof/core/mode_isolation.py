@@ -5,13 +5,12 @@ This module ensures that TR and Wheel semantics never mix within a single
 operation, enforcing compile-time switching and proper axiom application.
 """
 
-from typing import Any, Optional, Callable, TypeVar, Dict, Set, List
+from typing import Any, Optional, Callable, TypeVar, List
 from functools import wraps
-from enum import Enum
 import threading
 import warnings
 
-from .tr_scalar import TRScalar, TRTag, real, pinf, ninf, phi, bottom
+from .tr_scalar import TRScalar, TRTag, real, pinf, bottom
 from .wheel_mode import ArithmeticMode, WheelModeConfig
 
 
@@ -425,8 +424,8 @@ def validate_mode_transition(from_mode: ArithmeticMode,
         for val in values:
             if val.tag == TRTag.BOTTOM:
                 raise ModeViolationError(
-                    f"Cannot transition from Wheel to TR mode with BOTTOM values. "
-                    f"BOTTOM (⊥) has no meaning in Transreal arithmetic."
+                    "Cannot transition from Wheel to TR mode with BOTTOM values. "
+                    "BOTTOM (⊥) has no meaning in Transreal arithmetic."
                 )
     
     # TR to Wheel is always safe (PHI values remain valid)
@@ -470,11 +469,11 @@ def test_mode_isolation() -> bool:
     Returns:
         True if all isolation tests pass
     """
-    from .tr_ops import tr_add, tr_mul
+    from .tr_ops import tr_add
     
     # Test 1: Operations lock mode
     with ModeSwitchGuard(ArithmeticMode.TRANSREAL):
-        result = tr_add(real(1.0), real(2.0))
+        _result = tr_add(real(1.0), real(2.0))
         
         # Try to change mode within operation (should fail in strict implementations)
         try:
@@ -482,7 +481,7 @@ def test_mode_isolation() -> bool:
                 # This should be prevented
                 pass
             return False  # Should not reach here
-        except:
+        except Exception:
             pass  # Expected
     
     # Test 2: Wheel axioms only in Wheel mode

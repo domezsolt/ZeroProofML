@@ -5,12 +5,11 @@ This module implements aggregation operations (sum, mean, etc.) that handle
 non-REAL values according to the specified reduction mode.
 """
 
-from typing import List, Union, Optional
+from typing import List
 from .tr_scalar import TRScalar, TRTag, real, pinf, ninf, phi, bottom
 from .tr_ops import tr_add, tr_div
 from .reduction import ReductionMode
 from .precision_config import PrecisionConfig
-import math
 
 
 # Global toggle for deterministic compensated reductions (set by policy)
@@ -311,4 +310,4 @@ def tr_max(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
 
 
 # Import tr_mul at the end to avoid circular import
-from .tr_ops import tr_mul
+from .tr_ops import tr_mul  # noqa: E402

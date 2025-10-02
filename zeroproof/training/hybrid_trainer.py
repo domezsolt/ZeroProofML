@@ -11,7 +11,7 @@ import math
 import time
 
 from ..core import TRScalar, TRTag, real
-from ..autodiff import TRNode, backward_pass
+from ..autodiff import TRNode, backward_pass, tr_mul
 from ..autodiff.grad_mode import GradientMode, GradientModeConfig
 from ..autodiff.hybrid_gradient import (
     HybridGradientContext, 
@@ -686,7 +686,7 @@ class HybridTRTrainer(TRTrainer):
         if (self.hybrid_config.enable_anti_illusion and 
             self.anti_illusion_metrics and 
             self.ground_truth_poles and 
-            epoch % 5 == 0):  # Evaluate every 5 epochs
+            self.epoch % 5 == 0):  # Evaluate every 5 epochs
             
             try:
                 illusion_metrics = self.anti_illusion_metrics.evaluate_model(
@@ -701,7 +701,7 @@ class HybridTRTrainer(TRTrainer):
                         avg_metrics[f'ai_{key}'] = value
                 
                 # Log key metrics
-                if epoch % 10 == 0:
+                if self.epoch % 10 == 0:
                     print(f"  Anti-illusion: PLE={illusion_metrics.get('ple', float('inf')):.4f}, "
                           f"Sign={illusion_metrics.get('sign_consistency', 0):.3f}, "
                           f"Score={illusion_metrics.get('anti_illusion_score', float('inf')):.4f}")
@@ -1055,7 +1055,7 @@ class HybridTRTrainer(TRTrainer):
                     loss = TRNode.constant(real(lambda_val))
                 losses.append(loss)
             
-            total = tr_sum([l.value for l in losses])
+            total = tr_sum([loss_node.value for loss_node in losses])
             batch_loss = TRNode.constant(tr_div(total, real(float(len(losses)))))
         
         # Add tag loss if enabled and not using adaptive loss policy

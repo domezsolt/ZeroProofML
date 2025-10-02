@@ -6,12 +6,12 @@ and enable gradient computation with the Mask-REAL rule.
 """
 
 from __future__ import annotations
-from typing import Optional, List, Tuple, Callable, Any, Dict
+from typing import Optional, List, Any, Dict
 import weakref
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from ..core import TRScalar, TRTag, real, pinf, ninf, phi
+from ..core import TRScalar, TRTag
 
 
 class OpType(Enum):

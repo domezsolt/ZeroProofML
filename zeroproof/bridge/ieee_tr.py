@@ -6,13 +6,13 @@ and transreal values, preserving semantics across representations.
 """
 
 import math
-from typing import Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from ..core import TRScalar, TRTag, real, pinf, ninf, phi, bottom
+from ..core import TRScalar, TRTag, real, pinf, ninf, phi
 from ..core.precision_config import PrecisionConfig
 
 if TYPE_CHECKING:
-    import numpy as np
+    pass
 
 
 def from_ieee(value: float) -> TRScalar:

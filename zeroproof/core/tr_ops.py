@@ -8,9 +8,9 @@ are total (never throw exceptions) and deterministic.
 
 from __future__ import annotations
 import math
-from typing import Union
-
 from .tr_scalar import TRScalar, TRTag, real, pinf, ninf, phi, bottom
+from .precision_config import PrecisionConfig  # noqa: E402
+from .wheel_mode import WheelModeConfig  # noqa: E402
 # Internal helper: accept callers that accidentally pass TRNode
 def _ensure_trscalar(x):
     # If it's already TRScalar, return
@@ -20,8 +20,6 @@ def _ensure_trscalar(x):
     if hasattr(x, 'value') and isinstance(getattr(x, 'value'), TRScalar):
         return getattr(x, 'value')
     return x  # Let downstream raise if unsupported
-from .precision_config import PrecisionConfig
-from .wheel_mode import WheelModeConfig
 
 
 # Addition operation

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import List, Tuple, Optional, Callable, Union
 
 from .tr_node import TRNode
-from .gradient_tape import TRGradientTape, gradient_tape
+from .gradient_tape import gradient_tape
 
 
 def tr_grad(func: Callable[..., TRNode],
@@ -186,7 +186,7 @@ def check_gradient(func: Callable[..., TRNode],
         analytical = grad_func(x)
         if analytical is None or analytical.tag != TRTag.REAL:
             return analytical, None, None
-    except:
+    except Exception:
         return None, None, None
     
     # Compute numerical gradient using finite differences

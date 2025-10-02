@@ -6,7 +6,7 @@ singularities instead of zeroing out like the Mask-REAL rule.
 """
 
 from typing import Tuple, Optional, List
-from ..core import TRScalar, TRTag, real, pinf, ninf, phi
+from ..core import TRScalar, TRTag, real
 from ..core import tr_add, tr_mul, tr_div, tr_sqrt, tr_pow_int
 from .tr_node import TRNode
 from .grad_mode import GradientModeConfig

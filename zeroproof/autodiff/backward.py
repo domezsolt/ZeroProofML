@@ -7,8 +7,6 @@ topological ordering and the Mask-REAL rule.
 
 from __future__ import annotations
 from typing import Set, List, Dict, Optional
-import weakref
-from collections import defaultdict, deque
 
 from ..core import TRScalar, TRTag, real
 from .tr_node import TRNode, OpType

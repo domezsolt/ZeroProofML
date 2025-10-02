@@ -268,7 +268,6 @@ class TagPredictionHead:
     
     def _initialize_parameters(self):
         """Initialize network parameters."""
-        import math
         
         # Hidden layer: input_dim+1 (bias feature) -> hidden_dim
         self.W1 = []

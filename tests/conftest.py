@@ -8,6 +8,7 @@ is not installed. It also seeds RNGs for more deterministic behavior.
 import os
 import random
 from typing import Any, Callable
+from pathlib import Path
 
 import pytest
 
@@ -56,3 +57,19 @@ def benchmark() -> _DummyBenchmark:
     """Provide a basic benchmark fixture when pytest-benchmark is absent."""
     return _DummyBenchmark()
 
+
+def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Auto-mark tests under tests/property with the 'property' marker.
+
+    CI selects property tests via `-m property`. Some tests in tests/property
+    don't explicitly carry the marker, so ensure they are selectable.
+    """
+    for item in items:
+        try:
+            p = Path(str(item.fspath))
+            # Mark any test file within a 'tests/property' directory tree
+            if any(part == "property" for part in p.parts) and "tests" in p.parts:
+                item.add_marker(pytest.mark.property)  # type: ignore[attr-defined]
+        except Exception:
+            # Best-effort; ignore path issues
+            pass

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import numpy as np
 import math
 
-from ..core import TRScalar, TRTag, real
+from ..core import TRScalar, TRTag, real, pinf, ninf, phi
 from .bridge import to_real_scalar
 from ..autodiff import TRNode
 from ..autodiff.tr_ops_grad import tr_mul, tr_sub, tr_add, tr_div

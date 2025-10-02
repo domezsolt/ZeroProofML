@@ -12,7 +12,6 @@ Key differences:
 
 from enum import Enum, auto
 from contextlib import contextmanager
-from typing import Optional
 
 
 class ArithmeticMode(Enum):
