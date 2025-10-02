@@ -7,7 +7,6 @@ and transreal values, preserving semantics across representations.
 
 import math
 from typing import Union, TYPE_CHECKING
-import numpy as np
 
 from ..core import TRScalar, TRTag, real, pinf, ninf, phi, bottom
 from ..core.precision_config import PrecisionConfig

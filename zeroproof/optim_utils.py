@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """
 Optimizer safety utilities (batch-safe learning rate helpers).
 
@@ -74,4 +76,3 @@ def eta_adam(proxy: BatchCurvatureProxy, beta1: float, beta2: float) -> float:
     beta2 = min(max(beta2, 0.0), 0.999999)
     denom = math.sqrt(max(1.0 - beta2, 1e-12)) * max(proxy.L_hat, 1e-12)
     return (1.0 - beta1) / denom
-

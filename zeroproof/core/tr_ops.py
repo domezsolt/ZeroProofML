@@ -8,7 +8,6 @@ are total (never throw exceptions) and deterministic.
 
 from __future__ import annotations
 import math
-import numpy as np
 from typing import Union
 
 from .tr_scalar import TRScalar, TRTag, real, pinf, ninf, phi, bottom

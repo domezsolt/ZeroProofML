@@ -72,6 +72,7 @@ jax = [
   "jaxlib>=0.4.14; platform_machine != 'arm64' or platform_system != 'Darwin'",
 ]
 dev = [
+  "numpy>=1.23",
   "pytest>=7.4",
   "pytest-cov>=4.1",
   "hypothesis>=6.88",

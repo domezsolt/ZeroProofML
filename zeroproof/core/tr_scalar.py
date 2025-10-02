@@ -9,7 +9,6 @@ from __future__ import annotations
 from enum import IntEnum, auto
 from typing import Union, Optional, Any
 import math
-import numpy as np
 
 from .precision_config import PrecisionConfig
 
@@ -328,7 +327,7 @@ class TRScalar:
 
 # Factory functions for creating transreal scalars
 
-def real(value: Union[float, int, np.floating]) -> TRScalar:
+def real(value: Union[float, int]) -> TRScalar:
     """
     Create a transreal scalar with REAL tag.
     

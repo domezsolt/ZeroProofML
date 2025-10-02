@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """
 Second-order safeguards and curvature bound utilities.
 
@@ -204,4 +206,3 @@ def gauss_newton_bound(grad_norm_sq: float, y_max: float, eps: float = 1e-12) ->
         g2 = 1.0
     g2 = max(g2, eps)
     return g2
-

@@ -79,6 +79,7 @@ try:
         TRThreadPool,
         TRProcessPool,
         vectorize_operation,
+        ParallelConfig,
         PARALLEL_AVAILABLE,
     )
     __all__.extend([
@@ -87,6 +88,7 @@ try:
         "TRThreadPool",
         "TRProcessPool",
         "vectorize_operation",
+        "ParallelConfig",
         "PARALLEL_AVAILABLE",
     ])
 except ImportError:

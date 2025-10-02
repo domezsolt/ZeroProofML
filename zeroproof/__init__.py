@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """
 ZeroProof: Transreal arithmetic for stable machine learning without epsilon hacks.
 
@@ -58,6 +60,9 @@ from .core import (
 # Bridge functions (framework-agnostic imports only)
 from .bridge.ieee_tr import from_ieee, to_ieee
 
+# Policy exports (lightweight, no heavy deps)
+from .policy import TRPolicy, TRPolicyConfig
+
 # NumPy bridge is optional; import guarded to keep minimal installs working
 try:  # pragma: no cover - optional dependency
     from .bridge.numpy_bridge import from_numpy, to_numpy  # type: ignore
@@ -116,4 +121,19 @@ __all__ = [
     "to_ieee",
     "from_numpy",
     "to_numpy",
+    # Policy
+    "TRPolicy",
+    "TRPolicyConfig",
+    # Submodules (exposed lazily via __getattr__)
+    "layers",
+    "training",
+    "autodiff",
+    "utils",
 ]
+
+
+def __getattr__(name):  # Lazy import heavy submodules on demand
+    if name in {"layers", "training", "autodiff", "utils"}:
+        import importlib
+        return importlib.import_module(f"{__name__}.{name}")
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

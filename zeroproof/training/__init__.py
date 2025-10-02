@@ -28,11 +28,15 @@ from .advanced_control import (
     create_advanced_controller,
 )
 
-from .control_ablation import (
-    AblationConfig,
-    AblationRunner,
-    run_control_ablation,
-)
+_CONTROL_ABLATION_AVAILABLE = True
+try:
+    from .control_ablation import (
+        AblationConfig,
+        AblationRunner,
+        run_control_ablation,
+    )
+except Exception:
+    _CONTROL_ABLATION_AVAILABLE = False
 
 # Optional pole supervision (depends on torch). Import lazily and tolerate absence.
 _POLE_SUPERVISION_AVAILABLE = True
@@ -100,10 +104,7 @@ __all__ = [
     "HybridController",
     "create_advanced_controller",
     
-    # Control ablation
-    "AblationConfig",
-    "AblationRunner",
-    "run_control_ablation",
+    # Control ablation (conditionally appended below)
     
     # Sampling and diagnostics
     "SamplingStrategy",
@@ -147,6 +148,14 @@ if not _SAMPLING_AVAILABLE:
             __all__.remove(name)
         except ValueError:
             pass
+
+# Append control ablation exports only if available to avoid matplotlib dependency
+if _CONTROL_ABLATION_AVAILABLE:
+    __all__.extend([
+        "AblationConfig",
+        "AblationRunner",
+        "run_control_ablation",
+    ])
 
 
 # Lightweight shims for Torch integration in tests
