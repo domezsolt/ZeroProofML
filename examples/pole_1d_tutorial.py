@@ -26,7 +26,10 @@ def make_dataset(
     n_val: int = 128,
     exclude_radius: float = 0.05,
     seed: int | None = 123,
-) -> Tuple[List[Tuple[List[zp.TRScalar], List[zp.TRScalar]]], List[Tuple[List[zp.TRScalar], List[zp.TRScalar]]]]:
+) -> Tuple[
+    List[Tuple[List[zp.TRScalar], List[zp.TRScalar]]],
+    List[Tuple[List[zp.TRScalar], List[zp.TRScalar]]],
+]:
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -66,7 +69,9 @@ def main() -> None:
     ap.add_argument("--epochs", type=int, default=50, help="Training epochs")
     ap.add_argument("--seed", type=int, default=123, help="Random seed")
     ap.add_argument("--pairwise", action="store_true", help="Enable deterministic reductions")
-    ap.add_argument("--eval-out", type=str, default="", help="Optional JSON path to save evaluation metrics")
+    ap.add_argument(
+        "--eval-out", type=str, default="", help="Optional JSON path to save evaluation metrics"
+    )
     ap.add_argument("--no-viz", action="store_true", help="Disable plots during evaluation")
     args = ap.parse_args()
 

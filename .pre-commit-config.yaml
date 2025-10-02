@@ -21,4 +21,7 @@ repos:
     rev: v1.4.1
     hooks:
       - id: mypy
+        # Let mypy use config-defined targets (pyproject.toml) instead of filenames from git
+        pass_filenames: false
+        args: ["--config-file", "pyproject.toml", "--exclude", "^\\.venv.*|^venv.*|^dist/|^build/"]
         additional_dependencies: []

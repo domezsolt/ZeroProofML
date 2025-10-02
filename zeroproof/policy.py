@@ -11,9 +11,9 @@ classification used by layers, controllers, and metrics.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Optional
-import math
 
 from .core import TRScalar, TRTag
 
@@ -60,7 +60,9 @@ class TRPolicy:
     # non-REAL tags through the softmax surrogate.
     softmax_one_hot_infinity: bool = False
 
-    def resolve_thresholds(self, ulp: float, local_scale_q: float = 1.0, local_scale_p: float = 1.0) -> None:
+    def resolve_thresholds(
+        self, ulp: float, local_scale_q: float = 1.0, local_scale_p: float = 1.0
+    ) -> None:
         """
         Derive guard bands from a unit-in-last-place (ULP) and local sensitivities.
 
@@ -102,6 +104,7 @@ class TRPolicyConfig:
         # Propagate deterministic reduction preference to core reductions
         try:
             from .core.reductions import set_deterministic_reduction
+
             if policy is not None:
                 set_deterministic_reduction(bool(policy.deterministic_reduction))
             else:

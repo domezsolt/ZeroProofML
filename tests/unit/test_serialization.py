@@ -1,8 +1,9 @@
-import os
 import json
+import os
+
 import numpy as np
 
-from examples.robotics.rr_ik_dataset import RRDatasetGenerator, RobotConfig
+from examples.robotics.rr_ik_dataset import RobotConfig, RRDatasetGenerator
 
 
 def test_json_npz_roundtrip(tmp_path):
@@ -17,10 +18,10 @@ def test_json_npz_roundtrip(tmp_path):
 
     # Load JSON
     gen2 = RRDatasetGenerator.load_dataset(str(json_file))
-    assert hasattr(gen2, 'samples') and len(gen2.samples) == 50
+    assert hasattr(gen2, "samples") and len(gen2.samples) == 50
     # Metadata present
-    md = getattr(gen2, 'metadata', {})
-    assert isinstance(md.get('n_samples', 50), (int, float))
+    md = getattr(gen2, "metadata", {})
+    assert isinstance(md.get("n_samples", 50), (int, float))
 
     # Save NPZ
     npz_file = tmp_path / "rr_ik_dataset.npz"
@@ -28,7 +29,18 @@ def test_json_npz_roundtrip(tmp_path):
 
     # Load NPZ and verify arrays
     data = np.load(str(npz_file))
-    for key in ['dx','dy','theta1','theta2','dtheta1','dtheta2','det_J','cond_J','manipulability','distance_to_singularity','is_singular']:
+    for key in [
+        "dx",
+        "dy",
+        "theta1",
+        "theta2",
+        "dtheta1",
+        "dtheta2",
+        "det_J",
+        "cond_J",
+        "manipulability",
+        "distance_to_singularity",
+        "is_singular",
+    ]:
         assert key in data
         assert len(data[key]) == 50
-

@@ -7,8 +7,8 @@ is not installed. It also seeds RNGs for more deterministic behavior.
 
 import os
 import random
-from typing import Any, Callable
 from pathlib import Path
+from typing import Any, Callable
 
 import pytest
 
@@ -22,11 +22,13 @@ def pytest_sessionstart(session: pytest.Session) -> None:
         pass
     try:
         import numpy as np  # type: ignore
+
         np.random.seed(seed)
     except Exception:
         pass
     try:
         import torch  # type: ignore
+
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
@@ -58,7 +60,9 @@ def benchmark() -> _DummyBenchmark:
     return _DummyBenchmark()
 
 
-def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
+def pytest_collection_modifyitems(
+    session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
+) -> None:
     """Auto-mark tests under tests/property with the 'property' marker.
 
     CI selects property tests via `-m property`. Some tests in tests/property

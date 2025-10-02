@@ -2,14 +2,9 @@
 
 import numpy as np
 
-from zeroproof.bridge.numpy_bridge import (
-    from_numpy as from_numpy_std,
-    from_numpy_packed,
-    to_numpy,
-    TRArray,
-    TRArrayPacked,
-    count_tags,
-)
+from zeroproof.bridge.numpy_bridge import TRArray, TRArrayPacked, count_tags
+from zeroproof.bridge.numpy_bridge import from_numpy as from_numpy_std
+from zeroproof.bridge.numpy_bridge import from_numpy_packed, to_numpy
 
 
 def test_packed_roundtrip_matches_standard():
@@ -41,10 +36,9 @@ def test_packed_roundtrip_matches_standard():
     ninf_mask = packed.is_ninf()
     phi_mask = packed.is_phi()
     counts_packed = {
-        'REAL': int(real_mask.sum()),
-        'PINF': int(pinf_mask.sum()),
-        'NINF': int(ninf_mask.sum()),
-        'PHI': int(phi_mask.sum()),
+        "REAL": int(real_mask.sum()),
+        "PINF": int(pinf_mask.sum()),
+        "NINF": int(ninf_mask.sum()),
+        "PHI": int(phi_mask.sum()),
     }
     assert counts_std == counts_packed
-

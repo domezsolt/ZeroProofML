@@ -20,7 +20,7 @@ they are intended for monitoring, safety checks, and batch-safe step sizing.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from .autodiff.grad_mode import GradientModeConfig
 
@@ -37,6 +37,7 @@ class SecondOrderContract:
         H_max: Upper bound for SAT surrogate second-derivative proxy
         depth_hint: Approximate composition depth (used to combine bounds)
     """
+
     B_k: float = 1.0
     H_k: float = 1.0
     G_max: float = 1.0
@@ -63,7 +64,9 @@ def saturating_surrogate_bounds(bound: Optional[float] = None) -> Tuple[float, f
     return g, h
 
 
-def combine_path_bound(contract: SecondOrderContract, mr_paths: int = 1, sat_paths: int = 0) -> float:
+def combine_path_bound(
+    contract: SecondOrderContract, mr_paths: int = 1, sat_paths: int = 0
+) -> float:
     """
     Combine per-primitive bounds into a coarse global curvature bound.
 
@@ -80,11 +83,11 @@ def combine_path_bound(contract: SecondOrderContract, mr_paths: int = 1, sat_pat
     Returns:
         Curvature bound scalar (unitless envelope)
     """
-    c_mr = max(1.0, (contract.B_k ** 2) + contract.H_k)
-    c_sat = max(1.0, (contract.G_max ** 2) + contract.H_max)
+    c_mr = max(1.0, (contract.B_k**2) + contract.H_k)
+    c_sat = max(1.0, (contract.G_max**2) + contract.H_max)
     depth = max(1, int(contract.depth_hint))
     # Aggregate: (mr_paths * c_mr^depth + sat_paths * c_sat^depth)
-    return float(mr_paths) * (c_mr ** depth) + float(sat_paths) * (c_sat ** depth)
+    return float(mr_paths) * (c_mr**depth) + float(sat_paths) * (c_sat**depth)
 
 
 def estimate_contract_for_tr_rational(layer) -> SecondOrderContract:
@@ -99,7 +102,7 @@ def estimate_contract_for_tr_rational(layer) -> SecondOrderContract:
     """
     # Basis bound B (monomial basis typically exposes .bound)
     try:
-        B = float(getattr(getattr(layer, 'basis', None), 'bound', 1.0))
+        B = float(getattr(getattr(layer, "basis", None), "bound", 1.0))
     except Exception:
         B = 1.0
 
@@ -108,9 +111,9 @@ def estimate_contract_for_tr_rational(layer) -> SecondOrderContract:
         s = 0.0
         try:
             for n in nodes:
-                v = getattr(n, 'value', None)
-                if v is not None and getattr(v, 'tag', None) is not None:
-                    if v.tag.name == 'REAL':  # safe string check
+                v = getattr(n, "value", None)
+                if v is not None and getattr(v, "tag", None) is not None:
+                    if v.tag.name == "REAL":  # safe string check
                         try:
                             s += abs(float(v.value))
                         except Exception:
@@ -119,8 +122,8 @@ def estimate_contract_for_tr_rational(layer) -> SecondOrderContract:
             return 0.0
         return s
 
-    theta_l1 = _l1(getattr(layer, 'theta', []))
-    phi_l1 = _l1(getattr(layer, 'phi', []))
+    theta_l1 = _l1(getattr(layer, "theta", []))
+    phi_l1 = _l1(getattr(layer, "phi", []))
 
     # MR aggregate bounds: proportional to basis influence and parameter norms
     # B_k ~ O(1 + B * (||theta||_1 + ||phi||_1)), H_k set to similar scale
@@ -134,8 +137,8 @@ def estimate_contract_for_tr_rational(layer) -> SecondOrderContract:
     # Depth hint: number of primitive compositions in P/Q evaluation is
     # roughly deg(P)+deg(Q)+constant; use a safe minimum of 4
     try:
-        d_p = int(getattr(layer, 'd_p', 2) or 2)
-        d_q = int(getattr(layer, 'd_q', 1) or 1)
+        d_p = int(getattr(layer, "d_p", 2) or 2)
+        d_q = int(getattr(layer, "d_q", 1) or 1)
         depth_hint = max(4, d_p + d_q + 2)
     except Exception:
         depth_hint = 6
@@ -143,7 +146,9 @@ def estimate_contract_for_tr_rational(layer) -> SecondOrderContract:
     return SecondOrderContract(B_k=B_k, H_k=H_k, G_max=G_max, H_max=H_max, depth_hint=depth_hint)
 
 
-def curvature_bound_for_batch(layer, xs: Any, mr_paths: int = 1, sat_paths: int = 1) -> Dict[str, float]:
+def curvature_bound_for_batch(
+    layer, xs: Any, mr_paths: int = 1, sat_paths: int = 1
+) -> Dict[str, float]:
     """
     Compute a conservative curvature bound envelope for a batch.
 
@@ -163,9 +168,9 @@ def curvature_bound_for_batch(layer, xs: Any, mr_paths: int = 1, sat_paths: int 
     # q_min estimation
     try:
         q_vals = layer.get_q_values(xs)
-        q_min = min([float(v) for v in q_vals]) if q_vals else float('inf')
+        q_min = min([float(v) for v in q_vals]) if q_vals else float("inf")
     except Exception:
-        q_min = float('inf')
+        q_min = float("inf")
 
     contract = estimate_contract_for_tr_rational(layer)
 
@@ -182,13 +187,13 @@ def curvature_bound_for_batch(layer, xs: Any, mr_paths: int = 1, sat_paths: int 
 
     bound = combine_path_bound(contract, mr_paths=mr_w, sat_paths=sat_w)
     return {
-        'q_min': float(q_min),
-        'B_k': float(contract.B_k),
-        'H_k': float(contract.H_k),
-        'G_max': float(contract.G_max),
-        'H_max': float(contract.H_max),
-        'depth_hint': float(contract.depth_hint),
-        'curvature_bound': float(bound),
+        "q_min": float(q_min),
+        "B_k": float(contract.B_k),
+        "H_k": float(contract.H_k),
+        "G_max": float(contract.G_max),
+        "H_max": float(contract.H_max),
+        "depth_hint": float(contract.depth_hint),
+        "curvature_bound": float(bound),
     }
 
 

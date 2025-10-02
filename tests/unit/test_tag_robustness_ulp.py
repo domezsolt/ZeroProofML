@@ -6,11 +6,12 @@ For inputs where |Q| ≫ tau_Q_off, tags should remain REAL and invariant under
 """
 
 import math
+
 import numpy as np
 
+from zeroproof.core import TRTag, real
+from zeroproof.layers import MonomialBasis, TRRational
 from zeroproof.policy import TRPolicy, TRPolicyConfig
-from zeroproof.layers import TRRational, MonomialBasis
-from zeroproof.core import real, TRTag
 
 
 def setup_module(module):
@@ -53,4 +54,3 @@ def test_tag_invariant_under_ulps_outside_band():
         _, tagm = layer.forward(real(xm))
         assert tagp == TRTag.REAL
         assert tagm == TRTag.REAL
-

@@ -8,10 +8,10 @@ Run:
   python examples/hybrid_overhead.py
 """
 
-from zeroproof.layers import TRRational, MonomialBasis
-from zeroproof.training import HybridTRTrainer, HybridTrainingConfig, Optimizer
-from zeroproof.utils.overhead import overhead_report
 from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRational
+from zeroproof.training import HybridTrainingConfig, HybridTRTrainer, Optimizer
+from zeroproof.utils.overhead import overhead_report
 
 
 def _trscalar_list(vals):
@@ -27,7 +27,9 @@ def main():
     trainer = HybridTRTrainer(
         model=model,
         optimizer=Optimizer(model.parameters(), learning_rate=0.01),
-        config=HybridTrainingConfig(max_epochs=1, batch_size=4, verbose=False, use_hybrid_gradient=True)
+        config=HybridTrainingConfig(
+            max_epochs=1, batch_size=4, verbose=False, use_hybrid_gradient=True
+        ),
     )
 
     # Tiny data loader with a couple of near-pole and far-pole points
@@ -38,6 +40,5 @@ def main():
     overhead_report(trainer, data_loader)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

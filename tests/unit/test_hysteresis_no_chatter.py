@@ -6,8 +6,8 @@ We simulate batches with policy hysteresis ON/OFF thresholds and verify that:
  - Over many stable batches, the flip density remains low.
 """
 
-from zeroproof.policy import TRPolicy, TRPolicyConfig
 from zeroproof.autodiff.hybrid_gradient import HybridGradientContext, HybridGradientSchedule
+from zeroproof.policy import TRPolicy, TRPolicyConfig
 
 
 def test_no_chatter_with_stable_q_values():
@@ -21,8 +21,9 @@ def test_no_chatter_with_stable_q_values():
 
     # Hybrid schedule enabled (thresholds come from policy; schedule delta may be None)
     HybridGradientContext.reset()
-    schedule = HybridGradientSchedule(enable=True, warmup_epochs=0, transition_epochs=0,
-                                      delta_init=0.0, delta_final=0.0)
+    schedule = HybridGradientSchedule(
+        enable=True, warmup_epochs=0, transition_epochs=0, delta_init=0.0, delta_final=0.0
+    )
     HybridGradientContext.set_schedule(schedule)
     HybridGradientContext.update_epoch(0)
 
@@ -33,8 +34,8 @@ def test_no_chatter_with_stable_q_values():
         HybridGradientContext.end_batch_policy_update()
 
     stats = HybridGradientContext.get_statistics()
-    assert stats.get('policy_flip_count', 0) == 0
-    assert stats.get('flip_rate', 0.0) == 0.0
+    assert stats.get("policy_flip_count", 0) == 0
+    assert stats.get("flip_rate", 0.0) == 0.0
 
 
 def test_finite_flips_with_rare_excursions():
@@ -47,8 +48,9 @@ def test_finite_flips_with_rare_excursions():
     TRPolicyConfig.set_policy(pol)
 
     HybridGradientContext.reset()
-    schedule = HybridGradientSchedule(enable=True, warmup_epochs=0, transition_epochs=0,
-                                      delta_init=0.0, delta_final=0.0)
+    schedule = HybridGradientSchedule(
+        enable=True, warmup_epochs=0, transition_epochs=0, delta_init=0.0, delta_final=0.0
+    )
     HybridGradientContext.set_schedule(schedule)
     HybridGradientContext.update_epoch(0)
 
@@ -68,9 +70,8 @@ def test_finite_flips_with_rare_excursions():
         batches += 1
 
     stats = HybridGradientContext.get_statistics()
-    flips = stats.get('policy_flip_count', 0) or 0
-    flip_rate = stats.get('flip_rate', 0.0) or 0.0
+    flips = stats.get("policy_flip_count", 0) or 0
+    flip_rate = stats.get("flip_rate", 0.0) or 0.0
     # Finite flips and low flip density
     assert flips > 0 and flips < 10
     assert flip_rate < 0.1
-

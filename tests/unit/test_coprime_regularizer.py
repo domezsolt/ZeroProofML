@@ -6,8 +6,8 @@ Checks that:
 - When disabled, regularization_loss reduces to α/2 * ||φ||^2.
 """
 
-from zeroproof.layers import TRRational, MonomialBasis
 from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRational
 
 
 def _get_scalar(x):
@@ -15,7 +15,7 @@ def _get_scalar(x):
     try:
         return float(x.value.value)
     except Exception:
-        return float('nan')
+        return float("nan")
 
 
 def test_coprime_surrogate_increases_when_zeros_align():
@@ -28,7 +28,9 @@ def test_coprime_surrogate_increases_when_zeros_align():
 
     # Layer A: aligned P zero at x=a and Q zero at x=a
     layer_aligned = TRRational(
-        d_p=1, d_q=1, basis=basis,
+        d_p=1,
+        d_q=1,
+        basis=basis,
         enable_coprime_regularizer=True,
         lambda_coprime=1.0,
         alpha_phi=0.0,
@@ -41,7 +43,9 @@ def test_coprime_surrogate_increases_when_zeros_align():
 
     # Layer B: separated zeros (P zero at x=a, Q has small slope so no zero near grid)
     layer_sep = TRRational(
-        d_p=1, d_q=1, basis=basis,
+        d_p=1,
+        d_q=1,
+        basis=basis,
         enable_coprime_regularizer=True,
         lambda_coprime=1.0,
         alpha_phi=0.0,
@@ -56,7 +60,9 @@ def test_coprime_surrogate_increases_when_zeros_align():
     val_aligned = _get_scalar(reg_aligned)
     val_sep = _get_scalar(reg_sep)
 
-    assert val_aligned > val_sep, f"Expected aligned surrogate > separated (got {val_aligned} vs {val_sep})"
+    assert (
+        val_aligned > val_sep
+    ), f"Expected aligned surrogate > separated (got {val_aligned} vs {val_sep})"
 
 
 def test_regularization_no_surrogate_matches_alpha_half_phi_norm():
@@ -64,7 +70,9 @@ def test_regularization_no_surrogate_matches_alpha_half_phi_norm():
     basis = MonomialBasis()
     alpha = 0.2
     layer = TRRational(
-        d_p=1, d_q=2, basis=basis,
+        d_p=1,
+        d_q=2,
+        basis=basis,
         enable_coprime_regularizer=False,
         lambda_coprime=0.0,
         alpha_phi=alpha,
@@ -75,7 +83,6 @@ def test_regularization_no_surrogate_matches_alpha_half_phi_norm():
 
     reg = layer.regularization_loss()
     val = _get_scalar(reg)
-    expected = 0.5 * alpha * ((0.3 ** 2) + ((-0.4) ** 2))
+    expected = 0.5 * alpha * ((0.3**2) + ((-0.4) ** 2))
 
     assert abs(val - expected) < 1e-8, f"Expected {expected}, got {val}"
-

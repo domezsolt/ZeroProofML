@@ -36,26 +36,29 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 # Baselines
-from examples.baselines.mlp_baseline import MLPConfig, MLPBaseline, MLPTrainer
+from examples.baselines.mlp_baseline import MLPBaseline, MLPConfig, MLPTrainer
 from examples.baselines.rational_eps_baseline import (
-    RationalEpsConfig, RationalEpsModel, RationalEpsTrainer, grid_search_epsilon,
+    RationalEpsConfig,
+    RationalEpsModel,
+    RationalEpsTrainer,
+    grid_search_epsilon,
 )
-from zeroproof.core import real, TRTag
-from zeroproof.autodiff import GradientModeConfig, GradientMode, TRNode
+from zeroproof.autodiff import GradientMode, GradientModeConfig, TRNode
+from zeroproof.core import TRTag, real
 from zeroproof.layers import TRMultiInputRational
-from zeroproof.training import HybridTRTrainer, HybridTrainingConfig, Optimizer
+from zeroproof.training import HybridTrainingConfig, HybridTRTrainer, Optimizer
 
-
-DEFAULT_EDGES = [0.0, 1e-5, 1e-4, 1e-3, 1e-2, float('inf')]
+DEFAULT_EDGES = [0.0, 1e-5, 1e-4, 1e-3, 1e-2, float("inf")]
 
 
 def load_dataset(path: str) -> Dict[str, Any]:
-    with open(path, 'r') as fh:
+    with open(path, "r") as fh:
         return json.load(fh)
 
 
-def quick_indices(samples: List[Dict[str, float]], max_train: int, max_test: int,
-                  edges: List[float]) -> Tuple[List[int], List[int]]:
+def quick_indices(
+    samples: List[Dict[str, float]], max_train: int, max_test: int, edges: List[float]
+) -> Tuple[List[int], List[int]]:
     n_total = len(samples)
     n_train_full = int(0.8 * n_total)
     train_idx = list(range(n_train_full))
@@ -68,7 +71,7 @@ def quick_indices(samples: List[Dict[str, float]], max_train: int, max_test: int
     def bucketize(idx_list):
         buckets = {i: [] for i in range(len(edges) - 1)}
         for i in idx_list:
-            th2 = float(samples[i]['theta2'])
+            th2 = float(samples[i]["theta2"])
             dj = abs(math.sin(th2))
             for b in range(len(edges) - 1):
                 lo, hi = edges[b], edges[b + 1]
@@ -107,17 +110,24 @@ def quick_indices(samples: List[Dict[str, float]], max_train: int, max_test: int
     return selected_train, selected_test
 
 
-def build_data(samples: List[Dict[str, float]], idxs: List[int]) -> Tuple[List[List[float]], List[List[float]]]:
+def build_data(
+    samples: List[Dict[str, float]], idxs: List[int]
+) -> Tuple[List[List[float]], List[List[float]]]:
     inputs, targets = [], []
     for i in idxs:
         s = samples[i]
-        inputs.append([s['theta1'], s['theta2'], s['dx'], s['dy']])
-        targets.append([s['dtheta1'], s['dtheta2']])
+        inputs.append([s["theta1"], s["theta2"], s["dx"], s["dy"]])
+        targets.append([s["dtheta1"], s["dtheta2"]])
     return inputs, targets
 
 
-def compute_bucket_mse(per_sample_mse: List[float], inputs: List[List[float]], edges: List[float]) -> Dict[str, float]:
-    bucket_map: Dict[str, List[float]] = {f"({edges[i]:.0e},{edges[i+1]:.0e}]": [] for i in range(len(edges) - 1)}
+def compute_bucket_mse(
+    per_sample_mse: List[float], inputs: List[List[float]], edges: List[float]
+) -> Dict[str, float]:
+    bucket_map: Dict[str, List[float]] = {
+        f"({edges[i]:.0e},{edges[i+1]:.0e}]": [] for i in range(len(edges) - 1)
+    }
+
     def key_for(th2: float) -> str:
         dj = abs(math.sin(th2))
         for i in range(len(edges) - 1):
@@ -125,58 +135,77 @@ def compute_bucket_mse(per_sample_mse: List[float], inputs: List[List[float]], e
             if (dj > lo) and (dj <= hi):
                 return f"({lo:.0e},{hi:.0e}]"
         return f"({edges[-2]:.0e},inf]"
+
     for mse, inp in zip(per_sample_mse, inputs):
         bucket_map[key_for(float(inp[1]))].append(float(mse))
-    return {k: (float(np.mean(v)) if v else float('nan')) for k, v in bucket_map.items()}
+    return {k: (float(np.mean(v)) if v else float("nan")) for k, v in bucket_map.items()}
 
 
 def eval_mlp(train_data, val_data, test_orig, test_shift, edges) -> Dict[str, Any]:
-    cfg = MLPConfig(hidden_dims=[32, 16], activation='relu', learning_rate=0.01, epochs=1, batch_size=32)
+    cfg = MLPConfig(
+        hidden_dims=[32, 16], activation="relu", learning_rate=0.01, epochs=1, batch_size=32
+    )
     model = MLPBaseline(cfg)
     trainer = MLPTrainer(model, Optimizer(model.parameters(), learning_rate=cfg.learning_rate))
     trainer.train(*train_data, *val_data, verbose=True)
     # Evaluate
     te_orig = trainer.evaluate(*test_orig)
     te_shift = trainer.evaluate(*test_shift)
+
     # Per-sample mse for buckets
     def per_sample_mse(preds, targets):
         return [np.mean([(p - t) ** 2 for p, t in zip(pv, tv)]) for pv, tv in zip(preds, targets)]
-    bm_orig = compute_bucket_mse(per_sample_mse(te_orig['predictions'], test_orig[1]), test_orig[0], edges)
-    bm_shift = compute_bucket_mse(per_sample_mse(te_shift['predictions'], test_shift[1]), test_shift[0], edges)
+
+    bm_orig = compute_bucket_mse(
+        per_sample_mse(te_orig["predictions"], test_orig[1]), test_orig[0], edges
+    )
+    bm_shift = compute_bucket_mse(
+        per_sample_mse(te_shift["predictions"], test_shift[1]), test_shift[0], edges
+    )
     return {
-        'overall': {'orig': te_orig['mse'], 'shift': te_shift['mse']},
-        'bucket_mse': {'orig': bm_orig, 'shift': bm_shift},
+        "overall": {"orig": te_orig["mse"], "shift": te_shift["mse"]},
+        "bucket_mse": {"orig": bm_orig, "shift": bm_shift},
     }
 
 
 def eval_rational_eps(train_data, val_data, test_orig, test_shift, edges) -> Dict[str, Any]:
-    cfg = RationalEpsConfig(epochs=3, epsilon_values=[1e-4, 1e-3], learning_rate=0.01, batch_size=32)
+    cfg = RationalEpsConfig(
+        epochs=3, epsilon_values=[1e-4, 1e-3], learning_rate=0.01, batch_size=32
+    )
     # Grid search on original val (orig quick test)
-    gs = grid_search_epsilon(train_data, val_data, cfg, output_dir='results/robotics/e3_robustness_rational')
-    best_eps = gs.get('best_epsilon', 1e-4)
+    gs = grid_search_epsilon(
+        train_data, val_data, cfg, output_dir="results/robotics/e3_robustness_rational"
+    )
+    best_eps = gs.get("best_epsilon", 1e-4)
     # Train final
     model = RationalEpsModel(cfg, best_eps)
-    trainer = RationalEpsTrainer(model, Optimizer(model.parameters(), learning_rate=cfg.learning_rate))
+    trainer = RationalEpsTrainer(
+        model, Optimizer(model.parameters(), learning_rate=cfg.learning_rate)
+    )
     trainer.train(*train_data, *val_data, verbose=False)
     # Evaluate on both tests
     te_orig = trainer._evaluate_simple(*test_orig)
     te_shift = trainer._evaluate_simple(*test_shift)
     # Per-sample mse for buckets
-    bm_orig = compute_bucket_mse(te_orig['per_sample_mse'], test_orig[0], edges)
-    bm_shift = compute_bucket_mse(te_shift['per_sample_mse'], test_shift[0], edges)
+    bm_orig = compute_bucket_mse(te_orig["per_sample_mse"], test_orig[0], edges)
+    bm_shift = compute_bucket_mse(te_shift["per_sample_mse"], test_shift[0], edges)
     return {
-        'overall': {'orig': te_orig['mse'], 'shift': te_shift['mse']},
-        'bucket_mse': {'orig': bm_orig, 'shift': bm_shift},
-        'epsilon': best_eps,
+        "overall": {"orig": te_orig["mse"], "shift": te_shift["mse"]},
+        "bucket_mse": {"orig": bm_orig, "shift": bm_shift},
+        "epsilon": best_eps,
     }
 
 
-def eval_tr(train_data, val_data, test_orig, test_shift, edges, enable_enhancements: bool) -> Dict[str, Any]:
+def eval_tr(
+    train_data, val_data, test_orig, test_shift, edges, enable_enhancements: bool
+) -> Dict[str, Any]:
     GradientModeConfig.set_mode(GradientMode.MASK_REAL)
     # Determine dims
     output_dim = len(train_data[1][0]) if train_data[1] else 2
     input_dim = len(train_data[0][0]) if train_data[0] else 4
-    model = TRMultiInputRational(input_dim=input_dim, n_outputs=output_dim, d_p=3, d_q=2, hidden_dims=[8], shared_Q=True)
+    model = TRMultiInputRational(
+        input_dim=input_dim, n_outputs=output_dim, d_p=3, d_q=2, hidden_dims=[8], shared_Q=True
+    )
     if enable_enhancements:
         trainer = HybridTRTrainer(
             model=model,
@@ -214,7 +243,7 @@ def eval_tr(train_data, val_data, test_orig, test_shift, edges, enable_enhanceme
             if valid == 0:
                 continue
             sample_loss.backward()
-            if enable_enhancements and trainer is not None and hasattr(trainer, 'step_all'):
+            if enable_enhancements and trainer is not None and hasattr(trainer, "step_all"):
                 trainer.step_all()
             else:
                 Optimizer(model.parameters(), learning_rate=0.01).step(model)
@@ -232,15 +261,15 @@ def eval_tr(train_data, val_data, test_orig, test_shift, edges, enable_enhanceme
             pv = [(y.value.value if tag == TRTag.REAL else 0.0) for (y, tag) in outs]
             preds.append(pv)
             per_mse.append(np.mean([(a - b) ** 2 for a, b in zip(pv, tgt)]))
-        return float(np.mean(per_mse)) if per_mse else float('inf'), preds, per_mse
+        return float(np.mean(per_mse)) if per_mse else float("inf"), preds, per_mse
 
     m_orig, p_orig, per_orig = eval_on(*test_orig)
     m_shift, p_shift, per_shift = eval_on(*test_shift)
     bm_orig = compute_bucket_mse(per_orig, test_orig[0], edges)
     bm_shift = compute_bucket_mse(per_shift, test_shift[0], edges)
     return {
-        'overall': {'orig': m_orig, 'shift': m_shift},
-        'bucket_mse': {'orig': bm_orig, 'shift': bm_shift},
+        "overall": {"orig": m_orig, "shift": m_shift},
+        "bucket_mse": {"orig": bm_orig, "shift": bm_shift},
     }
 
 
@@ -252,16 +281,16 @@ def plot_robustness_b012(summary: Dict[str, Any], out_path: str) -> None:
         print(f"matplotlib not available: {e}. Skipping robustness plot.")
         return
     methods = [k for k in summary.keys()]
-    buckets = ['(0e+00,1e-05]', '(1e-05,1e-04]', '(1e-04,1e-03]']
+    buckets = ["(0e+00,1e-05]", "(1e-05,1e-04]", "(1e-04,1e-03]"]
     rel = []
     for m in methods:
-        mo = summary[m]['bucket_mse']['orig']
-        ms = summary[m]['bucket_mse']['shift']
+        mo = summary[m]["bucket_mse"]["orig"]
+        ms = summary[m]["bucket_mse"]["shift"]
         row = []
         for b in buckets:
             o = mo.get(b)
             s = ms.get(b)
-            if o in (None, float('nan')) or o == 0:
+            if o in (None, float("nan")) or o == 0:
                 row.append(0.0)
             else:
                 row.append(100.0 * (float(s) - float(o)) / float(o))
@@ -271,10 +300,10 @@ def plot_robustness_b012(summary: Dict[str, Any], out_path: str) -> None:
     width = 0.8 / len(methods)
     plt.figure(figsize=(7.0, 3.0), dpi=150)
     for i, m in enumerate(methods):
-        plt.bar(x + (i - len(methods)/2) * width + width/2, rel[i], width, label=m)
-    plt.axhline(0, color='gray', linewidth=0.8)
-    plt.xticks(x, ['B0', 'B1', 'B2'])
-    plt.ylabel('Relative Δ MSE (%) (shifted vs orig)')
+        plt.bar(x + (i - len(methods) / 2) * width + width / 2, rel[i], width, label=m)
+    plt.axhline(0, color="gray", linewidth=0.8)
+    plt.xticks(x, ["B0", "B1", "B2"])
+    plt.ylabel("Relative Δ MSE (%) (shifted vs orig)")
     plt.legend(fontsize=8, ncol=min(4, len(methods)), frameon=False)
     plt.tight_layout()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -284,13 +313,13 @@ def plot_robustness_b012(summary: Dict[str, Any], out_path: str) -> None:
 
 
 def main():
-    ap = argparse.ArgumentParser(description='E3: Robustness to near-pole shift')
-    ap.add_argument('--orig', required=True, help='Original dataset JSON')
-    ap.add_argument('--shifted', required=True, help='Shifted dataset JSON')
-    ap.add_argument('--outdir', default='results/robotics/e3_robustness', help='Output directory')
-    ap.add_argument('--max_train', type=int, default=2000)
-    ap.add_argument('--max_test', type=int, default=500)
-    ap.add_argument('--models', nargs='+', default=['mlp', 'rational_eps', 'tr_basic', 'tr_full'])
+    ap = argparse.ArgumentParser(description="E3: Robustness to near-pole shift")
+    ap.add_argument("--orig", required=True, help="Original dataset JSON")
+    ap.add_argument("--shifted", required=True, help="Shifted dataset JSON")
+    ap.add_argument("--outdir", default="results/robotics/e3_robustness", help="Output directory")
+    ap.add_argument("--max_train", type=int, default=2000)
+    ap.add_argument("--max_test", type=int, default=500)
+    ap.add_argument("--models", nargs="+", default=["mlp", "rational_eps", "tr_basic", "tr_full"])
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -298,9 +327,9 @@ def main():
     # Load datasets and edges
     ds_orig = load_dataset(args.orig)
     ds_shift = load_dataset(args.shifted)
-    samples_orig = ds_orig['samples']
-    samples_shift = ds_shift['samples']
-    md_edges = ds_orig.get('metadata', {}).get('bucket_edges')
+    samples_orig = ds_orig["samples"]
+    samples_shift = ds_shift["samples"]
+    md_edges = ds_orig.get("metadata", {}).get("bucket_edges")
     edges = []
     if isinstance(md_edges, list):
         for e in md_edges:
@@ -308,7 +337,7 @@ def main():
                 edges.append(float(e))
             except Exception:
                 s = str(e).strip().lower()
-                edges.append(float('inf') if s in ('inf', '+inf', 'infinity') else float(e))
+                edges.append(float("inf") if s in ("inf", "+inf", "infinity") else float(e))
     else:
         edges = DEFAULT_EDGES
 
@@ -323,32 +352,38 @@ def main():
 
     summary: Dict[str, Any] = {}
 
-    if 'mlp' in args.models:
-        print('Evaluating MLP...')
-        summary['MLP'] = eval_mlp(train_data, val_data, test_orig, test_shift, edges)
+    if "mlp" in args.models:
+        print("Evaluating MLP...")
+        summary["MLP"] = eval_mlp(train_data, val_data, test_orig, test_shift, edges)
 
-    if 'rational_eps' in args.models:
-        print('Evaluating Rational+ε...')
-        summary['Rational+ε'] = eval_rational_eps(train_data, val_data, test_orig, test_shift, edges)
+    if "rational_eps" in args.models:
+        print("Evaluating Rational+ε...")
+        summary["Rational+ε"] = eval_rational_eps(
+            train_data, val_data, test_orig, test_shift, edges
+        )
 
-    if 'tr_basic' in args.models:
-        print('Evaluating ZeroProofML (Basic)...')
-        summary['ZeroProofML (Basic)'] = eval_tr(train_data, val_data, test_orig, test_shift, edges, enable_enhancements=False)
+    if "tr_basic" in args.models:
+        print("Evaluating ZeroProofML (Basic)...")
+        summary["ZeroProofML (Basic)"] = eval_tr(
+            train_data, val_data, test_orig, test_shift, edges, enable_enhancements=False
+        )
 
-    if 'tr_full' in args.models:
-        print('Evaluating ZeroProofML (Full)...')
-        summary['ZeroProofML (Full)'] = eval_tr(train_data, val_data, test_orig, test_shift, edges, enable_enhancements=True)
+    if "tr_full" in args.models:
+        print("Evaluating ZeroProofML (Full)...")
+        summary["ZeroProofML (Full)"] = eval_tr(
+            train_data, val_data, test_orig, test_shift, edges, enable_enhancements=True
+        )
 
     # Save JSON
-    out_json = os.path.join(args.outdir, 'e3_robustness_summary.json')
-    with open(out_json, 'w') as fh:
+    out_json = os.path.join(args.outdir, "e3_robustness_summary.json")
+    with open(out_json, "w") as fh:
         json.dump(summary, fh, indent=2)
     print(f"Saved summary to {out_json}")
 
     # Plot robustness for B0–B2
-    out_fig = os.path.join(args.outdir, 'e3_robustness_b012.png')
+    out_fig = os.path.join(args.outdir, "e3_robustness_b012.png")
     plot_robustness_b012(summary, out_fig)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

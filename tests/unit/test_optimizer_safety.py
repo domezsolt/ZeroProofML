@@ -8,12 +8,7 @@ and basic behavior of batch-safe curvature proxy.
 
 import math
 
-from zeroproof.optim_utils import (
-    BatchCurvatureProxy,
-    batch_safe_lr,
-    eta_heavy_ball,
-    eta_adam,
-)
+from zeroproof.optim_utils import BatchCurvatureProxy, batch_safe_lr, eta_adam, eta_heavy_ball
 
 
 def test_eta_heavy_ball_matches_formula_and_clamps():

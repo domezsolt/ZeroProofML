@@ -6,9 +6,9 @@ Also verifies that TRRational.estimate_local_scales produces larger scales when
 coefficient norms grow.
 """
 
-from zeroproof.policy import TRPolicy
-from zeroproof.layers import TRRational, MonomialBasis
 from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRational
+from zeroproof.policy import TRPolicy
 
 
 def test_resolve_thresholds_scales_with_local_sensitivity():
@@ -47,4 +47,3 @@ def test_estimate_local_scales_increases_with_coeff_norms():
 
     assert q_big > q_small
     assert p_big > p_small
-

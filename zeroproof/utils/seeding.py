@@ -8,6 +8,7 @@ import os
 import random
 from typing import Optional
 
+
 def set_global_seed(seed: Optional[int]) -> None:
     """Set seeds across libraries in a best-effort manner.
 
@@ -29,12 +30,14 @@ def set_global_seed(seed: Optional[int]) -> None:
 
     try:
         import numpy as np  # type: ignore
+
         np.random.seed(seed)
     except Exception:
         pass
 
     try:
         import torch  # type: ignore
+
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
@@ -44,10 +47,10 @@ def set_global_seed(seed: Optional[int]) -> None:
             pass
         try:
             import torch.backends.cudnn as cudnn  # type: ignore
+
             cudnn.deterministic = True
             cudnn.benchmark = False
         except Exception:
             pass
     except Exception:
         pass
-

@@ -10,12 +10,13 @@ minimal dependencies. Functions that require non-float64 precisions will
 raise informative errors when NumPy is not installed.
 """
 
-from typing import Union
-from enum import Enum
 import sys
+from enum import Enum
+from typing import Union
 
 try:  # Optional dependency for dtype management
     import numpy as np  # type: ignore
+
     NUMPY_AVAILABLE = True
 except Exception:  # pragma: no cover - optional
     np = None  # type: ignore
@@ -27,9 +28,10 @@ class PrecisionMode(Enum):
 
     Uses string labels to avoid importing NumPy at module import time.
     """
-    FLOAT16 = 'float16'
-    FLOAT32 = 'float32'
-    FLOAT64 = 'float64'
+
+    FLOAT16 = "float16"
+    FLOAT32 = "float32"
+    FLOAT64 = "float64"
 
     @property
     def numpy_dtype(self):
@@ -50,51 +52,53 @@ class PrecisionMode(Enum):
         """Get the number of bits for this precision."""
         if NUMPY_AVAILABLE:
             return int(np.dtype(self.numpy_dtype).itemsize * 8)  # type: ignore[arg-type]
-        return {PrecisionMode.FLOAT16: 16, PrecisionMode.FLOAT32: 32, PrecisionMode.FLOAT64: 64}[self]
+        return {PrecisionMode.FLOAT16: 16, PrecisionMode.FLOAT32: 32, PrecisionMode.FLOAT64: 64}[
+            self
+        ]
 
 
 class PrecisionConfig:
     """
     Global precision configuration.
-    
+
     By default, ZeroProof uses float64 for all computations to ensure
     maximum precision in transreal arithmetic operations.
     """
-    
+
     _default_mode: PrecisionMode = PrecisionMode.FLOAT64
     _enforce_precision: bool = True
-    
+
     @classmethod
     def set_precision(cls, mode: Union[PrecisionMode, str]) -> None:
         """
         Set the default precision mode.
-        
+
         Args:
             mode: PrecisionMode enum or string ('float16', 'float32', 'float64')
-            
+
         Raises:
             ValueError: If mode is not supported
         """
         if isinstance(mode, str):
             mode_map = {
-                'float16': PrecisionMode.FLOAT16,
-                'float32': PrecisionMode.FLOAT32,
-                'float64': PrecisionMode.FLOAT64,
+                "float16": PrecisionMode.FLOAT16,
+                "float32": PrecisionMode.FLOAT32,
+                "float64": PrecisionMode.FLOAT64,
             }
             if mode not in mode_map:
                 raise ValueError(f"Unsupported precision mode: {mode}")
             mode = mode_map[mode]
-        
+
         if not isinstance(mode, PrecisionMode):
             raise ValueError(f"Invalid precision mode: {mode}")
-        
+
         cls._default_mode = mode
-    
+
     @classmethod
     def get_precision(cls) -> PrecisionMode:
         """Get the current default precision mode."""
         return cls._default_mode
-    
+
     @classmethod
     def get_dtype(cls):  # -> Type[np.floating] | Type[float]
         """Get the dtype for the current precision.
@@ -103,21 +107,21 @@ class PrecisionConfig:
         Python's ``float`` for float64.
         """
         return cls._default_mode.numpy_dtype
-    
+
     @classmethod
     def enforce_precision(cls, value: Union[float, int]) -> float:
         """
         Convert a value to the current default precision.
-        
+
         Args:
             value: Numeric value to convert
-            
+
         Returns:
             Value with enforced precision as Python float
         """
         if not cls._enforce_precision:
             return float(value)
-        
+
         if NUMPY_AVAILABLE:
             dtype = cls.get_dtype()
             # Convert to numpy dtype then back to Python float
@@ -129,22 +133,22 @@ class PrecisionConfig:
                 "Install with: pip install numpy"
             )
         return float(value)
-    
+
     @classmethod
     def set_enforcement(cls, enforce: bool) -> None:
         """
         Enable or disable precision enforcement.
-        
+
         Args:
             enforce: Whether to enforce precision conversion
         """
         cls._enforce_precision = enforce
-    
+
     @classmethod
     def is_enforcing(cls) -> bool:
         """Check if precision enforcement is enabled."""
         return cls._enforce_precision
-    
+
     # Conservative overflow margin to avoid borderline magnitudes near dtype max
     _overflow_safety_margin: float = 1.0  # strict check; do not preemptively overflow
 
@@ -152,10 +156,10 @@ class PrecisionConfig:
     def check_overflow(cls, value: float) -> bool:
         """
         Check if a value would overflow in the current precision.
-        
+
         Args:
             value: Value to check
-            
+
         Returns:
             True if value would overflow
         """
@@ -177,21 +181,21 @@ class PrecisionConfig:
             )
         # sys.float_info.max corresponds to double precision
         return abs(value) > sys.float_info.max * cls._overflow_safety_margin
-    
+
     @classmethod
     def get_epsilon(cls) -> float:
         """Get machine epsilon for current precision."""
         if NUMPY_AVAILABLE:
             return float(np.finfo(cls.get_dtype()).eps)  # type: ignore[arg-type]
         return sys.float_info.epsilon
-    
+
     @classmethod
     def get_max(cls) -> float:
         """Get maximum representable value for current precision."""
         if NUMPY_AVAILABLE:
             return float(np.finfo(cls.get_dtype()).max)  # type: ignore[arg-type]
         return sys.float_info.max
-    
+
     @classmethod
     def get_min(cls) -> float:
         """Get minimum positive value for current precision."""
@@ -205,25 +209,25 @@ class PrecisionConfig:
 class precision_context:
     """
     Context manager for temporary precision changes.
-    
+
     Example:
         with precision_context('float32'):
             # Operations use float32
             x = real(1.0)
         # Back to previous precision
     """
-    
+
     def __init__(self, mode: Union[PrecisionMode, str]):
         self.new_mode = mode
         self.old_mode = None
         self.old_enforcement = None
-    
+
     def __enter__(self):
         self.old_mode = PrecisionConfig.get_precision()
         self.old_enforcement = PrecisionConfig.is_enforcing()
         PrecisionConfig.set_precision(self.new_mode)
         return self
-    
+
     def __exit__(self, _exc_type, _exc_val, _exc_tb):
         PrecisionConfig.set_precision(self.old_mode)
         PrecisionConfig.set_enforcement(self.old_enforcement)

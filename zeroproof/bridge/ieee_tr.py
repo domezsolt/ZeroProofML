@@ -8,7 +8,7 @@ and transreal values, preserving semantics across representations.
 import math
 from typing import TYPE_CHECKING
 
-from ..core import TRScalar, TRTag, real, pinf, ninf, phi
+from ..core import TRScalar, TRTag, ninf, phi, pinf, real
 from ..core.precision_config import PrecisionConfig
 
 if TYPE_CHECKING:
@@ -18,16 +18,16 @@ if TYPE_CHECKING:
 def from_ieee(value: float) -> TRScalar:
     """
     Convert IEEE-754 float to transreal value.
-    
+
     Mapping:
         - finite float → (value, REAL)
         - +∞ → (—, PINF)
         - -∞ → (—, NINF)
         - NaN → (—, PHI)
-    
+
     Args:
         value: IEEE-754 float value
-        
+
     Returns:
         Corresponding transreal scalar
     """
@@ -48,17 +48,17 @@ def from_ieee(value: float) -> TRScalar:
 def to_ieee(tr_value: TRScalar) -> float:
     """
     Convert transreal value to IEEE-754 float.
-    
+
     Mapping:
         - (value, REAL) → value
         - (—, PINF) → +∞
         - (—, NINF) → -∞
         - (—, PHI) → NaN
         - (—, BOTTOM) → NaN (wheel mode)
-    
+
     Args:
         tr_value: Transreal scalar
-        
+
     Returns:
         Corresponding IEEE-754 float
     """
@@ -66,23 +66,20 @@ def to_ieee(tr_value: TRScalar) -> float:
         # Return value with enforced precision
         return float(PrecisionConfig.enforce_precision(tr_value.value))
     elif tr_value.tag == TRTag.PINF:
-        return float('inf')
+        return float("inf")
     elif tr_value.tag == TRTag.NINF:
-        return float('-inf')
+        return float("-inf")
     elif tr_value.tag == TRTag.PHI:
-        return float('nan')
+        return float("nan")
     else:  # BOTTOM
-        return float('nan')
+        return float("nan")
 
 
 # Import numpy bridge if available
 try:
-    from .numpy_bridge import (
-        from_numpy as from_numpy_impl,
-        to_numpy as to_numpy_impl,
-        TRArray,
-        NUMPY_AVAILABLE,
-    )
+    from .numpy_bridge import NUMPY_AVAILABLE, TRArray
+    from .numpy_bridge import from_numpy as from_numpy_impl
+    from .numpy_bridge import to_numpy as to_numpy_impl
 except ImportError:
     NUMPY_AVAILABLE = False
     TRArray = None
@@ -93,36 +90,36 @@ except ImportError:
 def from_numpy(arr):
     """
     Convert NumPy array to transreal representation.
-    
+
     Args:
         arr: NumPy array or scalar
-        
+
     Returns:
         TRArray for arrays, TRScalar for scalars
-        
+
     Raises:
         ImportError: If NumPy is not available
     """
     if not NUMPY_AVAILABLE or from_numpy_impl is None:
         raise ImportError("NumPy is required for from_numpy(). Install with: pip install numpy")
-    
+
     return from_numpy_impl(arr)
 
 
 def to_numpy(tr_obj):
     """
     Convert transreal object to NumPy representation.
-    
+
     Args:
         tr_obj: TRScalar or TRArray
-        
+
     Returns:
         float for TRScalar, NumPy array for TRArray
-        
+
     Raises:
         ImportError: If NumPy is not available
     """
     if not NUMPY_AVAILABLE or to_numpy_impl is None:
         raise ImportError("NumPy is required for to_numpy(). Install with: pip install numpy")
-    
+
     return to_numpy_impl(tr_obj)

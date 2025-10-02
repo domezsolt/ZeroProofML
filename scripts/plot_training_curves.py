@@ -16,10 +16,10 @@ Usage:
 
 from __future__ import annotations
 
-import os
-import json
 import argparse
-from typing import List, Dict, Any
+import json
+import os
+from typing import Any, Dict, List
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -131,4 +131,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

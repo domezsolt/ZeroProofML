@@ -6,14 +6,16 @@ Each member is trained independently with a different ε; predictions are averag
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import List, Tuple, Dict, Any, Optional
-import os
 import json
+import os
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 
-from .rational_eps_baseline import RationalEpsConfig, RationalEpsModel, RationalEpsTrainer
 from zeroproof.training import Optimizer
+
+from .rational_eps_baseline import RationalEpsConfig, RationalEpsModel, RationalEpsTrainer
 
 
 @dataclass
@@ -30,7 +32,13 @@ class EnsembleConfig:
             self.member_eps = [1e-4, 1e-3, 1e-2]
 
 
-def run_eps_ensemble_baseline(train_data: Tuple[List, List], test_data: Tuple[List, List], cfg: Optional[EnsembleConfig] = None, output_dir: str = 'results', seed: Optional[int] = None) -> Dict[str, Any]:
+def run_eps_ensemble_baseline(
+    train_data: Tuple[List, List],
+    test_data: Tuple[List, List],
+    cfg: Optional[EnsembleConfig] = None,
+    output_dir: str = "results",
+    seed: Optional[int] = None,
+) -> Dict[str, Any]:
     if cfg is None:
         cfg = EnsembleConfig()
     train_inputs, train_targets = train_data
@@ -50,11 +58,13 @@ def run_eps_ensemble_baseline(train_data: Tuple[List, List], test_data: Tuple[Li
             batch_size=cfg.batch_size,
         )
         model = RationalEpsModel(recfg, eps)
-        trainer = RationalEpsTrainer(model, Optimizer(model.parameters(), learning_rate=recfg.learning_rate))
+        trainer = RationalEpsTrainer(
+            model, Optimizer(model.parameters(), learning_rate=recfg.learning_rate)
+        )
         trn = trainer.train(train_inputs, train_targets, verbose=False)
-        total_time += float(trn.get('training_time', 0.0))
+        total_time += float(trn.get("training_time", 0.0))
         tm = trainer._evaluate_simple(test_inputs, test_targets)
-        preds_members.append(tm.get('predictions', []))
+        preds_members.append(tm.get("predictions", []))
     # Average predictions
     predictions: List[List[float]] = []
     per_sample_mse: List[float] = []
@@ -69,19 +79,18 @@ def run_eps_ensemble_baseline(train_data: Tuple[List, List], test_data: Tuple[Li
         tgt = test_targets[i]
         per_sample_mse.append(float(np.mean([(a - t) ** 2 for a, t in zip(avg, tgt)])))
     results = {
-        'model_type': 'EpsEnsemble',
-        'members': cfg.member_eps,
-        'config': asdict(cfg),
-        'test_metrics': {
-            'mse': float(np.mean(per_sample_mse)) if per_sample_mse else float('inf'),
-            'per_sample_mse': per_sample_mse,
-            'predictions': predictions,
+        "model_type": "EpsEnsemble",
+        "members": cfg.member_eps,
+        "config": asdict(cfg),
+        "test_metrics": {
+            "mse": float(np.mean(per_sample_mse)) if per_sample_mse else float("inf"),
+            "per_sample_mse": per_sample_mse,
+            "predictions": predictions,
         },
-        'training_time_total': total_time,
-        'seed': seed,
+        "training_time_total": total_time,
+        "seed": seed,
     }
     os.makedirs(output_dir, exist_ok=True)
-    with open(os.path.join(output_dir, 'eps_ensemble.json'), 'w') as fh:
+    with open(os.path.join(output_dir, "eps_ensemble.json"), "w") as fh:
         json.dump(results, fh, indent=2)
     return results
-

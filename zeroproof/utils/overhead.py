@@ -7,30 +7,31 @@ between a Mask‑REAL baseline and the current Hybrid configuration.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple, Callable, Optional
 import logging
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..autodiff.grad_mode import GradientMode, GradientModeConfig
 from ..autodiff.hybrid_gradient import HybridGradientContext
 
 logger = logging.getLogger(__name__)
 
+
 def _collect_learning_rates(trainer) -> Dict[str, float]:
     lrs: Dict[str, float] = {}
     try:
-        lrs['main'] = float(trainer.optimizer.learning_rate)
+        lrs["main"] = float(trainer.optimizer.learning_rate)
     except Exception:
         pass
     try:
-        if getattr(trainer, 'frontend_optimizer', None) is not None:
-            lrs['frontend'] = float(trainer.frontend_optimizer.learning_rate)
+        if getattr(trainer, "frontend_optimizer", None) is not None:
+            lrs["frontend"] = float(trainer.frontend_optimizer.learning_rate)
     except Exception:
         pass
     try:
-        if getattr(trainer, 'head_optimizers', None) is not None:
+        if getattr(trainer, "head_optimizers", None) is not None:
             # store first as representative and apply equally
             if trainer.head_optimizers:
-                lrs['head'] = float(trainer.head_optimizers[0].learning_rate)
+                lrs["head"] = float(trainer.head_optimizers[0].learning_rate)
     except Exception:
         pass
     return lrs
@@ -38,19 +39,19 @@ def _collect_learning_rates(trainer) -> Dict[str, float]:
 
 def _apply_learning_rates(trainer, lrs: Dict[str, float]) -> None:
     try:
-        if 'main' in lrs:
-            trainer.optimizer.learning_rate = lrs['main']
+        if "main" in lrs:
+            trainer.optimizer.learning_rate = lrs["main"]
     except Exception:
         pass
     try:
-        if 'frontend' in lrs and getattr(trainer, 'frontend_optimizer', None) is not None:
-            trainer.frontend_optimizer.learning_rate = lrs['frontend']
+        if "frontend" in lrs and getattr(trainer, "frontend_optimizer", None) is not None:
+            trainer.frontend_optimizer.learning_rate = lrs["frontend"]
     except Exception:
         pass
     try:
-        if 'head' in lrs and getattr(trainer, 'head_optimizers', None) is not None:
+        if "head" in lrs and getattr(trainer, "head_optimizers", None) is not None:
             for opt in trainer.head_optimizers:
-                opt.learning_rate = lrs['head']
+                opt.learning_rate = lrs["head"]
     except Exception:
         pass
 
@@ -61,12 +62,12 @@ def _set_all_learning_rates(trainer, value: float) -> None:
     except Exception:
         pass
     try:
-        if getattr(trainer, 'frontend_optimizer', None) is not None:
+        if getattr(trainer, "frontend_optimizer", None) is not None:
             trainer.frontend_optimizer.learning_rate = value
     except Exception:
         pass
     try:
-        if getattr(trainer, 'head_optimizers', None) is not None:
+        if getattr(trainer, "head_optimizers", None) is not None:
             for opt in trainer.head_optimizers:
                 opt.learning_rate = value
     except Exception:
@@ -80,10 +81,11 @@ def _run_epoch_generic(trainer, data_loader: List[Tuple[List, List]]) -> Dict[st
     Learning rates should already be set by caller (often 0.0 for benchmarking).
     """
     import time
+
     total_step_ms = 0.0
     total_optim_ms = 0.0
     n_batches = 0
-    for (inputs, targets) in data_loader:
+    for inputs, targets in data_loader:
         t0 = time.perf_counter()
         try:
             # Scalar path expects List[TRScalar]
@@ -93,7 +95,7 @@ def _run_epoch_generic(trainer, data_loader: List[Tuple[List, List]]) -> Dict[st
             result = trainer._train_batch_multi(inputs, targets)  # type: ignore[arg-type]
         t1 = time.perf_counter()
         step_ms = (t1 - t0) * 1000.0
-        optim_ms = float(result.get('optim_ms', 0.0)) if isinstance(result, dict) else 0.0
+        optim_ms = float(result.get("optim_ms", 0.0)) if isinstance(result, dict) else 0.0
         total_step_ms += step_ms
         total_optim_ms += optim_ms
         n_batches += 1
@@ -101,17 +103,17 @@ def _run_epoch_generic(trainer, data_loader: List[Tuple[List, List]]) -> Dict[st
     stats = HybridGradientContext.get_statistics()
     avg_step_ms = total_step_ms / max(1, n_batches)
     return {
-        'avg_step_ms': avg_step_ms,
-        'optim_time_ms': total_optim_ms / max(1, n_batches),
-        'batches': float(n_batches),
-        'saturating_ratio': stats.get('saturating_ratio', 0.0),
-        'saturating_activations': stats.get('saturating_activations', None),
-        'total_gradient_calls': stats.get('total_gradient_calls', None),
-        'mask_real_activations': stats.get('mask_real_activations', None),
+        "avg_step_ms": avg_step_ms,
+        "optim_time_ms": total_optim_ms / max(1, n_batches),
+        "batches": float(n_batches),
+        "saturating_ratio": stats.get("saturating_ratio", 0.0),
+        "saturating_activations": stats.get("saturating_activations", None),
+        "total_gradient_calls": stats.get("total_gradient_calls", None),
+        "mask_real_activations": stats.get("mask_real_activations", None),
     }
 
 
-def overhead_report(trainer, data_loader: List[Tuple[List, List]] ) -> Dict[str, Any]:
+def overhead_report(trainer, data_loader: List[Tuple[List, List]]) -> Dict[str, Any]:
     """
     Compare Mask‑REAL baseline vs Hybrid epoch timings and stats.
 
@@ -120,7 +122,7 @@ def overhead_report(trainer, data_loader: List[Tuple[List, List]] ) -> Dict[str,
     and hybrid schedule are restored afterward.
     """
     # Snapshot schedule and learning rates
-    orig_schedule = getattr(trainer, 'hybrid_schedule', None)
+    orig_schedule = getattr(trainer, "hybrid_schedule", None)
     orig_lrs = _collect_learning_rates(trainer)
 
     # Baseline: Mask‑REAL (no hybrid schedule)
@@ -145,7 +147,7 @@ def overhead_report(trainer, data_loader: List[Tuple[List, List]] ) -> Dict[str,
     HybridGradientContext.reset()
     if orig_schedule is not None:
         HybridGradientContext.set_schedule(orig_schedule)
-        HybridGradientContext.update_epoch(getattr(trainer, 'epoch', 0))
+        HybridGradientContext.update_epoch(getattr(trainer, "epoch", 0))
     GradientModeConfig.set_mode(GradientMode.HYBRID)
     _set_all_learning_rates(trainer, 0.0)
     try:
@@ -161,29 +163,33 @@ def overhead_report(trainer, data_loader: List[Tuple[List, List]] ) -> Dict[str,
         pass
 
     # Compute overhead summary
-    b_ms = float(baseline.get('avg_step_ms', float('nan')))
-    h_ms = float(hybrid.get('avg_step_ms', float('nan')))
-    slowdown = (h_ms / b_ms) if (b_ms > 0 and h_ms == h_ms) else float('nan')
-    sat_ratio = float(hybrid.get('saturating_ratio', 0.0))
-    mask_acts = hybrid.get('mask_real_activations', None)
-    sat_acts = hybrid.get('saturating_activations', None)
-    total_calls = hybrid.get('total_gradient_calls', None)
+    b_ms = float(baseline.get("avg_step_ms", float("nan")))
+    h_ms = float(hybrid.get("avg_step_ms", float("nan")))
+    slowdown = (h_ms / b_ms) if (b_ms > 0 and h_ms == h_ms) else float("nan")
+    sat_ratio = float(hybrid.get("saturating_ratio", 0.0))
+    mask_acts = hybrid.get("mask_real_activations", None)
+    sat_acts = hybrid.get("saturating_activations", None)
+    total_calls = hybrid.get("total_gradient_calls", None)
 
     report = {
-        'baseline': {
-            'avg_step_ms': b_ms,
-            'batches': baseline.get('batches'),
+        "baseline": {
+            "avg_step_ms": b_ms,
+            "batches": baseline.get("batches"),
         },
-        'hybrid': {
-            'avg_step_ms': h_ms,
-            'batches': hybrid.get('batches'),
-            'saturating_ratio': sat_ratio,
-            'saturating_activations': sat_acts,
-            'total_gradient_calls': total_calls,
-            'mask_real_activations': mask_acts,
-            'mask_bandwidth': (float(mask_acts) / float(total_calls)) if isinstance(mask_acts, (int, float)) and isinstance(total_calls, (int, float)) and total_calls > 0 else None,
+        "hybrid": {
+            "avg_step_ms": h_ms,
+            "batches": hybrid.get("batches"),
+            "saturating_ratio": sat_ratio,
+            "saturating_activations": sat_acts,
+            "total_gradient_calls": total_calls,
+            "mask_real_activations": mask_acts,
+            "mask_bandwidth": (float(mask_acts) / float(total_calls))
+            if isinstance(mask_acts, (int, float))
+            and isinstance(total_calls, (int, float))
+            and total_calls > 0
+            else None,
         },
-        'slowdown_x': slowdown,
+        "slowdown_x": slowdown,
     }
 
     # Print compact summary
@@ -193,7 +199,10 @@ def overhead_report(trainer, data_loader: List[Tuple[List, List]] ) -> Dict[str,
             sat_part += f" ({sat_acts}/{total_calls})"
         logger.info(
             "Overhead: baseline=%.2fms hybrid=%.2fms slowdown=%.2fx;%s",
-            b_ms, h_ms, slowdown, sat_part
+            b_ms,
+            h_ms,
+            slowdown,
+            sat_part,
         )
     except Exception:
         pass
@@ -213,6 +222,7 @@ def compare_tr_vs_float(
     Returns a dict with mean runtimes and slowdown factor.
     """
     import time
+
     def timeit(fn: Callable[[], Any]) -> float:
         times: List[float] = []
         for _ in range(repeats):
@@ -222,13 +232,14 @@ def compare_tr_vs_float(
             t1 = time.perf_counter()
             times.append(t1 - t0)
         return sum(times) / len(times)
+
     tr_s = timeit(tr_func)
     fl_s = timeit(float_func)
     return {
-        'name': name,
-        'tr_sec': tr_s,
-        'float_sec': fl_s,
-        'slowdown_x': (tr_s / fl_s) if fl_s > 0 else float('inf'),
-        'iterations': iterations,
-        'repeats': repeats,
+        "name": name,
+        "tr_sec": tr_s,
+        "float_sec": fl_s,
+        "slowdown_x": (tr_s / fl_s) if fl_s > 0 else float("inf"),
+        "iterations": iterations,
+        "repeats": repeats,
     }

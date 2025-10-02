@@ -1,9 +1,9 @@
 """Tests for policy threshold auto-resolution from model local scales."""
 
-from zeroproof.training import enable_policy_from_model
-from zeroproof.policy import TRPolicyConfig
-from zeroproof.layers import TRRational, MonomialBasis
 from zeroproof.core import TRTag, real
+from zeroproof.layers import MonomialBasis, TRRational
+from zeroproof.policy import TRPolicyConfig
+from zeroproof.training import enable_policy_from_model
 
 
 def _make_model(phi_val: float, theta_val: float = 0.0) -> TRRational:
@@ -46,4 +46,3 @@ def test_determinism_outside_guard_bands_with_auto_policy():
     assert tag2 == TRTag.REAL
     # Policy currently active should be the same instance
     assert TRPolicyConfig.get_policy() is pol
-

@@ -21,8 +21,12 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--n", type=int, default=4000, help="Total samples")
     ap.add_argument("--singular-ratio", type=float, default=0.35, help="Near-pole fraction")
     ap.add_argument("--seed", type=int, default=123, help="Global seed")
-    ap.add_argument("--models", nargs="+", default=["tr_rat", "rat_eps", "mlp"],
-                    help="Models to run: tr_rat, rat_eps, mlp")
+    ap.add_argument(
+        "--models",
+        nargs="+",
+        default=["tr_rat", "rat_eps", "mlp"],
+        help="Models to run: tr_rat, rat_eps, mlp",
+    )
     ap.add_argument("--profile", choices=["quick", "full"], default="quick")
     return ap.parse_args()
 
@@ -33,10 +37,11 @@ def main() -> None:
 
     # 1) Generate dataset with buckets and metadata
     try:
-        from .rr_ik_dataset import RRDatasetGenerator, RobotConfig
+        from .rr_ik_dataset import RobotConfig, RRDatasetGenerator
     except Exception:
         from rr_ik_dataset import RRDatasetGenerator, RobotConfig
     from zeroproof.utils.seeding import set_global_seed
+
     set_global_seed(args.seed)
     config = RobotConfig(L1=1.0, L2=1.0)
     gen = RRDatasetGenerator(config)

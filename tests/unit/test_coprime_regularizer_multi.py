@@ -2,15 +2,15 @@
 Unit tests for coprime surrogate on TRRationalMulti with shared Q.
 """
 
-from zeroproof.layers import TRRationalMulti, MonomialBasis
 from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRationalMulti
 
 
 def _as_float(x):
     try:
         return float(x.value.value)
     except Exception:
-        return float('nan')
+        return float("nan")
 
 
 def test_coprime_surrogate_multi_shared_q_aligned_vs_separated():
@@ -22,8 +22,14 @@ def test_coprime_surrogate_multi_shared_q_aligned_vs_separated():
 
     # Model A: enable surrogate, shared Q zero near a, both numerators zero at a
     multi_a = TRRationalMulti(
-        d_p=1, d_q=1, n_outputs=n_outputs, basis=basis, shared_Q=True,
-        enable_coprime_regularizer=True, lambda_coprime=1.0, alpha_phi=0.0,
+        d_p=1,
+        d_q=1,
+        n_outputs=n_outputs,
+        basis=basis,
+        shared_Q=True,
+        enable_coprime_regularizer=True,
+        lambda_coprime=1.0,
+        alpha_phi=0.0,
     )
     # Set shared denominator Q(x)=1+phi1*x
     shared_phi = multi_a.layers[0].phi
@@ -35,8 +41,14 @@ def test_coprime_surrogate_multi_shared_q_aligned_vs_separated():
 
     # Model B: enable surrogate, shared Q has no zero near a, same numerators
     multi_b = TRRationalMulti(
-        d_p=1, d_q=1, n_outputs=n_outputs, basis=basis, shared_Q=True,
-        enable_coprime_regularizer=True, lambda_coprime=1.0, alpha_phi=0.0,
+        d_p=1,
+        d_q=1,
+        n_outputs=n_outputs,
+        basis=basis,
+        shared_Q=True,
+        enable_coprime_regularizer=True,
+        lambda_coprime=1.0,
+        alpha_phi=0.0,
     )
     shared_phi_b = multi_b.layers[0].phi
     shared_phi_b[0]._value = real(0.05)
@@ -48,4 +60,3 @@ def test_coprime_surrogate_multi_shared_q_aligned_vs_separated():
     reg_b = multi_b.regularization_loss()
 
     assert _as_float(reg_a) > _as_float(reg_b)
-

@@ -1,9 +1,10 @@
 """Tests for identifiability diagnostics via Sylvester s_min surrogate."""
 
-from zeroproof.metrics.identifiability import compute_sylvester_smin
-from zeroproof.layers import TRRational, MonomialBasis
-from zeroproof.core import real
 import math
+
+from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRational
+from zeroproof.metrics.identifiability import compute_sylvester_smin
 
 
 def _set_coeffs(model: TRRational, theta: list[float], phi: list[float]) -> None:
@@ -34,4 +35,3 @@ def test_sylvester_larger_for_coprime():
     smin = compute_sylvester_smin(m)
     assert math.isfinite(smin)
     assert smin > 1e-6
-

@@ -24,7 +24,9 @@ def latest_json(src_dir: str) -> Optional[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Update benchmarks/baseline.json from latest result")
-    ap.add_argument("--src", default="benchmark_results", help="Source directory with benchmark JSONs")
+    ap.add_argument(
+        "--src", default="benchmark_results", help="Source directory with benchmark JSONs"
+    )
     args = ap.parse_args()
 
     src = latest_json(args.src)
@@ -40,4 +42,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

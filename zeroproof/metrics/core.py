@@ -10,8 +10,8 @@ policy/coverage controller and acceptance criteria:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
 import math
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -61,4 +61,3 @@ def compute_distance_stats(layer, xs: Any) -> Dict[str, float]:
 def hybrid_stats() -> Dict[str, float]:
     """Expose hybrid controller statistics for logging/monitoring."""
     return HybridGradientContext.get_statistics()
-

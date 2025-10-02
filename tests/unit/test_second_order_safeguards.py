@@ -7,13 +7,13 @@ Covers:
 
 import math
 
-from zeroproof.optim_utils_second_order import (
-    saturating_surrogate_bounds,
-    curvature_bound_for_batch,
-)
-from zeroproof.layers import TRRational, MonomialBasis
-from zeroproof.core import real
 from zeroproof.autodiff.grad_mode import GradientModeConfig
+from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRational
+from zeroproof.optim_utils_second_order import (
+    curvature_bound_for_batch,
+    saturating_surrogate_bounds,
+)
 
 
 def test_saturating_surrogate_bounds_monotone():
@@ -47,15 +47,14 @@ def test_curvature_bound_finite_near_pole():
     cb = curvature_bound_for_batch(model, xs)
 
     # Ensure outputs are present and finite
-    assert 'curvature_bound' in cb
-    assert 'G_max' in cb and 'H_max' in cb
-    assert all(k in cb for k in ('B_k', 'H_k', 'depth_hint', 'q_min'))
+    assert "curvature_bound" in cb
+    assert "G_max" in cb and "H_max" in cb
+    assert all(k in cb for k in ("B_k", "H_k", "depth_hint", "q_min"))
 
-    for key in ('curvature_bound', 'G_max', 'H_max', 'B_k', 'H_k'):
+    for key in ("curvature_bound", "G_max", "H_max", "B_k", "H_k"):
         val = float(cb[key])
         assert math.isfinite(val)
         assert val >= 0.0
 
     # With bound=0.1, G_max ≈ 10 or greater (clamped ≥1)
-    assert cb['G_max'] >= 10.0
-
+    assert cb["G_max"] >= 10.0

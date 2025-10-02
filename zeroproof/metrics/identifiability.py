@@ -11,6 +11,7 @@ indicates better-separated factors (coprime).
 from __future__ import annotations
 
 from typing import List
+
 import numpy as np
 
 
@@ -40,11 +41,11 @@ def _sylvester_matrix(a: List[float], b: List[float]) -> np.ndarray:
 
     # First n rows: shifted copies of 'a'
     for row in range(n):
-        S[row, row:row + m + 1] = a
+        S[row, row : row + m + 1] = a
 
     # Last m rows: shifted copies of 'b'
     for row in range(m):
-        S[n + row, row:row + n + 1] = b
+        S[n + row, row : row + n + 1] = b
 
     return S
 
@@ -60,12 +61,12 @@ def compute_sylvester_smin(tr_rational) -> float:
         Smallest singular value s_min >= 0 (float). Lower => closer to common factor.
     """
     # Extract coefficients: P(x) = sum_{k=0..d_p} theta_k x^k
-    a = _extract_coeffs(getattr(tr_rational, 'theta', []))
+    a = _extract_coeffs(getattr(tr_rational, "theta", []))
     if not a:
-        return float('nan')
+        return float("nan")
 
     # Q(x) = 1 + sum_{k=1..d_q} phi_k x^k
-    phi_nodes = getattr(tr_rational, 'phi', [])
+    phi_nodes = getattr(tr_rational, "phi", [])
     b = [1.0] + _extract_coeffs(phi_nodes)
 
     # Remove trailing zeros to get true degrees, but keep at least constant term
@@ -82,5 +83,4 @@ def compute_sylvester_smin(tr_rational) -> float:
         s = np.linalg.svd(S, compute_uv=False)
         return float(s[-1])
     except Exception:
-        return float('nan')
-
+        return float("nan")

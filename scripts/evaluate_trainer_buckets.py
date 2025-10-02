@@ -17,11 +17,11 @@ import argparse
 import json
 from typing import List, Tuple
 
-DEFAULT_EDGES = [0.0, 1e-5, 1e-4, 1e-3, 1e-2, float('inf')]
+DEFAULT_EDGES = [0.0, 1e-5, 1e-4, 1e-3, 1e-2, float("inf")]
 
 
 def _edges_from_meta(md):
-    edges = md.get('bucket_edges') if isinstance(md, dict) else None
+    edges = md.get("bucket_edges") if isinstance(md, dict) else None
     if isinstance(edges, list) and edges:
         out = []
         for e in edges:
@@ -29,8 +29,8 @@ def _edges_from_meta(md):
                 out.append(float(e))
             except Exception:
                 s = str(e).strip().lower()
-                if s in ('inf', '+inf', 'infinity'):
-                    out.append(float('inf'))
+                if s in ("inf", "+inf", "infinity"):
+                    out.append(float("inf"))
                 else:
                     raise
         return out
@@ -39,8 +39,8 @@ def _edges_from_meta(md):
 
 def _split_test_indices(meta: dict, n_samples: int) -> Tuple[int, int]:
     # Return (n_train, n_test)
-    if meta.get('stratified_by_detj') and isinstance(meta.get('train_bucket_counts'), list):
-        n_train = int(sum(meta.get('train_bucket_counts')))
+    if meta.get("stratified_by_detj") and isinstance(meta.get("train_bucket_counts"), list):
+        n_train = int(sum(meta.get("train_bucket_counts")))
         return n_train, n_samples - n_train
     # Fallback: 80/20 split
     n_train = int(0.8 * n_samples)
@@ -51,40 +51,46 @@ def _bucket_key(val: float, edges: List[float]) -> str:
     for i in range(len(edges) - 1):
         lo, hi = edges[i], edges[i + 1]
         if (val >= lo if i == 0 else val > lo) and val <= hi:
+
             def fmt(x):
-                if x == float('inf'):
-                    return 'inf'
+                if x == float("inf"):
+                    return "inf"
                 return f"{x:.0e}"
+
             return f"({fmt(lo)},{fmt(hi)}]"
     # If not matched, return last bin
     return f"({edges[-2]:.0e},{'inf'}]"
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Evaluate per-bucket MSE and 2D pole metrics for trainer results")
-    ap.add_argument('--dataset', required=True, help='Path to rr_ik_dataset.json')
-    ap.add_argument('--results', required=True, help='Path to trainer results JSON (results_tr_rat.json)')
-    ap.add_argument('--out', default=None, help='Optional path to save computed metrics JSON')
+    ap = argparse.ArgumentParser(
+        description="Evaluate per-bucket MSE and 2D pole metrics for trainer results"
+    )
+    ap.add_argument("--dataset", required=True, help="Path to rr_ik_dataset.json")
+    ap.add_argument(
+        "--results", required=True, help="Path to trainer results JSON (results_tr_rat.json)"
+    )
+    ap.add_argument("--out", default=None, help="Optional path to save computed metrics JSON")
     args = ap.parse_args()
 
     # Load dataset
-    with open(args.dataset, 'r') as f:
+    with open(args.dataset, "r") as f:
         dset = json.load(f)
-    samples = dset.get('samples', [])
-    meta = dset.get('metadata', {})
+    samples = dset.get("samples", [])
+    meta = dset.get("metadata", {})
     n_total = len(samples)
     if not samples:
-        raise SystemExit('No samples in dataset JSON')
+        raise SystemExit("No samples in dataset JSON")
 
     edges = _edges_from_meta(meta)
     n_train, n_test = _split_test_indices(meta, n_total)
     test_samples = samples[n_train:]
 
     # Load trainer results
-    with open(args.results, 'r') as f:
+    with open(args.results, "r") as f:
         res = json.load(f)
-    tmet = res.get('test_metrics', {})
-    preds = tmet.get('predictions', [])
+    tmet = res.get("test_metrics", {})
+    preds = tmet.get("predictions", [])
     if not preds or len(preds) != len(test_samples):
         print(f"Warning: predictions length {len(preds)} != test length {len(test_samples)}")
 
@@ -93,13 +99,14 @@ def main():
     for i, (s, p) in enumerate(zip(test_samples, preds)):
         # detJ from dataset or recompute as |sin theta2|
         try:
-            detj = abs(float(s.get('det_J')))
+            detj = abs(float(s.get("det_J")))
         except Exception:
             import math
-            detj = abs(math.sin(float(s.get('theta2'))))
+
+            detj = abs(math.sin(float(s.get("theta2"))))
         # MSE across outputs for this sample
         try:
-            target = [float(s.get('dtheta1', 0.0)), float(s.get('dtheta2', 0.0))]
+            target = [float(s.get("dtheta1", 0.0)), float(s.get("dtheta2", 0.0))]
             mse = sum((float(pi) - ti) ** 2 for pi, ti in zip(p, target)) / max(1, len(target))
         except Exception:
             continue
@@ -108,20 +115,23 @@ def main():
 
     # Aggregate per-bucket
     import math as _math
+
     agg = {}
     for k, xs in per_bucket.items():
         n = len(xs)
-        mu = sum(xs) / n if n else float('nan')
-        var = sum((x - mu) ** 2 for x in xs) / n if n else float('nan')
-        sd = var ** 0.5 if n else float('nan')
-        agg[k] = {'mean_mse': mu, 'std_mse': sd, 'n': n}
+        mu = sum(xs) / n if n else float("nan")
+        var = sum((x - mu) ** 2 for x in xs) / n if n else float("nan")
+        sd = var**0.5 if n else float("nan")
+        agg[k] = {"mean_mse": mu, "std_mse": sd, "n": n}
 
     # Print summary
     print(f"Test split size: {len(test_samples)} (train {n_train} / test {n_test})")
     print("Per-bucket MSE (mean±std; count):")
     for i in range(len(edges) - 1):
         lo, hi = edges[i], edges[i + 1]
-        key = _bucket_key((lo + (0 if _math.isinf(hi) else hi)) / (2 if not _math.isinf(hi) else 1), edges)
+        key = _bucket_key(
+            (lo + (0 if _math.isinf(hi) else hi)) / (2 if not _math.isinf(hi) else 1), edges
+        )
         # Use consistent key representation
         # Alternatively, iterate over keys present
     for k in sorted(agg.keys()):
@@ -131,7 +141,11 @@ def main():
     # (Optional) 2D pole metrics using predictions
     try:
         from zeroproof.metrics.pole_2d import compute_pole_metrics_2d
-        test_inputs = [[float(s['theta1']), float(s['theta2']), float(s['dx']), float(s['dy'])] for s in test_samples]
+
+        test_inputs = [
+            [float(s["theta1"]), float(s["theta2"]), float(s["dx"]), float(s["dy"])]
+            for s in test_samples
+        ]
         pole = compute_pole_metrics_2d(test_inputs, preds)
         print("\n2D pole metrics:")
         for k, v in pole.items():
@@ -142,21 +156,20 @@ def main():
 
     if args.out:
         out = {
-            'dataset': args.dataset,
-            'results': args.results,
-            'bucket_edges': edges,
-            'per_bucket': agg,
-            'n_train': n_train,
-            'n_test': n_test,
+            "dataset": args.dataset,
+            "results": args.results,
+            "bucket_edges": edges,
+            "per_bucket": agg,
+            "n_train": n_train,
+            "n_test": n_test,
         }
         try:
-            with open(args.out, 'w') as fh:
+            with open(args.out, "w") as fh:
                 json.dump(out, fh, indent=2)
             print(f"\nSaved metrics to {args.out}")
         except Exception as e:
             print(f"Warning: failed to write {args.out}: {e}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

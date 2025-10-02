@@ -20,7 +20,7 @@ import argparse
 import json
 import math
 import os
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 
 def _fmt_edge(v) -> str:
@@ -50,7 +50,9 @@ def make_bucket_keys(edges: List[Any]) -> List[str]:
     return keys
 
 
-def plot_per_bucket_bars(summary: Dict[str, Any], outdir: str, filename: str = "e1_per_bucket_bars.png"):
+def plot_per_bucket_bars(
+    summary: Dict[str, Any], outdir: str, filename: str = "e1_per_bucket_bars.png"
+):
     try:
         import matplotlib.pyplot as plt
         import numpy as np
@@ -67,7 +69,7 @@ def plot_per_bucket_bars(summary: Dict[str, Any], outdir: str, filename: str = "
     stds = []
     labels = []
     for m in methods:
-        pb = (summary.get("per_bucket_mse", {}).get(m) or {})
+        pb = summary.get("per_bucket_mse", {}).get(m) or {}
         m_means = [pb.get(k, {}).get("mean") for k in bucket_keys]
         m_stds = [pb.get(k, {}).get("std") for k in bucket_keys]
         # Skip methods with no bucket data
@@ -90,7 +92,14 @@ def plot_per_bucket_bars(summary: Dict[str, Any], outdir: str, filename: str = "
 
     plt.figure(figsize=(7.0, 3.2), dpi=150)
     for i in range(n_methods):
-        plt.bar(x + (i - n_methods/2) * width + width/2, means[i], width, yerr=stds[i], capsize=2, label=labels[i])
+        plt.bar(
+            x + (i - n_methods / 2) * width + width / 2,
+            means[i],
+            width,
+            yerr=stds[i],
+            capsize=2,
+            label=labels[i],
+        )
 
     plt.xticks(x, bucket_keys, rotation=0)
     plt.ylabel("MSE (lower is better)")
@@ -126,7 +135,9 @@ def plot_ple_hist(summary: Dict[str, Any], outdir: str, filename: str = "e1_ple_
             continue
         vals = np.array(arr, dtype=float)
         bins = max(3, min(10, len(vals)))
-        plt.hist(vals, bins=bins, alpha=0.45, label=m, color=colors[i % len(colors)], edgecolor="white")
+        plt.hist(
+            vals, bins=bins, alpha=0.45, label=m, color=colors[i % len(colors)], edgecolor="white"
+        )
         plotted += 1
 
     if plotted == 0:
@@ -147,9 +158,17 @@ def plot_ple_hist(summary: Dict[str, Any], outdir: str, filename: str = "e1_ple_
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Plot per-bucket bars and PLE hist from aggregated parity summary")
-    ap.add_argument('--summary', required=True, help='Path to aggregated JSON (from aggregate_parity.py --json_out)')
-    ap.add_argument('--outdir', default='results/robotics/figures', help='Directory to save figures')
+    ap = argparse.ArgumentParser(
+        description="Plot per-bucket bars and PLE hist from aggregated parity summary"
+    )
+    ap.add_argument(
+        "--summary",
+        required=True,
+        help="Path to aggregated JSON (from aggregate_parity.py --json_out)",
+    )
+    ap.add_argument(
+        "--outdir", default="results/robotics/figures", help="Directory to save figures"
+    )
     args = ap.parse_args()
 
     summary = load_summary(args.summary)
@@ -157,6 +176,5 @@ def main():
     plot_ple_hist(summary, args.outdir)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

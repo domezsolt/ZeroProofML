@@ -11,7 +11,7 @@ from enum import Enum, auto
 class ReductionMode(Enum):
     """
     Modes for handling non-REAL values in reductions.
-    
+
     Attributes:
         STRICT: If any element is PHI, result is PHI. If any infinity present
                 with conflicting signs, result is PHI. Otherwise, infinity
@@ -19,5 +19,6 @@ class ReductionMode(Enum):
         DROP_NULL: Ignore PHI elements and reduce over remaining. If none
                    remain, result is PHI. Used in metrics/monitoring.
     """
+
     STRICT = auto()
     DROP_NULL = auto()

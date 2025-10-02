@@ -12,7 +12,7 @@ Exports:
 """
 
 from ..core import bottom  # Bottom value constructor
-from ..core.wheel_mode import wheel_mode, WheelModeConfig, use_wheel, use_transreal
+from ..core.wheel_mode import WheelModeConfig, use_transreal, use_wheel, wheel_mode
 
 
 def enable_wheel_mode() -> None:

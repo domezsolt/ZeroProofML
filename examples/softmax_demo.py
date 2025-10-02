@@ -5,9 +5,9 @@ Run:
   python examples/softmax_demo.py
 """
 
-from zeroproof.layers import tr_softmax
 from zeroproof.autodiff import TRNode
 from zeroproof.core import real
+from zeroproof.layers import tr_softmax
 
 
 def main():
@@ -16,15 +16,14 @@ def main():
     probs = tr_softmax(nodes)
     vals = []
     for p in probs:
-        if p.tag.name == 'REAL':
+        if p.tag.name == "REAL":
             vals.append(float(p.value.value))
         else:
-            vals.append(float('nan'))
+            vals.append(float("nan"))
     print("logits:", logits)
     print("probs:", vals)
     print("sum:", sum(v for v in vals if v == v))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

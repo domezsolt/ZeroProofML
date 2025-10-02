@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from math import cos, pi
-from typing import Optional, Dict, Any, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+
 import numpy as np
 
 from .grad_mode import GradientModeConfig
@@ -32,7 +33,7 @@ class HybridGradientSchedule:
     schedule_type: ScheduleType = ScheduleType.EXPONENTIAL
     enable: bool = True
     saturating_bound: float = 1.0
-    
+
     # New: Force exploration parameters
     force_pole_exploration: bool = True
     pole_exploration_radius: float = 0.05  # δ-neighborhood radius
@@ -40,7 +41,7 @@ class HybridGradientSchedule:
     pole_detection_threshold: float = 0.1  # Threshold to consider as pole
     adaptive_delta: bool = True  # Adapt delta based on q_min
     min_delta: float = 1e-8  # Minimum delta value
-    
+
     # New: Detected poles tracking
     detected_poles: List[float] = field(default_factory=list)
     pole_exploration_schedule: Dict[int, List[Tuple[float, float]]] = field(default_factory=dict)
@@ -51,8 +52,10 @@ class HybridGradientSchedule:
     def is_transitioning(self, epoch: int) -> bool:
         if not self.enable:
             return False
-        return (not self.is_warmup(epoch)) and (self.transition_epochs > 0) and (
-            epoch < self.warmup_epochs + self.transition_epochs
+        return (
+            (not self.is_warmup(epoch))
+            and (self.transition_epochs > 0)
+            and (epoch < self.warmup_epochs + self.transition_epochs)
         )
 
     def _progress(self, epoch: int) -> float:
@@ -70,22 +73,24 @@ class HybridGradientSchedule:
             return None
         if self.is_warmup(epoch):
             return None
-        
+
         # Base delta from schedule
         p = self._progress(epoch)
         if self.schedule_type == ScheduleType.LINEAR:
             base_delta = self.delta_init + (self.delta_final - self.delta_init) * p
         elif self.schedule_type == ScheduleType.COSINE:
             # Cosine anneal from init → final
-            base_delta = self.delta_final + 0.5 * (self.delta_init - self.delta_final) * (1.0 + cos(pi * p))
+            base_delta = self.delta_final + 0.5 * (self.delta_init - self.delta_final) * (
+                1.0 + cos(pi * p)
+            )
         else:
             # EXPONENTIAL (default)
             if self.delta_init <= 0.0:
                 base_delta = self.delta_final
             else:
                 ratio = self.delta_final / self.delta_init
-                base_delta = self.delta_init * (ratio ** p)
-        
+                base_delta = self.delta_init * (ratio**p)
+
         # Adapt based on q_min if enabled
         if self.adaptive_delta:
             q_min = HybridGradientContext.get_q_min()
@@ -93,7 +98,7 @@ class HybridGradientSchedule:
                 # Increase delta when q_min is small (near poles)
                 adapted_delta = base_delta * max(1.0, 0.1 / q_min)
                 base_delta = min(adapted_delta, self.delta_init * 2.0)  # Cap at 2x initial
-        
+
         # Apply minimum threshold
         return max(base_delta, self.min_delta)
 
@@ -109,10 +114,10 @@ class HybridGradientSchedule:
                 n_poles = len(self.pole_exploration_schedule[epoch])
                 pole_info = f", exploring {n_poles} poles"
             return f"transitioning (delta={delta:.3e}{pole_info})"
-        
+
         delta = self.get_delta(epoch)
         return f"converged (delta={delta:.3e})"
-    
+
     # Lightweight context manager API used by tests
     def apply(self, epoch: int):
         """Context manager to apply this schedule for a given epoch.
@@ -122,13 +127,15 @@ class HybridGradientSchedule:
                 # do backward passes
         """
         from contextlib import contextmanager
+
         @contextmanager
         def _ctx():
             # Register schedule and epoch
             HybridGradientContext.set_schedule(self)
             HybridGradientContext.update_epoch(epoch)
             # Ensure gradient mode reflects hybrid scheduling and bound
-            from .grad_mode import GradientModeConfig, GradientMode
+            from .grad_mode import GradientMode, GradientModeConfig
+
             GradientModeConfig.set_mode(GradientMode.HYBRID)
             GradientModeConfig.set_saturation_bound(self.saturating_bound)
             try:
@@ -136,28 +143,34 @@ class HybridGradientSchedule:
             finally:
                 # No-op on exit; keep stats for inspection
                 pass
+
         return _ctx()
-    
+
     def update_detected_poles(self, new_poles: List[float], epoch: int) -> None:
         """Update detected poles and schedule exploration."""
         if not self.force_pole_exploration:
             return
-        
+
         # Add new unique poles
         for pole in new_poles:
             if not any(abs(pole - p) < self.pole_exploration_radius for p in self.detected_poles):
                 self.detected_poles.append(pole)
-                
+
                 # Schedule exploration for next few epochs
-                for e in range(epoch + 1, min(epoch + 1 + self.pole_exploration_epochs, 
-                                             self.warmup_epochs + self.transition_epochs)):
+                for e in range(
+                    epoch + 1,
+                    min(
+                        epoch + 1 + self.pole_exploration_epochs,
+                        self.warmup_epochs + self.transition_epochs,
+                    ),
+                ):
                     if e not in self.pole_exploration_schedule:
                         self.pole_exploration_schedule[e] = []
                     # Add pole neighborhood to explore
                     self.pole_exploration_schedule[e].append(
                         (pole - self.pole_exploration_radius, pole + self.pole_exploration_radius)
                     )
-    
+
     def get_exploration_regions(self, epoch: int) -> List[Tuple[float, float]]:
         """Get pole neighborhoods to explore in this epoch."""
         return self.pole_exploration_schedule.get(epoch, [])
@@ -173,7 +186,7 @@ class HybridGradientContext:
     _stats_total_calls: int = 0
     _stats_saturating: int = 0
     _stats_mask_real: int = 0
-    
+
     # New: q_min tracking
     _q_min_batch: Optional[float] = None
     _q_min_epoch: Optional[float] = None
@@ -204,7 +217,7 @@ class HybridGradientContext:
     def update_epoch(cls, epoch: int) -> None:
         cls._current_epoch = epoch
         cls.reset_epoch_statistics()
-        
+
         if cls._schedule is None or not cls._schedule.enable:
             cls._local_threshold = None
         else:
@@ -215,6 +228,7 @@ class HybridGradientContext:
         # Configure policy-based thresholds if a policy is active
         try:
             from ..policy import TRPolicyConfig
+
             pol = TRPolicyConfig.get_policy()
             if pol is not None:
                 cls._policy_enabled = True
@@ -230,25 +244,25 @@ class HybridGradientContext:
             cls._policy_enabled = False
             cls._tau_q_on = cls._tau_q_off = None
             cls._g_on = cls._g_off = None
-            
+
         # Expose threshold to grad mode config for callers that consult it
         GradientModeConfig.set_local_threshold(cls._local_threshold)
 
     @classmethod
     def should_use_saturating(cls, abs_q_value: float, x_value: Optional[float] = None) -> bool:
         """Determine if saturating gradient should be used.
-        
+
         Args:
             abs_q_value: Absolute value of Q(x)
             x_value: Optional input value for pole exploration check
         """
         cls._stats_total_calls += 1
-        
+
         # Track Q values
         cls._q_values_batch.append(abs_q_value)
         if cls._q_min_batch is None or abs_q_value < cls._q_min_batch:
             cls._q_min_batch = abs_q_value
-        
+
         # Check if in forced exploration region
         if x_value is not None and cls._exploration_regions:
             for region_min, region_max in cls._exploration_regions:
@@ -256,7 +270,7 @@ class HybridGradientContext:
                     cls._stats_saturating += 1
                     cls._near_pole_samples.add(cls._stats_total_calls)
                     return True
-        
+
         # If policy hysteresis says SAT globally, honor it
         if cls._policy_enabled and cls._policy_mode_sat:
             cls._stats_saturating += 1
@@ -273,7 +287,7 @@ class HybridGradientContext:
             cls._stats_saturating += 1
             cls._near_pole_samples.add(cls._stats_total_calls)
             return True
-        
+
         cls._stats_mask_real += 1
         return False
 
@@ -283,7 +297,7 @@ class HybridGradientContext:
         sat = cls._stats_saturating
         mask = cls._stats_mask_real
         ratio = (sat / total) if total > 0 else 0.0
-        
+
         # Compute q statistics
         q_stats = {}
         if cls._q_values_batch:
@@ -321,7 +335,7 @@ class HybridGradientContext:
                 "g_p90": g_p90,
                 "near_pole_ratio": len(cls._near_pole_samples) / len(cls._q_values_batch),
             }
-        
+
         stats = {
             "current_epoch": cls._current_epoch,
             "local_threshold": cls._local_threshold,
@@ -331,30 +345,34 @@ class HybridGradientContext:
             "saturating_ratio": ratio,
             "q_min_epoch": cls._q_min_epoch,
             "exploration_regions": len(cls._exploration_regions),
-            **q_stats
+            **q_stats,
         }
 
         # Add policy/hysteresis summary and thresholds if available
         if cls._policy_enabled:
             try:
-                stats.update({
-                    "policy_mode": "SAT" if cls._policy_mode_sat else "MR",
-                    "tau_q_on": cls._tau_q_on,
-                    "tau_q_off": cls._tau_q_off,
-                })
+                stats.update(
+                    {
+                        "policy_mode": "SAT" if cls._policy_mode_sat else "MR",
+                        "tau_q_on": cls._tau_q_on,
+                        "tau_q_off": cls._tau_q_off,
+                    }
+                )
             except Exception:
-                stats.update({
-                    "policy_mode": "SAT" if cls._policy_mode_sat else "MR",
-                    "tau_q_on": cls._tau_q_on,
-                    "tau_q_off": cls._tau_q_off,
-                })
+                stats.update(
+                    {
+                        "policy_mode": "SAT" if cls._policy_mode_sat else "MR",
+                        "tau_q_on": cls._tau_q_on,
+                        "tau_q_off": cls._tau_q_off,
+                    }
+                )
 
         # Flip stats across batches in this epoch (if tracked)
-        if hasattr(cls, '_policy_flip_count_epoch') and hasattr(cls, '_batch_count_epoch'):
-            flips = getattr(cls, '_policy_flip_count_epoch', 0) or 0
-            batches = getattr(cls, '_batch_count_epoch', 0) or 0
-            stats['policy_flip_count'] = flips
-            stats['flip_rate'] = (float(flips) / float(batches)) if batches > 0 else 0.0
+        if hasattr(cls, "_policy_flip_count_epoch") and hasattr(cls, "_batch_count_epoch"):
+            flips = getattr(cls, "_policy_flip_count_epoch", 0) or 0
+            batches = getattr(cls, "_batch_count_epoch", 0) or 0
+            stats["policy_flip_count"] = flips
+            stats["flip_rate"] = (float(flips) / float(batches)) if batches > 0 else 0.0
 
         return stats
 
@@ -366,13 +384,13 @@ class HybridGradientContext:
         cls._stats_mask_real = 0
         cls._q_values_batch = []
         cls._near_pole_samples = set()
-        
+
         # Update epoch minimum
         if cls._q_min_batch is not None:
             if cls._q_min_epoch is None or cls._q_min_batch < cls._q_min_epoch:
                 cls._q_min_epoch = cls._q_min_batch
         cls._q_min_batch = None
-    
+
     @classmethod
     def reset_epoch_statistics(cls) -> None:
         """Reset per-epoch statistics."""
@@ -400,7 +418,7 @@ class HybridGradientContext:
             q_p10 = float(np.min(q))
 
         # Sensitivity proxy g ≈ 1/|Q|; use 90th percentile for robustness
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             g_vals = 1.0 / np.maximum(q, 1e-18)
         try:
             g90 = float(np.percentile(g_vals, 90))
@@ -431,17 +449,17 @@ class HybridGradientContext:
 
         # Reset per-batch stats after update
         cls.reset_statistics()
-    
+
     @classmethod
     def get_q_min(cls) -> Optional[float]:
         """Get current batch q_min."""
         return cls._q_min_batch
-    
+
     @classmethod
     def get_q_min_epoch(cls) -> Optional[float]:
         """Get epoch q_min."""
         return cls._q_min_epoch
-    
+
     @classmethod
     def update_q_value(cls, abs_q: float) -> None:
         """Update q_min tracking."""
@@ -452,32 +470,32 @@ class HybridGradientContext:
             cls._q_values_batch.append(float(abs_q))
         except Exception:
             pass
-    
+
     @classmethod
     def set_exploration_regions(cls, regions: List[Tuple[float, float]]) -> None:
         """Set pole exploration regions for current epoch."""
         cls._exploration_regions = regions
-    
+
     @classmethod
     def detect_poles(cls, threshold: Optional[float] = None) -> List[int]:
         """Detect samples that are likely near poles.
-        
+
         Args:
             threshold: Q-value threshold for pole detection
-            
+
         Returns:
             List of sample indices that are near poles
         """
         if not cls._q_values_batch:
             return []
-        
+
         threshold = threshold or (cls._local_threshold if cls._local_threshold else 0.1)
         near_poles = []
-        
+
         for i, q_val in enumerate(cls._q_values_batch):
             if q_val <= threshold:
                 near_poles.append(i)
-        
+
         return near_poles
 
     @classmethod
@@ -490,16 +508,16 @@ class HybridGradientContext:
         GradientModeConfig.reset()
 
 
-def create_default_schedule(aggressive: bool = False, 
-                           warmup_epochs: int = 0,
-                           force_exploration: bool = True) -> HybridGradientSchedule:
+def create_default_schedule(
+    aggressive: bool = False, warmup_epochs: int = 0, force_exploration: bool = True
+) -> HybridGradientSchedule:
     """Create a default hybrid gradient schedule.
-    
+
     Args:
         aggressive: If True, use more aggressive parameters
         warmup_epochs: Number of warmup epochs with Mask-REAL only
         force_exploration: If True, enable forced pole exploration
-        
+
     Returns:
         HybridGradientSchedule with appropriate parameters
     """
@@ -516,7 +534,7 @@ def create_default_schedule(aggressive: bool = False,
             pole_exploration_radius=0.1,
             pole_exploration_epochs=10,
             adaptive_delta=True,
-            min_delta=1e-10
+            min_delta=1e-10,
         )
     return HybridGradientSchedule(
         warmup_epochs=warmup_epochs,
@@ -530,5 +548,5 @@ def create_default_schedule(aggressive: bool = False,
         pole_exploration_radius=0.05,
         pole_exploration_epochs=5,
         adaptive_delta=True,
-        min_delta=1e-8
+        min_delta=1e-8,
     )

@@ -130,6 +130,11 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.venv_ci/
+# Additional local virtualenvs (ensure they aren't tracked)
+.venv_*/
+.venv_dev/
+.venv_smoke/
 
 # Spyder project settings
 .spyderproject
@@ -227,3 +232,4 @@ mlruns/
 !**/.gitkeep
 # Benchmark outputs (avoid Windows-incompatible filenames)
 benchmark_results/
+local_reports/

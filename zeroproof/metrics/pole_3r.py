@@ -11,8 +11,8 @@ Metrics provided:
 - Residual consistency via forward kinematics with predicted Δθ
 """
 
-from typing import Dict, List, Tuple, Optional
 import math
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -23,8 +23,9 @@ def _wrap_pi(angle: float) -> float:
     return a
 
 
-def _fk_3r(theta1: float, theta2: float, theta3: float,
-           L1: float = 1.0, L2: float = 1.0, L3: float = 1.0) -> Tuple[float, float]:
+def _fk_3r(
+    theta1: float, theta2: float, theta3: float, L1: float = 1.0, L2: float = 1.0, L3: float = 1.0
+) -> Tuple[float, float]:
     """Planar 3R forward kinematics for end-effector position (x,y)."""
     t12 = theta1 + theta2
     t123 = t12 + theta3
@@ -33,9 +34,13 @@ def _fk_3r(theta1: float, theta2: float, theta3: float,
     return x, y
 
 
-def compute_residual_consistency_3r(test_inputs: List[List[float]],
-                                    predictions: List[List[float]],
-                                    L1: float = 1.0, L2: float = 1.0, L3: float = 1.0) -> float:
+def compute_residual_consistency_3r(
+    test_inputs: List[List[float]],
+    predictions: List[List[float]],
+    L1: float = 1.0,
+    L2: float = 1.0,
+    L3: float = 1.0,
+) -> float:
     """Mean squared residual between desired and achieved displacement (3R).
 
     Args:
@@ -45,7 +50,7 @@ def compute_residual_consistency_3r(test_inputs: List[List[float]],
         Mean squared residual over samples.
     """
     if not test_inputs or not predictions:
-        return float('inf')
+        return float("inf")
     errs: List[float] = []
     for inp, pred in zip(test_inputs, predictions):
         if len(inp) < 5 or len(pred) < 3:
@@ -57,19 +62,19 @@ def compute_residual_consistency_3r(test_inputs: List[List[float]],
         dx_hat, dy_hat = (x1 - x0), (y1 - y0)
         err = (dx_hat - dx_t) ** 2 + (dy_hat - dy_t) ** 2
         errs.append(err)
-    return float(np.mean(errs)) if errs else float('inf')
+    return float(np.mean(errs)) if errs else float("inf")
 
 
-def compute_ple_to_3r_lines(test_inputs: List[List[float]],
-                             predictions: List[List[float]],
-                             top_k_ratio: float = 0.05) -> float:
+def compute_ple_to_3r_lines(
+    test_inputs: List[List[float]], predictions: List[List[float]], top_k_ratio: float = 0.05
+) -> float:
     """Approximate PLE to the nearest 3R singular line.
 
     We select the top-|Δθ| samples and average the distance (in radians)
     to the nearest of {theta2 ∈ {0,π}, theta3 ∈ {0,π}}.
     """
     if not test_inputs or not predictions:
-        return float('inf')
+        return float("inf")
     n = min(len(test_inputs), len(predictions))
     norms: List[Tuple[int, float]] = []
     for i in range(n):
@@ -79,7 +84,7 @@ def compute_ple_to_3r_lines(test_inputs: List[List[float]],
         # Use L2 norm of the joint update vector
         norms.append((i, float(math.sqrt(sum(float(v) * float(v) for v in dth[:3])))))
     if not norms:
-        return float('inf')
+        return float("inf")
     norms.sort(key=lambda x: x[1], reverse=True)
     k = max(1, int(len(norms) * top_k_ratio))
     top_idx = [idx for idx, _ in norms[:k]]
@@ -95,22 +100,24 @@ def compute_ple_to_3r_lines(test_inputs: List[List[float]],
         d3_0 = abs(_wrap_pi(th3))
         d3_pi = abs(_wrap_pi(th3 - math.pi))
         dists.append(min(d2_0, d2_pi, d3_0, d3_pi))
-    return float(np.mean(dists)) if dists else float('inf')
+    return float(np.mean(dists)) if dists else float("inf")
 
 
-def compute_sign_consistency_rate_3r(test_inputs: List[List[float]],
-                                     predictions: List[List[float]],
-                                     n_paths: int = 8,
-                                     th1_tol: float = 0.08,
-                                     th2_window: float = 0.25,
-                                     th3_window: float = 0.25,
-                                     min_mag: float = 1e-3) -> Dict[str, float]:
+def compute_sign_consistency_rate_3r(
+    test_inputs: List[List[float]],
+    predictions: List[List[float]],
+    n_paths: int = 8,
+    th1_tol: float = 0.08,
+    th2_window: float = 0.25,
+    th3_window: float = 0.25,
+    min_mag: float = 1e-3,
+) -> Dict[str, float]:
     """Estimate sign flip consistency across theta2=0 and theta3=0.
 
     Returns a dict with keys 'theta2' and 'theta3' reporting the fraction
     of anchors exhibiting a sign flip for Δθ2 and Δθ3 respectively.
     """
-    result = {'theta2': 0.0, 'theta3': 0.0}
+    result = {"theta2": 0.0, "theta3": 0.0}
     if not test_inputs or not predictions:
         return result
     th1_vals = np.array([float(inp[0]) for inp in test_inputs])
@@ -145,7 +152,7 @@ def compute_sign_consistency_rate_3r(test_inputs: List[List[float]],
             continue
         valid += 1
         flips += 1 if sign_before != sign_after else 0
-    result['theta2'] = float(flips / valid) if valid > 0 else 0.0
+    result["theta2"] = float(flips / valid) if valid > 0 else 0.0
 
     # Theta3 crossing
     flips = 0
@@ -167,14 +174,18 @@ def compute_sign_consistency_rate_3r(test_inputs: List[List[float]],
             continue
         valid += 1
         flips += 1 if sign_before != sign_after else 0
-    result['theta3'] = float(flips / valid) if valid > 0 else 0.0
+    result["theta3"] = float(flips / valid) if valid > 0 else 0.0
 
     return result
 
 
-def compute_pole_metrics_3r(test_inputs: List[List[float]],
-                             predictions: List[List[float]],
-                             L1: float = 1.0, L2: float = 1.0, L3: float = 1.0) -> Dict[str, float]:
+def compute_pole_metrics_3r(
+    test_inputs: List[List[float]],
+    predictions: List[List[float]],
+    L1: float = 1.0,
+    L2: float = 1.0,
+    L3: float = 1.0,
+) -> Dict[str, float]:
     """Compute a bundle of 3R near-pole metrics.
 
     Returns a dict with keys:
@@ -185,21 +196,25 @@ def compute_pole_metrics_3r(test_inputs: List[List[float]],
     """
     signs = compute_sign_consistency_rate_3r(test_inputs, predictions)
     return {
-        'ple': compute_ple_to_3r_lines(test_inputs, predictions),
-        'sign_consistency_theta2': float(signs.get('theta2', 0.0)),
-        'sign_consistency_theta3': float(signs.get('theta3', 0.0)),
-        'residual_consistency': compute_residual_consistency_3r(test_inputs, predictions, L1=L1, L2=L2, L3=L3),
+        "ple": compute_ple_to_3r_lines(test_inputs, predictions),
+        "sign_consistency_theta2": float(signs.get("theta2", 0.0)),
+        "sign_consistency_theta3": float(signs.get("theta3", 0.0)),
+        "residual_consistency": compute_residual_consistency_3r(
+            test_inputs, predictions, L1=L1, L2=L2, L3=L3
+        ),
     }
 
 
-def compute_paired_sign_consistency_3r(test_inputs: List[List[float]],
-                                       predictions: List[List[float]],
-                                       joint: str = 'theta2',
-                                       phi_deg: float = 60.0,
-                                       phi_tol_deg: float = 35.0,
-                                       th_window: float = 0.35,
-                                       k: int = 4,
-                                       min_mag: float = 5e-4) -> Dict[str, float]:
+def compute_paired_sign_consistency_3r(
+    test_inputs: List[List[float]],
+    predictions: List[List[float]],
+    joint: str = "theta2",
+    phi_deg: float = 60.0,
+    phi_tol_deg: float = 35.0,
+    th_window: float = 0.35,
+    k: int = 4,
+    min_mag: float = 5e-4,
+) -> Dict[str, float]:
     """Paired sign-flip consistency across theta2=0 or theta3=0 under a direction window.
 
     Pairs k closest |theta_j| samples on negative side with k on positive side
@@ -219,13 +234,14 @@ def compute_paired_sign_consistency_3r(test_inputs: List[List[float]],
         {'rate': float, 'pairs': int}
     """
     if not test_inputs or not predictions:
-        return {'rate': 0.0, 'pairs': 0}
+        return {"rate": 0.0, "pairs": 0}
 
     import math
+
     # Build filtered lists
     neg: List[Tuple[float, float]] = []  # (|theta_j|, dtheta_j)
     pos: List[Tuple[float, float]] = []
-    j_idx = 1 if joint == 'theta2' else 2
+    j_idx = 1 if joint == "theta2" else 2
     for inp, pred in zip(test_inputs, predictions):
         if len(inp) < 5 or len(pred) < 3:
             continue
@@ -237,10 +253,12 @@ def compute_paired_sign_consistency_3r(test_inputs: List[List[float]],
             phi -= 360.0
         while phi < -180.0:
             phi += 360.0
+
         # Distance to target angle (circular)
         def ang_diff(a, b):
             d = (a - b + 180.0) % 360.0 - 180.0
             return abs(d)
+
         if ang_diff(phi, phi_deg) > phi_tol_deg:
             continue
         if abs(thj) > th_window:
@@ -256,7 +274,7 @@ def compute_paired_sign_consistency_3r(test_inputs: List[List[float]],
     pos.sort(key=lambda t: t[0])
     m = min(int(k), len(neg), len(pos))
     if m == 0:
-        return {'rate': 0.0, 'pairs': 0}
+        return {"rate": 0.0, "pairs": 0}
     flips = 0
     valid = 0
     for i in range(m):
@@ -272,5 +290,4 @@ def compute_paired_sign_consistency_3r(test_inputs: List[List[float]],
         if s_before != s_after:
             flips += 1
     rate = float(flips) / float(valid) if valid > 0 else 0.0
-    return {'rate': rate, 'pairs': valid}
-
+    return {"rate": rate, "pairs": valid}

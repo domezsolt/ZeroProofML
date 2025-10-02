@@ -3,8 +3,7 @@
 import math
 
 from zeroproof.bridge import from_ieee, to_ieee
-from zeroproof.core import TRTag, real
-from zeroproof.core import tr_div
+from zeroproof.core import TRTag, real, tr_div
 
 
 def test_signed_zero_roundtrip_and_division():
@@ -34,16 +33,15 @@ def test_signed_zero_roundtrip_and_division():
 
 def test_special_values_mapping():
     # NaN ↔ PHI
-    phi = from_ieee(float('nan'))
+    phi = from_ieee(float("nan"))
     assert phi.tag == TRTag.PHI
     back_nan = to_ieee(phi)
     assert math.isnan(back_nan)
 
     # +∞ and -∞ mapping
-    p = from_ieee(float('inf'))
-    n = from_ieee(float('-inf'))
+    p = from_ieee(float("inf"))
+    n = from_ieee(float("-inf"))
     assert p.tag == TRTag.PINF
     assert n.tag == TRTag.NINF
     assert math.isinf(to_ieee(p)) and to_ieee(p) > 0
     assert math.isinf(to_ieee(n)) and to_ieee(n) < 0
-

@@ -6,34 +6,36 @@ deterministically without epsilon hacks. It's the limit of standard
 batch normalization as ε→0⁺.
 """
 
-from typing import List, Optional, Tuple, Union
 import math
+from typing import List, Optional, Tuple, Union
 
-from ..core import TRScalar, TRTag, real, pinf, ninf, phi
+from ..autodiff import TRNode, tr_abs, tr_add, tr_div, tr_mul, tr_neg, tr_sqrt, tr_sub
+from ..core import TRScalar, TRTag, ninf, phi, pinf, real
 from ..core.precision_config import PrecisionConfig
-from ..autodiff import TRNode, tr_sqrt, tr_div, tr_sub, tr_add, tr_mul, tr_abs, tr_neg
 
 
 class TRNorm:
     """
     Epsilon-free normalization with deterministic zero-variance bypass.
-    
+
     For each feature:
     - If σ² > 0: ŷ = γ(x - μ)/σ + β  (standard normalization)
     - If σ² = 0: ŷ = β  (deterministic bypass)
-    
+
     Statistics are computed over REAL values only (drop-null).
     """
-    
-    def __init__(self,
-                 num_features: int,
-                 eps: float = 0.0,  # Ignored! For API compatibility only
-                 momentum: float = 0.1,
-                 affine: bool = True,
-                 track_running_stats: bool = False):
+
+    def __init__(
+        self,
+        num_features: int,
+        eps: float = 0.0,  # Ignored! For API compatibility only
+        momentum: float = 0.1,
+        affine: bool = True,
+        track_running_stats: bool = False,
+    ):
         """
         Initialize TR-Norm layer.
-        
+
         Args:
             num_features: Number of features to normalize
             eps: Ignored (kept for compatibility). TR-Norm is epsilon-free.
@@ -45,18 +47,17 @@ class TRNorm:
         self.momentum = momentum
         self.affine = affine
         self.track_running_stats = track_running_stats
-        
+
         if eps != 0.0:
             import warnings
+
             warnings.warn("TR-Norm ignores eps parameter. It's epsilon-free by design.")
-        
+
         # Initialize parameters
         self._initialize_parameters()
 
     @classmethod
-    def from_batch(cls,
-                   batch: List[List[Union[TRScalar, TRNode, float]]],
-                   **kwargs) -> "TRNorm":
+    def from_batch(cls, batch: List[List[Union[TRScalar, TRNode, float]]], **kwargs) -> "TRNorm":
         """Convenience constructor inferring num_features from first batch sample.
 
         Args:
@@ -74,7 +75,7 @@ class TRNorm:
         except Exception as ex:
             raise TypeError("Batch elements must be sequences of features") from ex
         return cls(num_features=num_features, **kwargs)
-    
+
     def _initialize_parameters(self):
         """Initialize affine parameters γ and β."""
         if self.affine:
@@ -87,7 +88,7 @@ class TRNorm:
         else:
             self.gamma = None
             self.beta = None
-        
+
         # Initialize running statistics if tracking is enabled
         if self.track_running_stats:
             # Track as plain Python floats (not part of the TR graph)
@@ -97,24 +98,24 @@ class TRNorm:
             self.num_batches_tracked: int = 0
         else:
             self.running_mean = None  # type: ignore[assignment]
-            self.running_var = None   # type: ignore[assignment]
+            self.running_var = None  # type: ignore[assignment]
             self.num_batches_tracked = None  # type: ignore[assignment]
-    
+
     def forward(self, x: List[List[Union[TRScalar, TRNode]]]) -> List[List[TRNode]]:
         """
         Forward pass of TR-Norm.
-        
+
         Args:
             x: Input tensor as list of samples, each sample is list of features
                Shape: [batch_size, num_features]
-               
+
         Returns:
             Normalized output with same shape as input
         """
         batch_size = len(x)
         if batch_size == 0:
             return []
-        
+
         # Ensure all inputs are nodes
         x_nodes = []
         for sample in x:
@@ -127,23 +128,23 @@ class TRNorm:
                 else:
                     sample_nodes.append(TRNode.constant(real(float(feature))))
             x_nodes.append(sample_nodes)
-        
+
         # Process each feature independently
         updated_any_running_stats = False
         output = []
         for i in range(batch_size):
             output.append([])
-        
+
         for j in range(self.num_features):
             # Collect REAL values for this feature
             real_values = []
             real_indices = []
-            
+
             for i in range(batch_size):
                 if x_nodes[i][j].tag == TRTag.REAL:
                     real_values.append(x_nodes[i][j])
                     real_indices.append(i)
-            
+
             # Compute statistics
             if len(real_values) == 0:
                 # No REAL values - set mean=0, var=0 (triggers bypass)
@@ -160,9 +161,11 @@ class TRNorm:
                     left = _pairwise_sum(nodes[:mid])
                     right = _pairwise_sum(nodes[mid:])
                     return tr_add(left, right)
+
                 use_pairwise = False
                 try:
                     from ..policy import TRPolicyConfig
+
                     pol = TRPolicyConfig.get_policy()
                     use_pairwise = bool(pol and pol.deterministic_reduction)
                 except Exception:
@@ -191,9 +194,14 @@ class TRNorm:
                     for t in sq_terms:
                         variance = tr_add(variance, t)
                     variance = tr_div(variance, TRNode.constant(real(float(len(real_values)))))
-            
+
             # Update running statistics if enabled and valid REAL stats are available
-            if self.track_running_stats and len(real_values) > 0 and mean.tag == TRTag.REAL and variance.tag == TRTag.REAL:
+            if (
+                self.track_running_stats
+                and len(real_values) > 0
+                and mean.tag == TRTag.REAL
+                and variance.tag == TRTag.REAL
+            ):
                 m_prev = self.running_mean[j]
                 v_prev = self.running_var[j]
                 m_val = mean.value.value
@@ -213,7 +221,7 @@ class TRNorm:
                 delta = x1 - x0
                 half_delta = delta / TRNode.constant(real(2.0))
                 denom = tr_abs(half_delta)
-                
+
                 # Always normalize, even if denom is very small
                 # This preserves affine invariance by maintaining relative ordering
                 for i in range(batch_size):
@@ -226,10 +234,10 @@ class TRNorm:
 
             # Bypass only when variance is exactly zero in REAL domain
             if variance.tag == TRTag.REAL:
-                var_is_zero = (variance.value.value == 0.0)
+                var_is_zero = variance.value.value == 0.0
             else:
                 var_is_zero = False
-            
+
             # Normalize or bypass
             for i in range(batch_size):
                 if var_is_zero:
@@ -244,23 +252,23 @@ class TRNorm:
                     centered = x_nodes[i][j] - mean
                     std_dev = tr_sqrt(variance)
                     normalized = centered / std_dev
-                    
+
                     # Apply affine transform
                     if self.affine:
                         normalized = self.gamma[j] * normalized + self.beta[j]
-                
+
                 output[i].append(normalized)
-        
+
         # Increment batch counter if we updated any stats this forward
         if self.track_running_stats and updated_any_running_stats:
             self.num_batches_tracked += 1  # type: ignore[operator]
-        
+
         return output
-    
+
     def __call__(self, x: List[List[Union[TRScalar, TRNode]]]) -> List[List[TRNode]]:
         """Convenience method for forward pass."""
         return self.forward(x)
-    
+
     def parameters(self) -> List[TRNode]:
         """Get all trainable parameters."""
         if self.affine:
@@ -272,17 +280,19 @@ class TRNorm:
 class TRLayerNorm:
     """
     Layer normalization using TR arithmetic.
-    
+
     Normalizes across features for each sample independently.
     """
-    
-    def __init__(self,
-                 normalized_shape: Union[int, List[int]],
-                 eps: float = 0.0,
-                 elementwise_affine: bool = True):
+
+    def __init__(
+        self,
+        normalized_shape: Union[int, List[int]],
+        eps: float = 0.0,
+        elementwise_affine: bool = True,
+    ):
         """
         Initialize TR Layer Normalization.
-        
+
         Args:
             normalized_shape: Shape of features to normalize
             eps: Ignored (epsilon-free)
@@ -292,16 +302,16 @@ class TRLayerNorm:
             normalized_shape = [normalized_shape]
         self.normalized_shape = normalized_shape
         self.elementwise_affine = elementwise_affine
-        
+
         # For now, only support 1D normalization
         if len(normalized_shape) != 1:
             raise NotImplementedError("Only 1D layer norm supported currently")
-        
+
         self.num_features = normalized_shape[0]
-        
+
         # Initialize parameters
         self._initialize_parameters()
-    
+
     def _initialize_parameters(self):
         """Initialize affine parameters."""
         if self.elementwise_affine:
@@ -313,14 +323,14 @@ class TRLayerNorm:
         else:
             self.gamma = None
             self.beta = None
-    
+
     def forward(self, x: List[Union[TRScalar, TRNode]]) -> List[TRNode]:
         """
         Forward pass for a single sample.
-        
+
         Args:
             x: Input features for one sample [num_features]
-            
+
         Returns:
             Normalized features [num_features]
         """
@@ -333,16 +343,16 @@ class TRLayerNorm:
                 x_nodes.append(TRNode.constant(feature))
             else:
                 x_nodes.append(TRNode.constant(real(float(feature))))
-        
+
         # Collect REAL values
         real_values = []
         real_indices = []
-        
+
         for i, node in enumerate(x_nodes):
             if node.tag == TRTag.REAL:
                 real_values.append(node)
                 real_indices.append(i)
-        
+
         # Compute statistics
         if len(real_values) == 0:
             # No REAL values
@@ -354,14 +364,14 @@ class TRLayerNorm:
             for k in range(1, len(real_values)):
                 mean = mean + real_values[k]
             mean = mean / TRNode.constant(real(float(len(real_values))))
-            
+
             # Compute variance
             variance = TRNode.constant(real(0.0))
             for val in real_values:
                 diff = val - mean
                 variance = variance + diff * diff
             variance = variance / TRNode.constant(real(float(len(real_values))))
-        
+
         # Check if variance is effectively zero (accounting for numerical precision)
         # Bypass only when variance would cause severe numerical issues
         if variance.tag == TRTag.REAL:
@@ -373,7 +383,7 @@ class TRLayerNorm:
             var_is_zero = abs(variance.value.value) < eps * eps
         else:
             var_is_zero = False
-        
+
         # Normalize each feature
         output = []
         for i in range(self.num_features):
@@ -388,18 +398,18 @@ class TRLayerNorm:
                 centered = x_nodes[i] - mean
                 std_dev = tr_sqrt(variance)
                 normalized = centered / std_dev
-                
+
                 if self.elementwise_affine:
                     normalized = self.gamma[i] * normalized + self.beta[i]
-            
+
             output.append(normalized)
-        
+
         return output
-    
+
     def __call__(self, x: List[Union[TRScalar, TRNode]]) -> List[TRNode]:
         """Convenience method."""
         return self.forward(x)
-    
+
     def parameters(self) -> List[TRNode]:
         """Get trainable parameters."""
         if self.elementwise_affine:

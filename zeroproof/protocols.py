@@ -9,7 +9,7 @@ without importing heavy optional deps (e.g., torch/jax).
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, Tuple, runtime_checkable
 
 if TYPE_CHECKING:  # Import only for type checkers to avoid runtime deps
     from .autodiff.tr_node import TRNode

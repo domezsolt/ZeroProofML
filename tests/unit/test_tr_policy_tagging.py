@@ -7,19 +7,19 @@ Covers:
 - Shared-Q concordance for multi-output rationals
 """
 
-from zeroproof.policy import TRPolicy, TRPolicyConfig
-from zeroproof.layers import TRRational, TRRationalMulti, MonomialBasis
 from zeroproof.autodiff import TRNode
-from zeroproof.core import real, TRTag
+from zeroproof.autodiff.grad_mode import GradientMode, GradientModeConfig
+from zeroproof.autodiff.hybrid_gradient import HybridGradientContext, HybridGradientSchedule
+from zeroproof.core import TRTag, real
+from zeroproof.layers import MonomialBasis, TRRational, TRRationalMulti
 from zeroproof.layers.hybrid_rational import HybridTRRational
-from zeroproof.autodiff.hybrid_gradient import HybridGradientSchedule, HybridGradientContext
-from zeroproof.autodiff.grad_mode import GradientModeConfig, GradientMode
+from zeroproof.policy import TRPolicy, TRPolicyConfig
 
 
 def setup_module(module):
     # Install a default policy with explicit thresholds
     pol = TRPolicy(
-        tau_Q_on=1e-6,   # tiny thresholds for determinism test
+        tau_Q_on=1e-6,  # tiny thresholds for determinism test
         tau_Q_off=2e-6,
         tau_P_on=1e-9,
         tau_P_off=2e-9,
@@ -41,7 +41,7 @@ def test_determinism_outside_guard_bands():
     # Keep phi small so |Q| stays near 1 for tested x
     layer.theta[0]._value = real(0.5)  # P(0)=0.5 but irrelevant — outside band must be REAL
     layer.theta[1]._value = real(0.1)
-    layer.phi[0]._value = real(0.01)   # Q ≈ 1 + 0.01 x
+    layer.phi[0]._value = real(0.01)  # Q ≈ 1 + 0.01 x
 
     xs = [real(-0.5), real(0.0), real(0.5), real(1.0)]
     tags_first = []
@@ -81,7 +81,7 @@ def test_hysteresis_band_behavior():
     layer.phi[0]._value = real(-1.0)
 
     # |Q| = |1 - x|
-    x_on = real(1.0 - 5e-4)   # |Q| = 5e-4 < tau_Q_on → non-REAL
+    x_on = real(1.0 - 5e-4)  # |Q| = 5e-4 < tau_Q_on → non-REAL
     x_mid = real(1.0 - 1.5e-3)  # |Q| = 1.5e-3 ∈ (tau_on, tau_off) → keep previous
     x_off = real(1.0 - 3e-3)  # |Q| = 3e-3 ≥ tau_Q_off → REAL
 
@@ -148,7 +148,9 @@ def test_determinism_multi_output_outside_guard_bands():
 
 def test_determinism_hybrid_tr_rational_outside_guard_bands():
     """HybridTRRational delegates to TRRational; tags remain REAL and stable outside band."""
-    layer = HybridTRRational(d_p=1, d_q=1, basis=MonomialBasis(), hybrid_schedule=None, track_Q_values=False)
+    layer = HybridTRRational(
+        d_p=1, d_q=1, basis=MonomialBasis(), hybrid_schedule=None, track_Q_values=False
+    )
     # Q(x) = 1 + 0.01 x keeps |Q| far above tau
     layer.theta[0]._value = real(0.25)
     layer.theta[1]._value = real(0.0)
@@ -172,12 +174,15 @@ def test_determinism_hybrid_with_schedule_outside_band():
     """With an active hybrid schedule, policy tagging remains REAL and stable outside band."""
     # Set up a trivial schedule (no warmup, no transition specifics)
     HybridGradientContext.reset()
-    schedule = HybridGradientSchedule(enable=True, warmup_epochs=0, transition_epochs=0,
-                                      delta_init=1e-2, delta_final=1e-2)
+    schedule = HybridGradientSchedule(
+        enable=True, warmup_epochs=0, transition_epochs=0, delta_init=1e-2, delta_final=1e-2
+    )
     HybridGradientContext.set_schedule(schedule)
     HybridGradientContext.update_epoch(0)
 
-    layer = HybridTRRational(d_p=1, d_q=1, basis=MonomialBasis(), hybrid_schedule=schedule, track_Q_values=False)
+    layer = HybridTRRational(
+        d_p=1, d_q=1, basis=MonomialBasis(), hybrid_schedule=schedule, track_Q_values=False
+    )
     # Q(x) = 1 + 0.02 x stays far above tiny tau thresholds across test inputs
     layer.theta[0]._value = real(0.1)
     layer.theta[1]._value = real(-0.05)
@@ -214,8 +219,9 @@ def test_policy_flip_counts_across_batches():
     TRPolicyConfig.set_policy(pol)
 
     HybridGradientContext.reset()
-    schedule = HybridGradientSchedule(enable=True, warmup_epochs=0, transition_epochs=0,
-                                      delta_init=0.0, delta_final=0.0)
+    schedule = HybridGradientSchedule(
+        enable=True, warmup_epochs=0, transition_epochs=0, delta_init=0.0, delta_final=0.0
+    )
     HybridGradientContext.set_schedule(schedule)
     HybridGradientContext.update_epoch(0)
 
@@ -230,8 +236,8 @@ def test_policy_flip_counts_across_batches():
     HybridGradientContext.end_batch_policy_update()
 
     stats = HybridGradientContext.get_statistics()
-    assert stats.get('policy_flip_count', 0) >= 2
-    flip_rate = stats.get('flip_rate', 0.0)
+    assert stats.get("policy_flip_count", 0) >= 2
+    flip_rate = stats.get("flip_rate", 0.0)
     assert flip_rate > 0.0
 
     # Clean up
@@ -250,8 +256,9 @@ def test_local_hybrid_saturation_triggers_with_large_delta():
 
     # Reset hybrid context and enable HYBRID mode
     HybridGradientContext.reset()
-    schedule = HybridGradientSchedule(enable=True, warmup_epochs=0, transition_epochs=0,
-                                      delta_init=10.0, delta_final=10.0)
+    schedule = HybridGradientSchedule(
+        enable=True, warmup_epochs=0, transition_epochs=0, delta_init=10.0, delta_final=10.0
+    )
     HybridGradientContext.set_schedule(schedule)
     HybridGradientContext.update_epoch(0)
     GradientModeConfig.set_mode(GradientMode.HYBRID)
@@ -277,8 +284,8 @@ def test_local_hybrid_saturation_triggers_with_large_delta():
     loss_node.backward()
 
     stats = HybridGradientContext.get_statistics()
-    sat = stats.get('saturating_activations', 0)
-    total = stats.get('total_gradient_calls', 0)
+    sat = stats.get("saturating_activations", 0)
+    total = stats.get("total_gradient_calls", 0)
     assert total > 0
     assert sat > 0, f"Expected saturating activations > 0, got {sat} (total={total})"
 

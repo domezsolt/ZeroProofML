@@ -25,8 +25,9 @@ def teardown_module(module):
 
 def test_finite_switching_over_batches():
     HybridGradientContext.reset()
-    schedule = HybridGradientSchedule(enable=True, warmup_epochs=0, transition_epochs=0,
-                                      delta_init=0.0, delta_final=0.0)
+    schedule = HybridGradientSchedule(
+        enable=True, warmup_epochs=0, transition_epochs=0, delta_init=0.0, delta_final=0.0
+    )
     HybridGradientContext.set_schedule(schedule)
     HybridGradientContext.update_epoch(0)
 
@@ -43,8 +44,8 @@ def test_finite_switching_over_batches():
         HybridGradientContext.end_batch_policy_update()
 
     stats = HybridGradientContext.get_statistics()
-    flips = stats.get('policy_flip_count', 0)
-    flip_rate = stats.get('flip_rate', 0.0)
+    flips = stats.get("policy_flip_count", 0)
+    flip_rate = stats.get("flip_rate", 0.0)
 
     # Expect at most 2 flips (MR->SAT, SAT->MR) across these batches
     assert flips <= 2
@@ -52,4 +53,3 @@ def test_finite_switching_over_batches():
     assert 0.0 <= flip_rate <= 0.5
 
     HybridGradientContext.reset()
-

@@ -16,8 +16,7 @@ import random
 from typing import List, Tuple
 
 from zeroproof.autodiff import TRNode
-from zeroproof.core import real, TRTag
-from zeroproof.core import tr_add, tr_mul, tr_div, tr_log, tr_sum
+from zeroproof.core import TRTag, real, tr_add, tr_div, tr_log, tr_mul, tr_sum
 from zeroproof.layers import tr_softmax
 from zeroproof.training.trainer import Optimizer
 
@@ -74,7 +73,7 @@ def accuracy(model: TinyClassifier, X: List[Tuple[float, float]], y: List[int]) 
     correct = 0
     for (x0, x1), yi in zip(X, y):
         p = model.forward(TRNode.constant(real(x0)), TRNode.constant(real(x1)))
-        vals = [float(pi.value.value) if pi.tag == TRTag.REAL else float('nan') for pi in p]
+        vals = [float(pi.value.value) if pi.tag == TRTag.REAL else float("nan") for pi in p]
         pred = 0 if vals[0] >= vals[1] else 1
         if pred == yi:
             correct += 1
@@ -105,21 +104,20 @@ def train(epochs: int, n: int, lr: float, seed: int) -> None:
         opt.step(model)
 
         # Report
-        loss_val = float(loss.value.value) if loss.value.tag == TRTag.REAL else float('nan')
+        loss_val = float(loss.value.value) if loss.value.tag == TRTag.REAL else float("nan")
         acc = accuracy(model, X, y)
         print(f"Epoch {epoch+1:3d} | loss={loss_val:.4f} | acc={acc:.3f}")
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--epochs', type=int, default=50)
-    p.add_argument('--n', type=int, default=200)
-    p.add_argument('--lr', type=float, default=0.2)
-    p.add_argument('--seed', type=int, default=0)
+    p.add_argument("--epochs", type=int, default=50)
+    p.add_argument("--n", type=int, default=200)
+    p.add_argument("--lr", type=float, default=0.2)
+    p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
     train(args.epochs, args.n, args.lr, args.seed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

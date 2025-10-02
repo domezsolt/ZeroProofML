@@ -4,9 +4,9 @@ Verifies that HybridTRTrainer logs curvature and gradient proxies,
 and that they are finite in a simple 1D setting.
 """
 
-from zeroproof.layers import TRRational, MonomialBasis
-from zeroproof.training import HybridTRTrainer, HybridTrainingConfig, Optimizer
 from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRational
+from zeroproof.training import HybridTrainingConfig, HybridTRTrainer, Optimizer
 
 
 def _trscalar_list(vals):
@@ -28,12 +28,11 @@ def test_curvature_and_grad_proxies_present_and_finite():
     metrics = trainer.train_epoch([(inputs, targets)])
 
     # Curvature and grad proxies should be present
-    assert 'curvature_proxy' in metrics
-    assert 'gn_proxy' in metrics
-    assert 'grad_max' in metrics
+    assert "curvature_proxy" in metrics
+    assert "gn_proxy" in metrics
+    assert "grad_max" in metrics
 
     # Finite values
-    assert metrics['curvature_proxy'] >= 0.0
-    assert metrics['gn_proxy'] >= 0.0
-    assert metrics['grad_max'] >= 0.0
-
+    assert metrics["curvature_proxy"] >= 0.0
+    assert metrics["gn_proxy"] >= 0.0
+    assert metrics["grad_max"] >= 0.0

@@ -1,9 +1,9 @@
 import math
 
-from zeroproof.layers import MonomialBasis
-from zeroproof.layers.multi_input_rational import TRMultiInputRational
 from zeroproof.autodiff import TRNode, gradient_tape
 from zeroproof.core import TRTag, real
+from zeroproof.layers import MonomialBasis
+from zeroproof.layers.multi_input_rational import TRMultiInputRational
 
 
 def _compute_loss_with_constants(model, x_vals, target):
@@ -27,8 +27,14 @@ def _compute_loss_with_constants(model, x_vals, target):
 def test_tr_multi_gradient_check_random_input():
     # Model: 4D->2D with small degrees for stability
     model = TRMultiInputRational(
-        input_dim=4, n_outputs=2, d_p=2, d_q=1,
-        basis=MonomialBasis(), hidden_dims=[4], shared_Q=True, enable_pole_head=False
+        input_dim=4,
+        n_outputs=2,
+        d_p=2,
+        d_q=1,
+        basis=MonomialBasis(),
+        hidden_dims=[4],
+        shared_Q=True,
+        enable_pole_head=False,
     )
 
     # Random-but-small input (deterministic values to avoid RNG deps)
@@ -87,4 +93,3 @@ def test_tr_multi_gradient_check_random_input():
         # Allow modest tolerance due to rational nonlinearity
         assert math.isfinite(gn)
         assert abs(gi.value.value - gn) <= (1e-2 * max(1.0, abs(gn)) + 1e-3)
-

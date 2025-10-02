@@ -22,6 +22,7 @@ class BatchCurvatureProxy:
     L_hat is a bound on local curvature; eta_safe <= 1 / L_hat is sufficient
     for non-exploding updates under basic conditions.
     """
+
     L_hat: float
 
 
@@ -72,6 +73,7 @@ def eta_adam(proxy: BatchCurvatureProxy, beta1: float, beta2: float) -> float:
         eta <= (1 - beta1) / (sqrt(1 - beta2) * L_hat)
     """
     import math
+
     beta1 = min(max(beta1, 0.0), 0.999999)
     beta2 = min(max(beta2, 0.0), 0.999999)
     denom = math.sqrt(max(1.0 - beta2, 1e-12)) * max(proxy.L_hat, 1e-12)

@@ -10,12 +10,12 @@ and produce multi-output predictions (e.g., 2D) using:
 By default, the denominator Q is shared across outputs for parameter efficiency.
 """
 
-from typing import List, Tuple, Optional, Union, Any
+from typing import Any, List, Optional, Tuple, Union
 
-from ..core import TRTag, TRScalar, real
 from ..autodiff import TRNode
-from .tr_rational import TRRational, TRRationalMulti
+from ..core import TRScalar, TRTag, real
 from .basis import Basis, MonomialBasis
+from .tr_rational import TRRational, TRRationalMulti
 
 
 class _TRDense:
@@ -32,6 +32,7 @@ class _TRDense:
 
         # He/Xavier-style scaling
         import math
+
         if activation == "relu":
             std = math.sqrt(2.0 / max(1, in_dim))
         else:
@@ -65,6 +66,7 @@ class _TRDense:
         use_pairwise = False
         try:
             from ..policy import TRPolicyConfig
+
             pol = TRPolicyConfig.get_policy()
             use_pairwise = bool(pol and pol.deterministic_reduction)
         except Exception:
@@ -108,19 +110,21 @@ class TRMultiInputRational:
     Example: input_dim=4, n_outputs=2, features_per_output=1 -> K=2
     """
 
-    def __init__(self,
-                 input_dim: int,
-                 n_outputs: int,
-                 d_p: int,
-                 d_q: int,
-                 basis: Optional[Basis] = None,
-                 hidden_dims: Optional[List[int]] = None,
-                 features_per_output: int = 1,
-                 shared_Q: bool = True,
-                 enable_pole_head: bool = False,
-                 # Coprime surrogate flags for heads
-                 enable_coprime_regularizer: bool = False,
-                 lambda_coprime: float = 0.0):
+    def __init__(
+        self,
+        input_dim: int,
+        n_outputs: int,
+        d_p: int,
+        d_q: int,
+        basis: Optional[Basis] = None,
+        hidden_dims: Optional[List[int]] = None,
+        features_per_output: int = 1,
+        shared_Q: bool = True,
+        enable_pole_head: bool = False,
+        # Coprime surrogate flags for heads
+        enable_coprime_regularizer: bool = False,
+        lambda_coprime: float = 0.0,
+    ):
         self.input_dim = input_dim
         self.n_outputs = n_outputs
         self.d_p = d_p
@@ -142,8 +146,11 @@ class TRMultiInputRational:
         if self.shared_Q and self.features_per_output == 1:
             # Share Q across outputs via TRRationalMulti, but wrap for unified API
             self.multi = TRRationalMulti(
-                d_p=self.d_p, d_q=self.d_q, n_outputs=self.n_outputs,
-                basis=self.basis, shared_Q=True,
+                d_p=self.d_p,
+                d_q=self.d_q,
+                n_outputs=self.n_outputs,
+                basis=self.basis,
+                shared_Q=True,
                 enable_coprime_regularizer=self.enable_coprime_regularizer,
                 lambda_coprime=self.lambda_coprime,
             )
@@ -154,7 +161,9 @@ class TRMultiInputRational:
             for _ in range(self.n_outputs):
                 self.heads.append(
                     TRRational(
-                        d_p=self.d_p, d_q=self.d_q, basis=self.basis,
+                        d_p=self.d_p,
+                        d_q=self.d_q,
+                        basis=self.basis,
                         enable_coprime_regularizer=self.enable_coprime_regularizer,
                         lambda_coprime=self.lambda_coprime,
                     )
@@ -164,6 +173,7 @@ class TRMultiInputRational:
         if self.enable_pole_head:
             from ..autodiff import TRNode
             from ..core import real
+
             k = self.n_outputs * self.features_per_output
             self.pole_W: List[TRNode] = []
             for i in range(k):
@@ -176,13 +186,15 @@ class TRMultiInputRational:
         self.layers: List[_TRDense] = []
         # Hidden layers (ReLU)
         for i in range(len(dims) - 1):
-            self.layers.append(_TRDense(dims[i], dims[i+1], activation="relu"))
+            self.layers.append(_TRDense(dims[i], dims[i + 1], activation="relu"))
         # Output layer produces K scalar features (linear activation)
         k = self.n_outputs * self.features_per_output
         last_in = dims[-1] if dims else self.input_dim
         self.layers.append(_TRDense(last_in, k, activation="linear"))
 
-    def _ensure_trnodes(self, x: Union[List[TRNode], List[float], Tuple[float, ...], Any]) -> List[TRNode]:
+    def _ensure_trnodes(
+        self, x: Union[List[TRNode], List[float], Tuple[float, ...], Any]
+    ) -> List[TRNode]:
         # Accept list/tuple of floats or TRNodes
         if isinstance(x, (list, tuple)):
             tr = []
@@ -202,7 +214,9 @@ class TRMultiInputRational:
             h = layer.forward(h)
         return h  # length = n_outputs * features_per_output
 
-    def forward(self, x: Union[List[TRNode], List[float], Tuple[float, ...]]) -> List[Tuple[TRNode, TRTag]]:
+    def forward(
+        self, x: Union[List[TRNode], List[float], Tuple[float, ...]]
+    ) -> List[Tuple[TRNode, TRTag]]:
         x_vec = self._ensure_trnodes(x)
         feats = self._frontend_forward(x_vec)
 
@@ -222,6 +236,7 @@ class TRMultiInputRational:
                 end = start + self.features_per_output
                 # Average features using optional pairwise sum
                 group = feats[start:end]
+
                 # Local helper
                 def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
                     if not nodes:
@@ -232,9 +247,11 @@ class TRMultiInputRational:
                     left = _pairwise_sum(nodes[:mid])
                     right = _pairwise_sum(nodes[mid:])
                     return left + right
+
                 use_pairwise = False
                 try:
                     from ..policy import TRPolicyConfig
+
                     pol = TRPolicyConfig.get_policy()
                     use_pairwise = bool(pol and pol.deterministic_reduction)
                 except Exception:
@@ -248,8 +265,10 @@ class TRMultiInputRational:
                 outputs.append((y, tag))
         return outputs
 
-    def forward_pole_head(self, x: Union[List[TRNode], List[float], Tuple[float, ...]]) -> Optional[TRNode]:
-        if not getattr(self, 'enable_pole_head', False):
+    def forward_pole_head(
+        self, x: Union[List[TRNode], List[float], Tuple[float, ...]]
+    ) -> Optional[TRNode]:
+        if not getattr(self, "enable_pole_head", False):
             return None
         x_vec = self._ensure_trnodes(x)
         feats = self._frontend_forward(x_vec)
@@ -260,6 +279,7 @@ class TRMultiInputRational:
                 start = i * self.features_per_output
                 end = start + self.features_per_output
                 group = feats[start:end]
+
                 def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
                     if not nodes:
                         return TRNode.constant(real(0.0))
@@ -269,9 +289,11 @@ class TRMultiInputRational:
                     left = _pairwise_sum(nodes[:mid])
                     right = _pairwise_sum(nodes[mid:])
                     return left + right
+
                 use_pairwise = False
                 try:
                     from ..policy import TRPolicyConfig
+
                     pol = TRPolicyConfig.get_policy()
                     use_pairwise = bool(pol and pol.deterministic_reduction)
                 except Exception:
@@ -292,7 +314,9 @@ class TRMultiInputRational:
                 score = score + self.pole_W[i] * f
         return score
 
-    def forward_fully_integrated(self, x: Union[List[TRNode], List[float], Tuple[float, ...]]) -> dict:
+    def forward_fully_integrated(
+        self, x: Union[List[TRNode], List[float], Tuple[float, ...]]
+    ) -> dict:
         """
         Forward pass returning a structured result for interface parity.
 
@@ -315,7 +339,7 @@ class TRMultiInputRational:
                 y, tag = head.forward(z)
                 outputs.append(y)
                 tags.append(tag)
-                q_abs = getattr(head, '_last_Q_abs', None)
+                q_abs = getattr(head, "_last_Q_abs", None)
                 if isinstance(q_abs, (int, float)):
                     q_abs_list.append(float(q_abs))
         else:
@@ -329,20 +353,20 @@ class TRMultiInputRational:
                 y, tag = head.forward(acc)
                 outputs.append(y)
                 tags.append(tag)
-                q_abs = getattr(head, '_last_Q_abs', None)
+                q_abs = getattr(head, "_last_Q_abs", None)
                 if isinstance(q_abs, (int, float)):
                     q_abs_list.append(float(q_abs))
 
         result = {
-            'outputs': outputs,
-            'tags': tags,
+            "outputs": outputs,
+            "tags": tags,
         }
         if q_abs_list:
-            result['Q_abs_list'] = q_abs_list
+            result["Q_abs_list"] = q_abs_list
 
-        if getattr(self, 'enable_pole_head', False):
+        if getattr(self, "enable_pole_head", False):
             # Provide a raw linear score for pole proximity
-            result['pole_score'] = self.forward_pole_head(x_vec)
+            result["pole_score"] = self.forward_pole_head(x_vec)
 
         return result
 
@@ -355,7 +379,7 @@ class TRMultiInputRational:
             params.extend(layer.parameters())
         for head in self.heads:
             params.extend(head.parameters())
-        if getattr(self, 'enable_pole_head', False):
+        if getattr(self, "enable_pole_head", False):
             params.extend(self.pole_W)
             params.append(self.pole_b)
         return params
@@ -367,36 +391,40 @@ class TRMultiInputRational:
         Otherwise: aggregate by taking max over heads for safety.
         """
         try:
-            if hasattr(self, 'heads') and self.heads:
+            if hasattr(self, "heads") and self.heads:
                 if self.shared_Q:
                     return self.heads[0].get_layer_contract()
                 # Aggregate conservatively
-                contracts = [h.get_layer_contract() for h in self.heads if hasattr(h, 'get_layer_contract')]
+                contracts = [
+                    h.get_layer_contract() for h in self.heads if hasattr(h, "get_layer_contract")
+                ]
                 if not contracts:
-                    return {'B_k': 1.0, 'H_k': 1.0, 'G_max': 1.0, 'H_max': 1.0, 'depth_hint': 4}
+                    return {"B_k": 1.0, "H_k": 1.0, "G_max": 1.0, "H_max": 1.0, "depth_hint": 4}
                 out = {}
-                for k in ('B_k', 'H_k', 'G_max', 'H_max'):
+                for k in ("B_k", "H_k", "G_max", "H_max"):
                     out[k] = float(max(c.get(k, 1.0) for c in contracts))
-                out['depth_hint'] = int(max(c.get('depth_hint', 4) for c in contracts))
+                out["depth_hint"] = int(max(c.get("depth_hint", 4) for c in contracts))
                 return out
         except Exception:
             pass
-        return {'B_k': 1.0, 'H_k': 1.0, 'G_max': 1.0, 'H_max': 1.0, 'depth_hint': 4}
+        return {"B_k": 1.0, "H_k": 1.0, "G_max": 1.0, "H_max": 1.0, "depth_hint": 4}
 
     def pole_parameters(self) -> List[TRNode]:
         params: List[TRNode] = []
-        if getattr(self, 'enable_pole_head', False):
+        if getattr(self, "enable_pole_head", False):
             params.extend(self.pole_W)
             params.append(self.pole_b)
         return params
 
     # Compatibility helpers
-    def forward_with_tag(self, x: Union[List[TRNode], List[float], Tuple[float, ...]]) -> List[Tuple[TRNode, TRTag]]:
+    def forward_with_tag(
+        self, x: Union[List[TRNode], List[float], Tuple[float, ...]]
+    ) -> List[Tuple[TRNode, TRTag]]:
         return self.forward(x)
 
     def regularization_loss(self) -> TRNode:
         # Sum regularization of heads (front-end has no explicit regularizer here)
-        if hasattr(self, 'multi'):
+        if hasattr(self, "multi"):
             return self.multi.regularization_loss()  # type: ignore[attr-defined]
         # If independent heads, sum their regs
         reg = TRNode.constant(real(0.0))
@@ -407,7 +435,9 @@ class TRMultiInputRational:
     # -----------------------------
     # SoA value-only fast inference (batch)
     # -----------------------------
-    def value_only_batch(self, X: List[Union[List[float], Tuple[float, ...]]]) -> List[List[TRScalar]]:
+    def value_only_batch(
+        self, X: List[Union[List[float], Tuple[float, ...]]]
+    ) -> List[List[TRScalar]]:
         """
         Fast value-only batch inference using SoA path for the front-end and
         TRRational.value_only for heads. Builds no autodiff graph.
@@ -469,8 +499,10 @@ class TRMultiInputRational:
                 for layer in self.layers:
                     y_vals: List[float] = []
                     # Pre-fetch weights as floats
-                    Wf = [[float(layer.W[i][j].value.value) for j in range(layer.in_dim)]
-                          for i in range(layer.out_dim)]
+                    Wf = [
+                        [float(layer.W[i][j].value.value) for j in range(layer.in_dim)]
+                        for i in range(layer.out_dim)
+                    ]
                     bf = [float(layer.b[i].value.value) for i in range(layer.out_dim)]
                     for i in range(layer.out_dim):
                         a = bf[i]
@@ -519,7 +551,7 @@ class TRMultiInputRational:
     # Policy sensitivity scales (heuristic): use first head (shared Q typical)
     def get_policy_local_scales(self) -> Tuple[float, float]:
         try:
-            if hasattr(self, 'multi') and hasattr(self.multi, 'layers') and self.multi.layers:
+            if hasattr(self, "multi") and hasattr(self.multi, "layers") and self.multi.layers:
                 return self.multi.layers[0].get_policy_local_scales()
             if self.heads:
                 return self.heads[0].get_policy_local_scales()

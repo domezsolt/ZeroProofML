@@ -6,17 +6,17 @@ Implements P / (Q + ε_pos), with ε_pos = raw^2 + ε_floor to stay positive.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import List, Tuple, Dict, Any, Optional
-import os
 import json
 import math
+import os
 import time
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from zeroproof.core import real, TRTag
-from zeroproof.autodiff import TRNode, GradientModeConfig, GradientMode
+from zeroproof.autodiff import GradientMode, GradientModeConfig, TRNode
+from zeroproof.core import TRTag, real
 from zeroproof.layers import MonomialBasis, TRRational
 from zeroproof.training import Optimizer
 
@@ -42,7 +42,7 @@ class LearnableEpsModel:
         for _ in range(cfg.output_dim):
             self.rationals.append(TRRational(d_p=cfg.degree_p, d_q=cfg.degree_q, basis=self.basis))
         # Global learnable raw epsilon
-        self.raw_eps = TRNode.parameter(real(0.0), name='raw_eps')
+        self.raw_eps = TRNode.parameter(real(0.0), name="raw_eps")
 
     def parameters(self) -> List[TRNode]:
         params: List[TRNode] = [self.raw_eps]
@@ -86,22 +86,28 @@ class LearnableEpsTrainer:
         self.history: List[Dict[str, Any]] = []
         self.training_time = 0.0
 
-    def train(self, train_inputs: List[List[float]], train_targets: List[List[float]]) -> Dict[str, Any]:
+    def train(
+        self, train_inputs: List[List[float]], train_targets: List[List[float]]
+    ) -> Dict[str, Any]:
         GradientModeConfig.set_mode(GradientMode.MASK_REAL)
         t0 = time.time()
         bs = self.model.config.batch_size
         for ep in range(self.model.config.epochs):
             losses = []
             for i in range(0, len(train_inputs), bs):
-                batch_in = train_inputs[i:i+bs]
-                batch_tg = train_targets[i:i+bs]
+                batch_in = train_inputs[i : i + bs]
+                batch_tg = train_targets[i : i + bs]
                 for inp, tgt in zip(batch_in, batch_tg):
                     tr_in = [TRNode.constant(real(x)) for x in inp]
                     outs = self.model.forward(tr_in)
                     loss = TRNode.constant(real(0.0))
                     valid = 0
-                    for (y, t) in zip(outs, tgt):
-                        if y.tag == TRTag.REAL and (not math.isnan(y.value.value)) and (not math.isinf(y.value.value)):
+                    for y, t in zip(outs, tgt):
+                        if (
+                            y.tag == TRTag.REAL
+                            and (not math.isnan(y.value.value))
+                            and (not math.isinf(y.value.value))
+                        ):
                             diff = y - TRNode.constant(real(float(t)))
                             loss = loss + diff * diff
                             valid += 1
@@ -114,7 +120,11 @@ class LearnableEpsTrainer:
             if losses and ep % max(1, self.model.config.epochs // 10) == 0:
                 print(f"[Learnable-ε] Epoch {ep}: loss={float(np.mean(losses)):.6f}")
         self.training_time = time.time() - t0
-        return {'history': self.history, 'training_time': self.training_time, 'config': asdict(self.model.config)}
+        return {
+            "history": self.history,
+            "training_time": self.training_time,
+            "config": asdict(self.model.config),
+        }
 
     def evaluate(self, inputs: List[List[float]], targets: List[List[float]]) -> Dict[str, Any]:
         per_sample_mse: List[float] = []
@@ -125,8 +135,12 @@ class LearnableEpsTrainer:
             pred = []
             mse = 0.0
             valid = 0
-            for (y, t) in zip(outs, tgt):
-                if y.tag == TRTag.REAL and (not math.isnan(y.value.value)) and (not math.isinf(y.value.value)):
+            for y, t in zip(outs, tgt):
+                if (
+                    y.tag == TRTag.REAL
+                    and (not math.isnan(y.value.value))
+                    and (not math.isinf(y.value.value))
+                ):
                     val = float(y.value.value)
                     pred.append(val)
                     mse += (val - float(t)) ** 2
@@ -134,17 +148,27 @@ class LearnableEpsTrainer:
             if valid > 0:
                 per_sample_mse.append(mse / valid)
                 predictions.append(pred)
-        raw_eps_val = float(self.model.raw_eps.value.value) if self.model.raw_eps.value.tag == TRTag.REAL else 0.0
+        raw_eps_val = (
+            float(self.model.raw_eps.value.value)
+            if self.model.raw_eps.value.tag == TRTag.REAL
+            else 0.0
+        )
         eps_pos = raw_eps_val * raw_eps_val + float(self.model.config.eps_floor)
         return {
-            'mse': float(np.mean(per_sample_mse)) if per_sample_mse else float('inf'),
-            'per_sample_mse': per_sample_mse,
-            'predictions': predictions,
-            'eps_final': float(eps_pos),
+            "mse": float(np.mean(per_sample_mse)) if per_sample_mse else float("inf"),
+            "per_sample_mse": per_sample_mse,
+            "predictions": predictions,
+            "eps_final": float(eps_pos),
         }
 
 
-def run_learnable_eps_baseline(train_data: Tuple[List, List], test_data: Tuple[List, List], cfg: Optional[LearnableEpsConfig] = None, output_dir: str = 'results', seed: Optional[int] = None) -> Dict[str, Any]:
+def run_learnable_eps_baseline(
+    train_data: Tuple[List, List],
+    test_data: Tuple[List, List],
+    cfg: Optional[LearnableEpsConfig] = None,
+    output_dir: str = "results",
+    seed: Optional[int] = None,
+) -> Dict[str, Any]:
     if cfg is None:
         cfg = LearnableEpsConfig()
     cfg.input_dim = len(train_data[0][0])
@@ -154,16 +178,15 @@ def run_learnable_eps_baseline(train_data: Tuple[List, List], test_data: Tuple[L
     trn = tr.train(*train_data)
     met = tr.evaluate(*test_data)
     res = {
-        'model_type': 'LearnableEpsilon',
-        'config': asdict(cfg),
-        'training_results': trn,
-        'test_metrics': met,
-        'n_parameters': len(model.parameters()),
-        'training_time': trn['training_time'],
-        'seed': seed,
+        "model_type": "LearnableEpsilon",
+        "config": asdict(cfg),
+        "training_results": trn,
+        "test_metrics": met,
+        "n_parameters": len(model.parameters()),
+        "training_time": trn["training_time"],
+        "seed": seed,
     }
     os.makedirs(output_dir, exist_ok=True)
-    with open(os.path.join(output_dir, 'learnable_eps.json'), 'w') as fh:
+    with open(os.path.join(output_dir, "learnable_eps.json"), "w") as fh:
         json.dump(res, fh, indent=2)
     return res
-

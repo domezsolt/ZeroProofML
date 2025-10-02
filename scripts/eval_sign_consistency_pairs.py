@@ -21,29 +21,30 @@ import glob
 import json
 import math
 import os
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-
-DEFAULT_BUCKET_EDGES = [0.0, 1e-5, 1e-4, 1e-3, 1e-2, float('inf')]
+DEFAULT_BUCKET_EDGES = [0.0, 1e-5, 1e-4, 1e-3, 1e-2, float("inf")]
 
 
 def load_dataset(dataset_path: str) -> Dict:
-    with open(dataset_path, 'r') as fh:
+    with open(dataset_path, "r") as fh:
         return json.load(fh)
 
 
-def reconstruct_quick_test_indices(samples: List[Dict], max_test: int = 500,
-                                   edges: Optional[List[float]] = None) -> List[int]:
+def reconstruct_quick_test_indices(
+    samples: List[Dict], max_test: int = 500, edges: Optional[List[float]] = None
+) -> List[int]:
     edges = edges or DEFAULT_BUCKET_EDGES
     n_total = len(samples)
     n_train_full = int(0.8 * n_total)
     test_idx = list(range(n_train_full, n_total))
+
     def bucketize(idx_list):
         buckets = {i: [] for i in range(len(edges) - 1)}
         for i in idx_list:
-            th2 = float(samples[i]['theta2'])
+            th2 = float(samples[i]["theta2"])
             dj = abs(math.sin(th2))
             for b in range(len(edges) - 1):
                 lo, hi = edges[b], edges[b + 1]
@@ -51,6 +52,7 @@ def reconstruct_quick_test_indices(samples: List[Dict], max_test: int = 500,
                     buckets[b].append(i)
                     break
         return buckets
+
     tb = bucketize(test_idx)
     selected = []
     for b in range(min(4, len(edges) - 1)):
@@ -84,39 +86,49 @@ def load_predictions(run_dir: str) -> Dict[str, List[List[float]]]:
     preds: Dict[str, List[List[float]]] = {}
     # MLP
     try:
-        with open(os.path.join(run_dir, 'mlp', 'mlp_baseline_results.json')) as fh:
-            preds['MLP'] = json.load(fh).get('test_metrics', {}).get('predictions', [])
+        with open(os.path.join(run_dir, "mlp", "mlp_baseline_results.json")) as fh:
+            preds["MLP"] = json.load(fh).get("test_metrics", {}).get("predictions", [])
     except Exception:
         pass
     # Rational+ε
-    rat_dir = os.path.join(run_dir, 'rational_eps')
+    rat_dir = os.path.join(run_dir, "rational_eps")
     try:
-        candidates = glob.glob(os.path.join(rat_dir, 'rational_eps_baseline_eps_*.json'))
+        candidates = glob.glob(os.path.join(rat_dir, "rational_eps_baseline_eps_*.json"))
         if candidates:
             with open(sorted(candidates)[0]) as fh:
-                preds['Rational+ε'] = json.load(fh).get('test_metrics', {}).get('predictions', [])
+                preds["Rational+ε"] = json.load(fh).get("test_metrics", {}).get("predictions", [])
     except Exception:
         pass
     # TR basic
     try:
-        with open(os.path.join(run_dir, 'zeroproof_basic', 'tr_rational_basic_results.json')) as fh:
+        with open(os.path.join(run_dir, "zeroproof_basic", "tr_rational_basic_results.json")) as fh:
             data = json.load(fh)
-        preds['ZeroProofML-Basic'] = data.get('predictions', []) or data.get('test_metrics', {}).get('predictions', [])
+        preds["ZeroProofML-Basic"] = data.get("predictions", []) or data.get(
+            "test_metrics", {}
+        ).get("predictions", [])
     except Exception:
         pass
     # TR full
     try:
-        with open(os.path.join(run_dir, 'zeroproof_full', 'zeroproof_full_results.json')) as fh:
+        with open(os.path.join(run_dir, "zeroproof_full", "zeroproof_full_results.json")) as fh:
             data = json.load(fh)
-        preds['ZeroProofML-Full'] = data.get('predictions', []) or data.get('test_metrics', {}).get('predictions', [])
+        preds["ZeroProofML-Full"] = data.get("predictions", []) or data.get("test_metrics", {}).get(
+            "predictions", []
+        )
     except Exception:
         pass
     return preds
 
 
-def paired_consistency(test_inputs: List[List[float]], preds: List[List[float]],
-                       n_paths: int, th1_tol: float, th2_window: float,
-                       k_pairs: int, min_dtheta2: float) -> Tuple[float, int]:
+def paired_consistency(
+    test_inputs: List[List[float]],
+    preds: List[List[float]],
+    n_paths: int,
+    th1_tol: float,
+    th2_window: float,
+    k_pairs: int,
+    min_dtheta2: float,
+) -> Tuple[float, int]:
     if not test_inputs or not preds:
         return 0.0, 0
     n = min(len(test_inputs), len(preds))
@@ -153,37 +165,47 @@ def paired_consistency(test_inputs: List[List[float]], preds: List[List[float]],
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Paired sign-flip consistency across θ2=0 for E1 quick runs')
-    ap.add_argument('--dataset', default='data/rr_ik_dataset.json')
-    ap.add_argument('--runs_glob', default='results/robotics/quick_s*')
-    ap.add_argument('--outjson', default='results/robotics/quick_sign_consistency_pairs.json')
-    ap.add_argument('--outfig', default='results/robotics/figures/e1_sign_consistency_pairs.png')
-    ap.add_argument('--n_paths', type=int, default=12)
-    ap.add_argument('--th1_tol', type=float, default=0.15)
-    ap.add_argument('--th2_window', type=float, default=0.30)
-    ap.add_argument('--k_pairs', type=int, default=3)
-    ap.add_argument('--min_dtheta2', type=float, default=1e-3)
+    ap = argparse.ArgumentParser(
+        description="Paired sign-flip consistency across θ2=0 for E1 quick runs"
+    )
+    ap.add_argument("--dataset", default="data/rr_ik_dataset.json")
+    ap.add_argument("--runs_glob", default="results/robotics/quick_s*")
+    ap.add_argument("--outjson", default="results/robotics/quick_sign_consistency_pairs.json")
+    ap.add_argument("--outfig", default="results/robotics/figures/e1_sign_consistency_pairs.png")
+    ap.add_argument("--n_paths", type=int, default=12)
+    ap.add_argument("--th1_tol", type=float, default=0.15)
+    ap.add_argument("--th2_window", type=float, default=0.30)
+    ap.add_argument("--k_pairs", type=int, default=3)
+    ap.add_argument("--min_dtheta2", type=float, default=1e-3)
     args = ap.parse_args()
 
     dset = load_dataset(args.dataset)
-    samples = dset.get('samples', [])
+    samples = dset.get("samples", [])
     if not samples:
-        raise SystemExit('Dataset missing or empty')
+        raise SystemExit("Dataset missing or empty")
     edges = None
-    md = dset.get('metadata', {})
-    if isinstance(md, dict) and 'bucket_edges' in md:
+    md = dset.get("metadata", {})
+    if isinstance(md, dict) and "bucket_edges" in md:
         try:
-            edges = [float(e) if not (isinstance(e, str) and e.lower() in ('inf', '+inf', 'infinity')) else float('inf') for e in md['bucket_edges']]
+            edges = [
+                float(e)
+                if not (isinstance(e, str) and e.lower() in ("inf", "+inf", "infinity"))
+                else float("inf")
+                for e in md["bucket_edges"]
+            ]
         except Exception:
             edges = None
     selected = reconstruct_quick_test_indices(samples, max_test=500, edges=edges)
-    test_inputs = [[samples[i]['theta1'], samples[i]['theta2'], samples[i]['dx'], samples[i]['dy']] for i in selected]
+    test_inputs = [
+        [samples[i]["theta1"], samples[i]["theta2"], samples[i]["dx"], samples[i]["dy"]]
+        for i in selected
+    ]
 
     run_dirs = sorted(glob.glob(args.runs_glob))
     if not run_dirs:
-        raise SystemExit(f'No runs found matching {args.runs_glob}')
+        raise SystemExit(f"No runs found matching {args.runs_glob}")
 
-    per_method = {'MLP': [], 'Rational+ε': [], 'ZeroProofML-Basic': [], 'ZeroProofML-Full': []}
+    per_method = {"MLP": [], "Rational+ε": [], "ZeroProofML-Basic": [], "ZeroProofML-Full": []}
     pair_counts = {k: [] for k in per_method.keys()}
 
     for rd in run_dirs:
@@ -191,47 +213,64 @@ def main():
         for method, preds in preds_map.items():
             if method not in per_method:
                 continue
-            score, count = paired_consistency(test_inputs, preds, args.n_paths, args.th1_tol,
-                                              args.th2_window, args.k_pairs, args.min_dtheta2)
+            score, count = paired_consistency(
+                test_inputs,
+                preds,
+                args.n_paths,
+                args.th1_tol,
+                args.th2_window,
+                args.k_pairs,
+                args.min_dtheta2,
+            )
             per_method[method].append(score)
             pair_counts[method].append(count)
 
-    summary = {'methods': {}, 'params': vars(args)}
-    print('Paired sign-flip consistency across θ2=0 (mean±std over runs):')
+    summary = {"methods": {}, "params": vars(args)}
+    print("Paired sign-flip consistency across θ2=0 (mean±std over runs):")
     for m, xs in per_method.items():
         if not xs:
             continue
         arr = np.array(xs, dtype=float)
         mu, sd = float(arr.mean()), float(arr.std())
         print(f"  {m:18s}: {mu*100:.2f}% ± {sd*100:.2f}% (n={len(xs)})")
-        summary['methods'][m] = {
-            'mean': mu, 'std': sd, 'n': len(xs), 'values': xs,
-            'pairs_mean': float(np.mean(pair_counts[m])) if pair_counts[m] else 0.0,
-            'pairs_min': int(min(pair_counts[m])) if pair_counts[m] else 0,
-            'pairs_max': int(max(pair_counts[m])) if pair_counts[m] else 0,
+        summary["methods"][m] = {
+            "mean": mu,
+            "std": sd,
+            "n": len(xs),
+            "values": xs,
+            "pairs_mean": float(np.mean(pair_counts[m])) if pair_counts[m] else 0.0,
+            "pairs_min": int(min(pair_counts[m])) if pair_counts[m] else 0,
+            "pairs_max": int(max(pair_counts[m])) if pair_counts[m] else 0,
         }
 
     os.makedirs(os.path.dirname(args.outjson), exist_ok=True)
-    with open(args.outjson, 'w') as fh:
+    with open(args.outjson, "w") as fh:
         json.dump(summary, fh, indent=2)
     print(f"Saved summary to {args.outjson}")
 
     # Plot
     try:
         import matplotlib.pyplot as plt
+
         methods = [m for m in per_method.keys() if per_method[m]]
         if methods:
-            means = [summary['methods'][m]['mean'] * 100.0 for m in methods]
-            stds = [summary['methods'][m]['std'] * 100.0 for m in methods]
+            means = [summary["methods"][m]["mean"] * 100.0 for m in methods]
+            stds = [summary["methods"][m]["std"] * 100.0 for m in methods]
             plt.figure(figsize=(6.2, 3.2), dpi=150)
             bars = plt.bar(methods, means, yerr=stds, capsize=3)
-            plt.ylabel('Paired Sign Consistency (%)')
+            plt.ylabel("Paired Sign Consistency (%)")
             plt.ylim(0, 100)
             # Annotate average contributing pairs on top of bars
             for i, m in enumerate(methods):
-                pairs = summary['methods'][m].get('pairs_mean', 0.0)
-                plt.text(i, means[i] + max(1.0, stds[i]) + 1.0, f"pairs~{pairs:.1f}",
-                         ha='center', va='bottom', fontsize=8)
+                pairs = summary["methods"][m].get("pairs_mean", 0.0)
+                plt.text(
+                    i,
+                    means[i] + max(1.0, stds[i]) + 1.0,
+                    f"pairs~{pairs:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                )
             plt.tight_layout()
             os.makedirs(os.path.dirname(args.outfig), exist_ok=True)
             plt.savefig(args.outfig)
@@ -241,5 +280,5 @@ def main():
         print(f"Figure not generated ({e})")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

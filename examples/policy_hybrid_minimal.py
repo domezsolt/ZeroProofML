@@ -12,13 +12,15 @@ import random
 from typing import List, Tuple
 
 import zeroproof as zp
-from zeroproof.layers import TRRational, MonomialBasis
-from zeroproof.training import enable_default_tr_policy
 from zeroproof.autodiff import GradientMode, GradientModeConfig, TRNode
 from zeroproof.autodiff.hybrid_gradient import HybridGradientContext
+from zeroproof.layers import MonomialBasis, TRRational
+from zeroproof.training import enable_default_tr_policy
 
 
-def make_dataset(n: int = 128, center: float = 1.0, span: float = 2e-4) -> List[Tuple[List[zp.TRScalar], List[zp.TRScalar]]]:
+def make_dataset(
+    n: int = 128, center: float = 1.0, span: float = 2e-4
+) -> List[Tuple[List[zp.TRScalar], List[zp.TRScalar]]]:
     """Create a 1D dataset clustered around a pole at x≈center.
 
     Args:

@@ -26,9 +26,9 @@ from zeroproof.autodiff import TRNode
 from zeroproof.utils.overhead import overhead_report
 
 
-def make_dataset(center: float = 0.5,
-                 n: int = 256,
-                 exclude: float = 0.05) -> List[Tuple[List[zp.TRScalar], List[zp.TRScalar]]]:
+def make_dataset(
+    center: float = 0.5, n: int = 256, exclude: float = 0.05
+) -> List[Tuple[List[zp.TRScalar], List[zp.TRScalar]]]:
     # Simple 1D grid excluding a small window around the pole
     xs: List[float] = []
     lo, hi = -2.0, 2.0
@@ -37,8 +37,10 @@ def make_dataset(center: float = 0.5,
         x = lo + i * step
         if abs(x - center) >= exclude:
             xs.append(x)
+
     def f(x: float) -> float:
         return 1.0 / (x - center)
+
     inputs = [zp.real(float(x)) for x in xs]
     targets = [zp.real(float(f(x))) for x in xs]
     # Single batch loader
@@ -49,13 +51,16 @@ class _MiniOptimizer:
     def __init__(self, params: List[TRNode], lr: float = 0.01) -> None:
         self.params = params
         self.learning_rate = lr
+
     def zero_grad(self) -> None:
         for p in self.params:
             p.zero_grad()
+
     def step(self) -> None:
         if self.learning_rate == 0.0:
             return
         from zeroproof.core import tr_mul, tr_sub
+
         lr_node = TRNode.constant(zp.real(self.learning_rate))
         for p in self.params:
             if p.gradient is not None and p.gradient.tag == zp.TRTag.REAL:
@@ -65,14 +70,18 @@ class _MiniOptimizer:
 
 class _MiniTrainer:
     """Tiny trainer with batch APIs to satisfy overhead_report."""
+
     def __init__(self, model: Any, lr: float = 0.01) -> None:
         self.model = model
         self.optimizer = _MiniOptimizer(model.parameters(), lr)
         self.hybrid_schedule = None
         self.epoch = 0
 
-    def _train_batch(self, inputs: List[zp.TRScalar], targets: List[zp.TRScalar], _unused=None) -> Dict[str, float]:
+    def _train_batch(
+        self, inputs: List[zp.TRScalar], targets: List[zp.TRScalar], _unused=None
+    ) -> Dict[str, float]:
         import time
+
         t0 = time.perf_counter()
         self.optimizer.zero_grad()
         # Forward and loss accumulation (balanced sum)
@@ -84,6 +93,7 @@ class _MiniTrainer:
                 losses.append(diff * diff)
         if not losses:
             return {"loss": float("inf"), "optim_ms": 0.0}
+
         def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
             if not nodes:
                 return TRNode.constant(zp.real(0.0))
@@ -91,12 +101,15 @@ class _MiniTrainer:
                 return nodes[0]
             mid = len(nodes) // 2
             return _pairwise_sum(nodes[:mid]) + _pairwise_sum(nodes[mid:])
+
         total = _pairwise_sum(losses) / TRNode.constant(zp.real(float(len(losses))))
         total.backward()
         self.optimizer.step()
         t1 = time.perf_counter()
-        return {"loss": total.value.value if total.value.tag == zp.TRTag.REAL else float("inf"),
-                "optim_ms": (t1 - t0) * 1000.0}
+        return {
+            "loss": total.value.value if total.value.tag == zp.TRTag.REAL else float("inf"),
+            "optim_ms": (t1 - t0) * 1000.0,
+        }
 
 
 def main(argv: List[str] | None = None) -> int:

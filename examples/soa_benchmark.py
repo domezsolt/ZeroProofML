@@ -14,9 +14,9 @@ import argparse
 import random
 import time
 
-from zeroproof.layers import TRRational, MonomialBasis
 from zeroproof.autodiff import TRNode
 from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRational
 
 
 def bench(n: int, d_p: int, d_q: int, seed: int = 0):
@@ -36,7 +36,7 @@ def bench(n: int, d_p: int, d_q: int, seed: int = 0):
     for x in xs:
         y_node, _ = layer.forward(TRNode.constant(real(x)))
         if y_node.tag == y_node.value.tag:  # always true; force access
-            s += float(y_node.value.value) if y_node.tag.name == 'REAL' else 0.0
+            s += float(y_node.value.value) if y_node.tag.name == "REAL" else 0.0
     t1 = time.perf_counter()
     t_regular = t1 - t0
 
@@ -45,27 +45,28 @@ def bench(n: int, d_p: int, d_q: int, seed: int = 0):
     s2 = 0.0
     for x in xs:
         y = layer.value_only(x)
-        s2 += float(y.value) if y.tag.name == 'REAL' else 0.0
+        s2 += float(y.value) if y.tag.name == "REAL" else 0.0
     t3 = time.perf_counter()
     t_soa = t3 - t2
 
-    speedup = t_regular / t_soa if t_soa > 0 else float('inf')
+    speedup = t_regular / t_soa if t_soa > 0 else float("inf")
     print(f"N={n} d_p={d_p} d_q={d_q}")
-    print(f"Regular forward: {t_regular:.4f}s  | SoA (value-only): {t_soa:.4f}s  | speedup: {speedup:.2f}x")
+    print(
+        f"Regular forward: {t_regular:.4f}s  | SoA (value-only): {t_soa:.4f}s  | speedup: {speedup:.2f}x"
+    )
     # Prevent optimizing away sums
     print(f"checksum regular={s:.6f} soa={s2:.6f}")
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--n', type=int, default=20000)
-    p.add_argument('--dp', type=int, default=3)
-    p.add_argument('--dq', type=int, default=3)
-    p.add_argument('--seed', type=int, default=0)
+    p.add_argument("--n", type=int, default=20000)
+    p.add_argument("--dp", type=int, default=3)
+    p.add_argument("--dq", type=int, default=3)
+    p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
     bench(args.n, args.dp, args.dq, seed=args.seed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

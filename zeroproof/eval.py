@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 from typing import List, Optional
 
-from . import utils, layers
+from . import layers, utils
 
 
 def _make_grid(xmin: float, xmax: float, n: int) -> List[float]:

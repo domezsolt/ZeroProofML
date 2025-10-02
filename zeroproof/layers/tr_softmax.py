@@ -19,10 +19,8 @@ from __future__ import annotations
 
 from typing import List
 
-from ..core import TRScalar, TRTag, real
-from ..autodiff import TRNode
-from ..autodiff import tr_add, tr_sub, tr_mul, tr_div, tr_abs
-from ..core import tr_max
+from ..autodiff import TRNode, tr_abs, tr_add, tr_div, tr_mul, tr_sub
+from ..core import TRScalar, TRTag, real, tr_max
 
 
 def pade_exp_approx(z: TRNode) -> TRNode:
@@ -60,17 +58,20 @@ def tr_softmax(logits: List[TRNode]) -> List[TRNode]:
     # Policy: force one-hot if any +INF present
     try:
         from ..policy import TRPolicyConfig
+
         pol = TRPolicyConfig.get_policy()
-        if pol is not None and getattr(pol, 'softmax_one_hot_infinity', False):
+        if pol is not None and getattr(pol, "softmax_one_hot_infinity", False):
             idx = None
             for i, x in enumerate(logits):
-                if getattr(x, 'tag', None) == TRTag.PINF:
+                if getattr(x, "tag", None) == TRTag.PINF:
                     idx = i
                     break
             if idx is not None:
                 out: List[TRNode] = []
                 for i in range(len(logits)):
-                    out.append(TRNode.constant(real(1.0)) if i == idx else TRNode.constant(real(0.0)))
+                    out.append(
+                        TRNode.constant(real(1.0)) if i == idx else TRNode.constant(real(0.0))
+                    )
                 return out
     except Exception:
         pass
@@ -83,6 +84,7 @@ def tr_softmax(logits: List[TRNode]) -> List[TRNode]:
     shifted: List[TRNode] = [x - max_val for x in logits]
     # Apply rational exp approx
     r: List[TRNode] = [pade_exp_approx(z) for z in shifted]
+
     # Sum as nodes to keep AD path with optional deterministic pairwise reduction
     def _pairwise_sum(nodes: List[TRNode]) -> TRNode:
         if not nodes:
@@ -93,9 +95,11 @@ def tr_softmax(logits: List[TRNode]) -> List[TRNode]:
         left = _pairwise_sum(nodes[:mid])
         right = _pairwise_sum(nodes[mid:])
         return tr_add(left, right)
+
     use_pairwise = False
     try:
         from ..policy import TRPolicyConfig
+
         pol = TRPolicyConfig.get_policy()
         use_pairwise = bool(pol and pol.deterministic_reduction)
     except Exception:

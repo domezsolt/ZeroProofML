@@ -6,11 +6,11 @@ non-REAL values according to the specified reduction mode.
 """
 
 from typing import List
-from .tr_scalar import TRScalar, TRTag, real, pinf, ninf, phi, bottom
-from .tr_ops import tr_add, tr_div
-from .reduction import ReductionMode
-from .precision_config import PrecisionConfig
 
+from .precision_config import PrecisionConfig
+from .reduction import ReductionMode
+from .tr_ops import tr_add, tr_div
+from .tr_scalar import TRScalar, TRTag, bottom, ninf, phi, pinf, real
 
 # Global toggle for deterministic compensated reductions (set by policy)
 _DETERMINISTIC_REDUCTION: bool = False
@@ -58,14 +58,14 @@ def _compensated_sum_real(values: List[TRScalar]) -> TRScalar:
 def tr_sum(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -> TRScalar:
     """
     Sum reduction over transreal values.
-    
+
     Args:
         values: List of transreal scalars to sum
         mode: Reduction mode (STRICT or DROP_NULL)
-        
+
     Returns:
         Sum of values according to the specified mode
-        
+
     Behavior:
         STRICT mode:
         - If any PHI present → PHI
@@ -73,7 +73,7 @@ def tr_sum(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
         - If both PINF and NINF present → PHI
         - If any infinity → that infinity
         - Otherwise → sum of REAL values
-        
+
         DROP_NULL mode:
         - Ignores PHI and BOTTOM values
         - If no non-null values → PHI (or BOTTOM if all were BOTTOM)
@@ -81,7 +81,7 @@ def tr_sum(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
     """
     if not values:
         return real(0.0)
-    
+
     if mode == ReductionMode.DROP_NULL:
         # Filter out PHI and BOTTOM values
         non_null_values = [v for v in values if v.tag not in (TRTag.PHI, TRTag.BOTTOM)]
@@ -98,18 +98,18 @@ def tr_sum(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
             return phi()
         if any(v.tag == TRTag.BOTTOM for v in values):
             return bottom()
-    
+
     # Check for infinities
     has_pinf = any(v.tag == TRTag.PINF for v in values)
     has_ninf = any(v.tag == TRTag.NINF for v in values)
-    
+
     if has_pinf and has_ninf:
         return phi()  # ∞ + (-∞) = PHI
     elif has_pinf:
         return pinf()
     elif has_ninf:
         return ninf()
-    
+
     # Sum REAL values (compensated if enabled)
     if _DETERMINISTIC_REDUCTION:
         real_values = [v for v in values if v.tag == TRTag.REAL]
@@ -125,14 +125,14 @@ def tr_sum(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
 def tr_mean(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -> TRScalar:
     """
     Mean reduction over transreal values.
-    
+
     Args:
         values: List of transreal scalars
         mode: Reduction mode (STRICT or DROP_NULL)
-        
+
     Returns:
         Mean of values according to the specified mode
-        
+
     Behavior:
         - Computes sum according to mode
         - Divides by count of included values
@@ -140,7 +140,7 @@ def tr_mean(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) 
     """
     if not values:
         return phi()
-    
+
     if mode == ReductionMode.DROP_NULL:
         # Count non-PHI values
         non_phi_values = [v for v in values if v.tag != TRTag.PHI]
@@ -149,14 +149,14 @@ def tr_mean(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) 
         count = len(non_phi_values)
     else:
         count = len(values)
-    
+
     # Compute sum
     total = tr_sum(values, mode)
-    
+
     # If sum is non-REAL, return it
     if total.tag != TRTag.REAL:
         return total
-    
+
     # Divide by count
     return tr_div(total, real(float(count)))
 
@@ -164,17 +164,17 @@ def tr_mean(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) 
 def tr_prod(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -> TRScalar:
     """
     Product reduction over transreal values.
-    
+
     Args:
         values: List of transreal scalars
         mode: Reduction mode (STRICT or DROP_NULL)
-        
+
     Returns:
         Product of values according to the specified mode
     """
     if not values:
         return real(1.0)
-    
+
     if mode == ReductionMode.DROP_NULL:
         # Filter out PHI values
         non_phi_values = [v for v in values if v.tag != TRTag.PHI]
@@ -185,7 +185,7 @@ def tr_prod(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) 
         # Check for any PHI
         if any(v.tag == TRTag.PHI for v in values):
             return phi()
-    
+
     # Deterministic product if enabled and all REAL: use pairwise multiplication
     if _DETERMINISTIC_REDUCTION:
         all_real = all(v.tag == TRTag.REAL for v in values)
@@ -213,6 +213,7 @@ def _pairwise_prod_real(values: List[TRScalar]) -> TRScalar:
     for v in values:
         if v.tag == TRTag.REAL and float(v.value) == 0.0:
             return real(0.0)
+
     def _prod(lo: int, hi: int) -> TRScalar:
         if hi - lo == 1:
             return values[lo]
@@ -220,25 +221,26 @@ def _pairwise_prod_real(values: List[TRScalar]) -> TRScalar:
         left = _prod(lo, mid)
         right = _prod(mid, hi)
         return tr_mul(left, right)
+
     return _prod(0, len(values))
 
 
 def tr_min(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -> TRScalar:
     """
     Minimum reduction over transreal values.
-    
+
     Args:
         values: List of transreal scalars
         mode: Reduction mode (STRICT or DROP_NULL)
-        
+
     Returns:
         Minimum value according to the specified mode
-        
+
     Order: NINF < REAL values < PINF, PHI is incomparable
     """
     if not values:
         return phi()
-    
+
     if mode == ReductionMode.DROP_NULL:
         # Filter out PHI values
         non_phi_values = [v for v in values if v.tag != TRTag.PHI]
@@ -249,11 +251,11 @@ def tr_min(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
         # Check for any PHI
         if any(v.tag == TRTag.PHI for v in values):
             return phi()
-    
+
     # Check for NINF (smallest value)
     if any(v.tag == TRTag.NINF for v in values):
         return ninf()
-    
+
     # Find minimum among REAL and PINF
     min_val = None
     for v in values:
@@ -262,26 +264,26 @@ def tr_min(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
                 min_val = v
         elif v.tag == TRTag.PINF and min_val is None:
             min_val = v
-    
+
     return min_val if min_val is not None else phi()
 
 
 def tr_max(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -> TRScalar:
     """
     Maximum reduction over transreal values.
-    
+
     Args:
         values: List of transreal scalars
         mode: Reduction mode (STRICT or DROP_NULL)
-        
+
     Returns:
         Maximum value according to the specified mode
-        
+
     Order: NINF < REAL values < PINF, PHI is incomparable
     """
     if not values:
         return phi()
-    
+
     if mode == ReductionMode.DROP_NULL:
         # Filter out PHI values
         non_phi_values = [v for v in values if v.tag != TRTag.PHI]
@@ -292,11 +294,11 @@ def tr_max(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
         # Check for any PHI
         if any(v.tag == TRTag.PHI for v in values):
             return phi()
-    
+
     # Check for PINF (largest value)
     if any(v.tag == TRTag.PINF for v in values):
         return pinf()
-    
+
     # Find maximum among REAL and NINF
     max_val = None
     for v in values:
@@ -305,7 +307,7 @@ def tr_max(values: List[TRScalar], mode: ReductionMode = ReductionMode.STRICT) -
                 max_val = v
         elif v.tag == TRTag.NINF and max_val is None:
             max_val = v
-    
+
     return max_val if max_val is not None else phi()
 
 

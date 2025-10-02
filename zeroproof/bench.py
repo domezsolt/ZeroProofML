@@ -29,16 +29,19 @@ from typing import Any, Dict, List
 
 import zeroproof as zp
 from zeroproof.autodiff import TRNode, gradient_tape, tr_add, tr_mul
-from zeroproof.core import tr_add as core_add, tr_mul as core_mul, tr_div as core_div, real as tr_real
-from zeroproof.core.reductions import tr_sum as core_sum
+from zeroproof.core import real as tr_real
+from zeroproof.core import tr_add as core_add
+from zeroproof.core import tr_div as core_div
+from zeroproof.core import tr_mul as core_mul
 from zeroproof.core.reductions import set_deterministic_reduction
-from zeroproof.layers import TRRational, TRNorm
+from zeroproof.core.reductions import tr_sum as core_sum
+from zeroproof.layers import TRNorm, TRRational
 from zeroproof.utils import (
-    TRBenchmark,
     OperationBenchmark,
+    TRBenchmark,
     create_scaling_benchmark,
-    parallel_map,
     memoize_tr,
+    parallel_map,
 )
 
 
@@ -67,7 +70,12 @@ class MiniBench:
                 y = tr_mul(x, x)
             return tape.gradient(y, x)
 
-        res["simple_derivative"] = bench.benchmark(simple_derivative, name="simple_derivative", iterations=self.iterations, samples=self.samples)
+        res["simple_derivative"] = bench.benchmark(
+            simple_derivative,
+            name="simple_derivative",
+            iterations=self.iterations,
+            samples=self.samples,
+        )
 
         def chain():
             x = TRNode.parameter(zp.real(2.0))
@@ -78,7 +86,9 @@ class MiniBench:
                 w = tr_mul(z, z)
             return tape.gradient(w, x)
 
-        res["chain_rule"] = bench.benchmark(chain, name="chain_rule", iterations=max(1, self.iterations//5), samples=self.samples)
+        res["chain_rule"] = bench.benchmark(
+            chain, name="chain_rule", iterations=max(1, self.iterations // 5), samples=self.samples
+        )
         self.results["autodiff"] = res
         return res
 
@@ -87,15 +97,29 @@ class MiniBench:
         res: Dict[str, Any] = {}
 
         rat = TRRational(d_p=3, d_q=2)
+
         def rat_forward():
             return rat.forward(TRNode.constant(zp.real(1.25)))
-        res["tr_rational_forward"] = bench.benchmark(rat_forward, name="tr_rational_forward", iterations=self.iterations, samples=self.samples)
+
+        res["tr_rational_forward"] = bench.benchmark(
+            rat_forward,
+            name="tr_rational_forward",
+            iterations=self.iterations,
+            samples=self.samples,
+        )
 
         norm = TRNorm(num_features=8)
+
         def norm_forward():
             batch = [[TRNode.constant(zp.real(float(i + j))) for j in range(8)] for i in range(16)]
             return norm.forward(batch)
-        res["tr_norm_forward_b16_f8"] = bench.benchmark(norm_forward, name="tr_norm_forward_b16_f8", iterations=max(1, self.iterations//20), samples=self.samples)
+
+        res["tr_norm_forward_b16_f8"] = bench.benchmark(
+            norm_forward,
+            name="tr_norm_forward_b16_f8",
+            iterations=max(1, self.iterations // 20),
+            samples=self.samples,
+        )
 
         self.results["layers"] = res
         return res
@@ -112,16 +136,23 @@ class MiniBench:
                     y = zp.tr_add(zp.tr_mul(y, x), zp.real(1.0))
             return tape.gradient(y, x)
 
-        res["graph_depth"] = create_scaling_benchmark(deep_graph, sizes=[10, 20, 40, 80], name="graph_depth")
+        res["graph_depth"] = create_scaling_benchmark(
+            deep_graph, sizes=[10, 20, 40, 80], name="graph_depth"
+        )
 
         def batch_op(n: int):
             outs = []
             for i in range(n):
-                r = tr_add(tr_mul(TRNode.constant(zp.real(float(i))), TRNode.constant(zp.real(1.01))), TRNode.constant(zp.real(0.1)))
+                r = tr_add(
+                    tr_mul(TRNode.constant(zp.real(float(i))), TRNode.constant(zp.real(1.01))),
+                    TRNode.constant(zp.real(0.1)),
+                )
                 outs.append(r)
             return outs
 
-        res["batch_size"] = create_scaling_benchmark(batch_op, sizes=[10, 100, 1000], name="batch_size")
+        res["batch_size"] = create_scaling_benchmark(
+            batch_op, sizes=[10, 100, 1000], name="batch_size"
+        )
         self.results["scaling"] = res
         return res
 
@@ -140,19 +171,27 @@ class MiniBench:
 
         def seq():
             return [work(x) for x in inputs]
-        res["sequential"] = bench.benchmark(seq, name="sequential_400", iterations=1, samples=self.samples)
+
+        res["sequential"] = bench.benchmark(
+            seq, name="sequential_400", iterations=1, samples=self.samples
+        )
 
         # Keep parallel modest for portability
         for workers in [2, 4]:
+
             def par():
                 return parallel_map(work, inputs)
-            res[f"parallel_{workers}"] = bench.benchmark(par, name=f"parallel_{workers}", iterations=1, samples=self.samples)
+
+            res[f"parallel_{workers}"] = bench.benchmark(
+                par, name=f"parallel_{workers}", iterations=1, samples=self.samples
+            )
         self.results["parallel"] = res
         return res
 
     def suite_overhead(self) -> Dict[str, Any]:
         """Compare basic TR core ops vs IEEE float ops."""
         import time
+
         res: Dict[str, Any] = {}
 
         def bench_pair(tr_op, py_op, a_vals, b_vals, iters=3000):
@@ -167,10 +206,14 @@ class MiniBench:
             t0 = time.perf_counter()
             _acc_f = 0.0
             for i in range(iters):
-                _acc_f = py_op(float(i % 7), float((i+1) % 11))
+                _acc_f = py_op(float(i % 7), float((i + 1) % 11))
             t1 = time.perf_counter()
             py_time = t1 - t0
-            return {"tr_sec": tr_time, "py_sec": py_time, "slowdown_x": tr_time / py_time if py_time > 0 else float("inf")}
+            return {
+                "tr_sec": tr_time,
+                "py_sec": py_time,
+                "slowdown_x": tr_time / py_time if py_time > 0 else float("inf"),
+            }
 
         vals_a = [tr_real(float(i)) for i in range(1, 8)]
         vals_b = [tr_real(float(i)) for i in range(1, 12)]
@@ -182,8 +225,9 @@ class MiniBench:
 
     def suite_reductions(self) -> Dict[str, Any]:
         """Benchmark sequential vs pairwise reductions over TRScalars."""
-        import time
         import random
+        import time
+
         res: Dict[str, Any] = {}
 
         def make_values(n: int):
@@ -204,6 +248,7 @@ class MiniBench:
                     return xs[0]
                 mid = len(xs) // 2
                 return core_add(_pair(xs[:mid]), _pair(xs[mid:]))
+
             return _pair(vals)
 
         for n in [100, 1000, 3000]:
@@ -250,7 +295,7 @@ class MiniBench:
         def fl_once():
             acc = 0.0
             for a in xs_fl:
-                num = a*a + a
+                num = a * a + a
                 den = a + 1.0
                 if den == 0.0:
                     # mimic TR: skip or treat as 0 contribution
@@ -259,8 +304,15 @@ class MiniBench:
             return acc
 
         from zeroproof.utils.overhead import compare_tr_vs_float
-        res['composite'] = compare_tr_vs_float('composite', tr_once, fl_once, iterations=max(500, self.iterations), repeats=self.samples)
-        self.results['tag_overhead'] = res
+
+        res["composite"] = compare_tr_vs_float(
+            "composite",
+            tr_once,
+            fl_once,
+            iterations=max(500, self.iterations),
+            repeats=self.samples,
+        )
+        self.results["tag_overhead"] = res
         return res
 
     def suite_reductions_policy(self) -> Dict[str, Any]:
@@ -269,6 +321,7 @@ class MiniBench:
         Uses zeroproof.core.reductions.tr_sum and set_deterministic_reduction.
         """
         import time
+
         res: Dict[str, Any] = {}
         vals = [tr_real(float(i % 7 - 3)) for i in range(2000)]
         # Disabled
@@ -283,13 +336,13 @@ class MiniBench:
         t3 = time.perf_counter()
         # Reset to default off
         set_deterministic_reduction(False)
-        res['tr_sum'] = {
-            'disabled_s': (t1 - t0),
-            'enabled_s': (t3 - t2),
-            'slowdown_x': ((t3 - t2) / (t1 - t0)) if (t1 - t0) > 0 else float('inf'),
-            'n': len(vals),
+        res["tr_sum"] = {
+            "disabled_s": (t1 - t0),
+            "enabled_s": (t3 - t2),
+            "slowdown_x": ((t3 - t2) / (t1 - t0)) if (t1 - t0) > 0 else float("inf"),
+            "n": len(vals),
         }
-        self.results['reductions_policy'] = res
+        self.results["reductions_policy"] = res
         return res
 
     def suite_near_pole(self) -> Dict[str, Any]:
@@ -305,17 +358,32 @@ class MiniBench:
         center = 0.5
         # Precompute TRScalars to avoid allocation cost in the timed region
         # Near-pole set: small offsets from the center, excluding exact pole
-        near_offsets = [1e-9, 5e-9, 1e-8, 5e-8, 1e-7, 5e-7, 1e-6, 5e-6,
-                        1e-5, 5e-5, 1e-4, 5e-4, 1e-3]
+        near_offsets = [
+            1e-9,
+            5e-9,
+            1e-8,
+            5e-8,
+            1e-7,
+            5e-7,
+            1e-6,
+            5e-6,
+            1e-5,
+            5e-5,
+            1e-4,
+            5e-4,
+            1e-3,
+        ]
         xs_near = []
         for d in near_offsets:
             xs_near.append(tr_real(center + d))
             xs_near.append(tr_real(center - d))
 
         # Far-from-pole set: values at least 0.5 away from the pole
-        xs_far = [tr_real(v) for v in (-2.0, -1.0, -0.75, -0.5, -0.25,
-                                       0.0, 0.25, 0.75, 1.0, 1.5, 2.0)
-                  if abs(v - center) >= 0.5]
+        xs_far = [
+            tr_real(v)
+            for v in (-2.0, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.75, 1.0, 1.5, 2.0)
+            if abs(v - center) >= 0.5
+        ]
 
         # Center is implicit in expr via constant subtraction
 
@@ -364,32 +432,32 @@ class MiniBench:
         def fib_no_cache(n: int):
             if n <= 1:
                 return tr_real(float(n))
-            return core_add(fib_no_cache(n-1), fib_no_cache(n-2))
+            return core_add(fib_no_cache(n - 1), fib_no_cache(n - 2))
 
         @memoize_tr()
         def fib_cached(n: int):
             if n <= 1:
                 return tr_real(float(n))
-            return core_add(fib_cached(n-1), fib_cached(n-2))
+            return core_add(fib_cached(n - 1), fib_cached(n - 2))
 
         # Keep n modest for portability
         for n in [10, 15, 20]:
             # No cache: fewer iterations to avoid long runtimes
-            res[f'fib_{n}_no_cache'] = bench.benchmark(
+            res[f"fib_{n}_no_cache"] = bench.benchmark(
                 lambda n=n: fib_no_cache(n),
-                name=f'fibonacci_{n}_no_cache',
+                name=f"fibonacci_{n}_no_cache",
                 iterations=max(1, self.iterations // 50),
                 samples=self.samples,
             )
             # Cached: clear and run more iterations
             fib_cached.cache_clear()
-            res[f'fib_{n}_cached'] = bench.benchmark(
+            res[f"fib_{n}_cached"] = bench.benchmark(
                 lambda n=n: fib_cached(n),
-                name=f'fibonacci_{n}_cached',
+                name=f"fibonacci_{n}_cached",
                 iterations=max(1, self.iterations // 5),
                 samples=self.samples,
             )
-        self.results['caching'] = res
+        self.results["caching"] = res
         return res
 
     def suite_torch(self) -> Dict[str, Any]:
@@ -397,8 +465,8 @@ class MiniBench:
         try:
             import torch  # type: ignore
         except Exception:
-            self.results['backend_torch'] = {'skipped': True}
-            return self.results['backend_torch']
+            self.results["backend_torch"] = {"skipped": True}
+            return self.results["backend_torch"]
 
         bench = TRBenchmark()
         res: Dict[str, Any] = {}
@@ -409,13 +477,13 @@ class MiniBench:
             z = x * x + y
             return float(z.sum().item())
 
-        res['torch_vec_op'] = bench.benchmark(
+        res["torch_vec_op"] = bench.benchmark(
             torch_op,
-            name='torch_vec_op',
+            name="torch_vec_op",
             iterations=max(50, self.iterations // 10),
             samples=self.samples,
         )
-        self.results['backend_torch'] = res
+        self.results["backend_torch"] = res
         return res
 
     def suite_jax(self) -> Dict[str, Any]:
@@ -424,8 +492,8 @@ class MiniBench:
             import jax  # type: ignore
             import jax.numpy as jnp  # type: ignore
         except Exception:
-            self.results['backend_jax'] = {'skipped': True}
-            return self.results['backend_jax']
+            self.results["backend_jax"] = {"skipped": True}
+            return self.results["backend_jax"]
 
         bench = TRBenchmark()
         res: Dict[str, Any] = {}
@@ -437,17 +505,18 @@ class MiniBench:
             z = x * x + y
             return float(jnp.sum(z).item())
 
-        res['jax_vec_op'] = bench.benchmark(
+        res["jax_vec_op"] = bench.benchmark(
             jax_op,
-            name='jax_vec_op',
+            name="jax_vec_op",
             iterations=max(50, self.iterations // 10),
             samples=self.samples,
         )
-        self.results['backend_jax'] = res
+        self.results["backend_jax"] = res
         return res
 
     def suite_memory(self) -> Dict[str, Any]:
         from zeroproof.utils import profile_memory_usage
+
         res: Dict[str, Any] = {}
 
         def make_graph(n: int):
@@ -480,6 +549,7 @@ class MiniBench:
     def write_summary(self, json_path: str) -> str:
         """Render a compact text summary next to the JSON file."""
         from zeroproof.bench_summary import _load  # reuse loader
+
         data = _load(json_path)
         results = data.get("results", {})
         lines = ["ZeroProof Bench Summary", "=" * 28, ""]
@@ -528,7 +598,9 @@ def main(argv: List[str] | None = None) -> int:
         ],
         default=["all"],
     )
-    ap.add_argument("--iterations", type=int, default=1000, help="Iterations per sample for micro-benchmarks")
+    ap.add_argument(
+        "--iterations", type=int, default=1000, help="Iterations per sample for micro-benchmarks"
+    )
     ap.add_argument("--samples", type=int, default=5, help="Number of samples per benchmark")
     args = ap.parse_args(argv)
 

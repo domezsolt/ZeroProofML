@@ -1,7 +1,7 @@
-from zeroproof.layers import TRRational, MonomialBasis
-from zeroproof.training import HybridTRTrainer, HybridTrainingConfig, Optimizer
-from zeroproof.core import real
 from zeroproof.autodiff import TRNode
+from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRational
+from zeroproof.training import HybridTrainingConfig, HybridTRTrainer, Optimizer
 
 
 def _trscalar_list(vals):
@@ -31,9 +31,8 @@ def test_hybrid_trainer_bench_fields_present():
     assert metrics["optim_time_ms"] >= 0.0
 
     # Trainer should retain a bench history entry
-    assert hasattr(trainer, 'bench_history')
+    assert hasattr(trainer, "bench_history")
     assert len(trainer.bench_history) >= 1
     rec = trainer.bench_history[-1]
     for key in ("epoch", "avg_step_ms", "data_time_ms", "optim_time_ms", "batches"):
         assert key in rec
-

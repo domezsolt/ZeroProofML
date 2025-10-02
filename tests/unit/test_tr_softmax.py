@@ -2,19 +2,19 @@
 
 import math
 
-from zeroproof.layers import tr_softmax
 from zeroproof.autodiff import TRNode
-from zeroproof.core import real, TRTag
+from zeroproof.core import TRTag, real
+from zeroproof.layers import tr_softmax
 
 
 def _to_vals(nodes):
     vals = []
     for n in nodes:
-        tag = getattr(n, 'tag', None)
+        tag = getattr(n, "tag", None)
         if tag == TRTag.REAL:
             vals.append(float(n.value.value))
         else:
-            vals.append(float('nan'))
+            vals.append(float("nan"))
     return vals
 
 
@@ -46,24 +46,33 @@ def test_tr_softmax_shift_invariance():
 
 def test_tr_softmax_nonreal_tolerated():
     from zeroproof.core import pinf
+
     logits = [TRNode.constant(real(0.0)), TRNode.constant(pinf())]
     probs = tr_softmax(logits)
     assert len(probs) == 2
     # Ensure tags are present and no crash; at least one may be non-REAL
-    assert all(hasattr(p, 'tag') for p in probs)
+    assert all(hasattr(p, "tag") for p in probs)
 
 
 def test_tr_softmax_extreme_large_and_small():
     # Very large/small logits should not crash and should produce sensible probabilities
     # Case 1: large positive dominates
-    logits1 = [TRNode.constant(real(1000.0)), TRNode.constant(real(-1000.0)), TRNode.constant(real(0.0))]
+    logits1 = [
+        TRNode.constant(real(1000.0)),
+        TRNode.constant(real(-1000.0)),
+        TRNode.constant(real(0.0)),
+    ]
     p1 = tr_softmax(logits1)
     vals1 = _to_vals(p1)
     s1 = sum(vals1)
     assert abs(s1 - 1.0) < 1e-3
     assert vals1[0] > 0.99  # dominant class near 1
     # Case 2: large negative but one less negative dominates
-    logits2 = [TRNode.constant(real(-1000.0)), TRNode.constant(real(-1001.0)), TRNode.constant(real(-999.0))]
+    logits2 = [
+        TRNode.constant(real(-1000.0)),
+        TRNode.constant(real(-1001.0)),
+        TRNode.constant(real(-999.0)),
+    ]
     p2 = tr_softmax(logits2)
     vals2 = _to_vals(p2)
     s2 = sum(vals2)
@@ -74,26 +83,31 @@ def test_tr_softmax_extreme_large_and_small():
 
 def test_tr_softmax_with_infinities_and_phi():
     # +inf present — current implementation may yield non-REALs after shift-by-max
-    from zeroproof.core import pinf, ninf, phi as tr_phi
+    from zeroproof.core import ninf
+    from zeroproof.core import phi as tr_phi
+    from zeroproof.core import pinf
+
     logits_inf = [TRNode.constant(real(0.0)), TRNode.constant(pinf()), TRNode.constant(real(1.0))]
     probs_inf = tr_softmax(logits_inf)
     assert len(probs_inf) == 3
     # Ensure tags exist and API is stable
-    assert all(hasattr(p, 'tag') for p in probs_inf)
+    assert all(hasattr(p, "tag") for p in probs_inf)
     # Include PHI explicitly
     logits_phi = [TRNode.constant(tr_phi()), TRNode.constant(real(0.0))]
     probs_phi = tr_softmax(logits_phi)
     assert len(probs_phi) == 2
-    assert all(hasattr(p, 'tag') for p in probs_phi)
+    assert all(hasattr(p, "tag") for p in probs_phi)
 
 
 def test_tr_softmax_one_hot_policy_infinity():
     # Enable one-hot policy and ensure +INF yields deterministic one-hot
     from zeroproof.policy import TRPolicy, TRPolicyConfig
+
     pol = TRPolicy(softmax_one_hot_infinity=True)
     TRPolicyConfig.set_policy(pol)
     try:
         from zeroproof.core import pinf
+
         logits = [TRNode.constant(real(0.0)), TRNode.constant(pinf()), TRNode.constant(real(1.0))]
         probs = tr_softmax(logits)
         vals = _to_vals(probs)

@@ -6,12 +6,12 @@ both in a near-pole (SAT) batch and a far-from-pole (MR) batch.
 
 import math
 
-from zeroproof.layers import TRRational, MonomialBasis
-from zeroproof.training import HybridTRTrainer, HybridTrainingConfig, Optimizer
-from zeroproof.training.coverage import CoverageTracker
+from zeroproof.autodiff.grad_mode import GradientMode, GradientModeConfig
 from zeroproof.autodiff.hybrid_gradient import HybridGradientContext, HybridGradientSchedule
-from zeroproof.autodiff.grad_mode import GradientModeConfig, GradientMode
 from zeroproof.core import real
+from zeroproof.layers import MonomialBasis, TRRational
+from zeroproof.training import HybridTrainingConfig, HybridTRTrainer, Optimizer
+from zeroproof.training.coverage import CoverageTracker
 
 
 def _trscalar_list(vals):
@@ -20,9 +20,9 @@ def _trscalar_list(vals):
 
 def _param_vector(model):
     vec = []
-    if hasattr(model, 'parameters'):
+    if hasattr(model, "parameters"):
         for p in model.parameters():
-            if p.value.tag.name == 'REAL':
+            if p.value.tag.name == "REAL":
                 vec.append(float(p.value.value))
             else:
                 vec.append(0.0)
@@ -46,8 +46,9 @@ def test_bounded_update_near_and_far_batches():
 
     # Hybrid setup: fixed local threshold so near-pole triggers SAT
     HybridGradientContext.reset()
-    schedule = HybridGradientSchedule(enable=True, warmup_epochs=0, transition_epochs=0,
-                                      delta_init=0.05, delta_final=0.05)
+    schedule = HybridGradientSchedule(
+        enable=True, warmup_epochs=0, transition_epochs=0, delta_init=0.05, delta_final=0.05
+    )
     HybridGradientContext.set_schedule(schedule)
     HybridGradientContext.update_epoch(0)
     # Ensure hybrid mode active
@@ -68,7 +69,7 @@ def test_bounded_update_near_and_far_batches():
     upd_norm = _l2_norm(delta)
     # Bound: lr * sqrt(gn_proxy)
     lr = opt.learning_rate
-    gn = float(metrics1.get('gn_proxy', 0.0))
+    gn = float(metrics1.get("gn_proxy", 0.0))
     bound = lr * math.sqrt(max(gn, 0.0)) + 1e-12
     assert upd_norm <= bound
 
@@ -78,7 +79,7 @@ def test_bounded_update_near_and_far_batches():
     params_after = _param_vector(model)
     delta = [a - b for a, b in zip(params_after, params_before)]
     upd_norm = _l2_norm(delta)
-    gn = float(metrics2.get('gn_proxy', 0.0))
+    gn = float(metrics2.get("gn_proxy", 0.0))
     bound = lr * math.sqrt(max(gn, 0.0)) + 1e-12
     assert upd_norm <= bound
 
@@ -92,8 +93,14 @@ def test_contract_safe_lr_clamps():
 
     # Large starting LR to force clamp
     opt = Optimizer(model.parameters(), learning_rate=10.0)
-    cfg = HybridTrainingConfig(max_epochs=1, batch_size=2, verbose=False,
-                               use_contract_safe_lr=True, contract_c=1.0, loss_smoothness_beta=1.0)
+    cfg = HybridTrainingConfig(
+        max_epochs=1,
+        batch_size=2,
+        verbose=False,
+        use_contract_safe_lr=True,
+        contract_c=1.0,
+        loss_smoothness_beta=1.0,
+    )
     trainer = HybridTRTrainer(model=model, optimizer=opt, config=cfg)
 
     def run_batch(xs, ys):
@@ -102,9 +109,9 @@ def test_contract_safe_lr_clamps():
 
     # One batch triggers clamp
     contract = model.get_layer_contract()
-    B_k = float(contract.get('B_k', 1.0))
-    G_max = float(contract.get('G_max', 1.0))
-    depth = int(contract.get('depth_hint', 4))
+    B_k = float(contract.get("B_k", 1.0))
+    G_max = float(contract.get("G_max", 1.0))
+    depth = int(contract.get("depth_hint", 4))
     eta_expected = 1.0 / (max(B_k, G_max) ** max(1, depth))
 
     run_batch([0.1, 0.2], [0.0, 0.0])

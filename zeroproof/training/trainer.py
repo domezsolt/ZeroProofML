@@ -6,12 +6,12 @@ training with transreal values, including adaptive loss policies and
 proper gradient handling.
 """
 
-from typing import List, Optional, Callable, Dict, Tuple, Any
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from ..core import TRScalar, TRTag, real
 from ..autodiff import TRNode, backward_pass
+from ..core import TRScalar, TRTag, real
 from ..utils.bridge import to_trnode_constant
 from .adaptive_loss import AdaptiveLossPolicy, create_adaptive_loss
 from .coverage import CoverageTracker
@@ -20,12 +20,13 @@ from .coverage import CoverageTracker
 @dataclass
 class TrainingConfig:
     """Configuration for transreal training."""
+
     # Optimization
     learning_rate: float = 0.001
     use_safe_lr: bool = False
     batch_size: int = 32
     max_epochs: int = 100
-    
+
     # Adaptive loss
     use_adaptive_loss: bool = True
     target_coverage: float = 0.95
@@ -41,11 +42,11 @@ class TrainingConfig:
     adaptive_exponential_decay: Optional[float] = None
     adaptive_lambda_min: float = 0.1  # Soft minimum
     adaptive_lambda_max: Optional[float] = None
-    
+
     # Logging
     log_interval: int = 10
     verbose: bool = True
-    
+
     # Early stopping
     early_stopping: bool = False
     patience: int = 10
@@ -54,11 +55,11 @@ class TrainingConfig:
 
 class Optimizer:
     """Simple gradient descent optimizer for TR values."""
-    
+
     def __init__(self, parameters: List[TRNode], learning_rate: float = 0.001):
         """
         Initialize optimizer.
-        
+
         Args:
             parameters: List of parameter nodes to optimize
             learning_rate: Learning rate for updates
@@ -66,21 +67,21 @@ class Optimizer:
         self.parameters = parameters
         self.learning_rate = learning_rate
         self.step_count = 0
-    
+
     def zero_grad(self) -> None:
         """Zero all parameter gradients."""
         for param in self.parameters:
             param.zero_grad()
-    
+
     def step(self, model=None) -> None:
         """
         Perform optimization step.
-        
+
         Args:
             model: Optional model reference to apply projections (e.g., L1 projection)
         """
         from ..core import tr_mul, tr_sub
-        
+
         for param in self.parameters:
             if param.gradient is not None and param.gradient.tag == TRTag.REAL:
                 # Update: param = param - lr * grad
@@ -88,35 +89,37 @@ class Optimizer:
                 update = tr_mul(lr_node, param.gradient)
                 # Subtract the TRScalar update from the TRScalar parameter value
                 new_value = tr_sub(param.value, update)
-                
+
                 # Update parameter value in-place
                 param._value = new_value
-        
+
         # Apply model-specific projections if model is provided
         if model is not None:
             # Check if model has L1 projection (e.g., TRRational layer)
-            if hasattr(model, '_project_phi_l1'):
+            if hasattr(model, "_project_phi_l1"):
                 model._project_phi_l1()
             # For multi-layer models, apply projections to each layer
-            elif hasattr(model, 'layers'):
+            elif hasattr(model, "layers"):
                 for layer in model.layers:
-                    if hasattr(layer, '_project_phi_l1'):
+                    if hasattr(layer, "_project_phi_l1"):
                         layer._project_phi_l1()
 
         # Enforce exact pole constraints requested by higher-level trainers (no ε)
         try:
-            requests = getattr(self, '_enforce_requests', None)
+            requests = getattr(self, "_enforce_requests", None)
             if requests is None:
                 # Support requests attached to optimizer (set by higher-level trainers)
-                requests = getattr(self, 'optimizer', None)
-                requests = getattr(requests, '_enforce_requests', []) if requests is not None else []
+                requests = getattr(self, "optimizer", None)
+                requests = (
+                    getattr(requests, "_enforce_requests", []) if requests is not None else []
+                )
             if requests:
                 # Process and then clear
                 for req in requests:
-                    phi_list = req.get('phi')
-                    basis = req.get('basis')
-                    d_q = req.get('d_q')
-                    x = req.get('x')
+                    phi_list = req.get("phi")
+                    basis = req.get("basis")
+                    d_q = req.get("d_q")
+                    x = req.get("x")
                     if not phi_list or basis is None or d_q is None or x is None:
                         continue
                     # Compute psi_k(x) for k=1..d_q
@@ -130,13 +133,17 @@ class Optimizer:
                             psi_k = 0.0
                             try:
                                 # psi[k] may be TRNode or TRScalar
-                                val = psi[k].value if hasattr(psi[k], 'value') else psi[k]
-                                psi_k = float(val.value if hasattr(val, 'value') else val)
+                                val = psi[k].value if hasattr(psi[k], "value") else psi[k]
+                                psi_k = float(val.value if hasattr(val, "value") else val)
                             except Exception:
                                 psi_k = 0.0
                             phi_k = phi_list[k - 1]
                             try:
-                                phi_val = float(phi_k.value.value) if phi_k.value.tag == TRTag.REAL else 0.0
+                                phi_val = (
+                                    float(phi_k.value.value)
+                                    if phi_k.value.tag == TRTag.REAL
+                                    else 0.0
+                                )
                             except Exception:
                                 phi_val = 0.0
                             s += phi_val * psi_k
@@ -149,17 +156,17 @@ class Optimizer:
                     for k in range(1, d_q + 1):
                         if k < len(psi) and (k - 1) < len(phi_list):
                             try:
-                                val = psi[k].value if hasattr(psi[k], 'value') else psi[k]
-                                psi_k = float(val.value if hasattr(val, 'value') else val)
+                                val = psi[k].value if hasattr(psi[k], "value") else psi[k]
+                                psi_k = float(val.value if hasattr(val, "value") else val)
                                 phi_k = phi_list[k - 1]
-                                if hasattr(phi_k, '_value') and phi_k.value.tag == TRTag.REAL:
+                                if hasattr(phi_k, "_value") and phi_k.value.tag == TRTag.REAL:
                                     new_val = phi_k.value.value + alpha * psi_k
                                     phi_k._value = real(float(new_val))
                             except Exception:
                                 pass
                 # Clear after applying
                 # Clear requests on optimizer if present, else on self
-                if hasattr(self.optimizer, '_enforce_requests'):
+                if hasattr(self.optimizer, "_enforce_requests"):
                     self.optimizer._enforce_requests = []  # type: ignore[attr-defined]
                 else:
                     self._enforce_requests = []
@@ -172,18 +179,20 @@ class Optimizer:
 class TRTrainer:
     """
     Trainer for models using transreal arithmetic.
-    
+
     Handles training loops, adaptive loss policies, and proper
     gradient computation with the Mask-REAL rule.
     """
-    
-    def __init__(self,
-                 model: Any,
-                 optimizer: Optional[Optimizer] = None,
-                 config: Optional[TrainingConfig] = None):
+
+    def __init__(
+        self,
+        model: Any,
+        optimizer: Optional[Optimizer] = None,
+        config: Optional[TrainingConfig] = None,
+    ):
         """
         Initialize trainer.
-        
+
         Args:
             model: Model to train (must have parameters() method)
             optimizer: Optimizer instance (creates default if None)
@@ -191,19 +200,16 @@ class TRTrainer:
         """
         self.model = model
         self.config = config or TrainingConfig()
-        
+
         # Get model parameters
-        if hasattr(model, 'parameters'):
+        if hasattr(model, "parameters"):
             parameters = model.parameters()
         else:
             raise ValueError("Model must have parameters() method")
-        
+
         # Create optimizer if not provided
-        self.optimizer = optimizer or Optimizer(
-            parameters, 
-            learning_rate=self.config.learning_rate
-        )
-        
+        self.optimizer = optimizer or Optimizer(parameters, learning_rate=self.config.learning_rate)
+
         # Create adaptive loss policy if enabled
         if self.config.use_adaptive_loss:
             self.loss_policy = create_adaptive_loss(
@@ -220,7 +226,7 @@ class TRTrainer:
             )
         else:
             self.loss_policy = None
-        
+
         # Training state
         self.epoch = 0
         self.global_step = 0
@@ -229,11 +235,11 @@ class TRTrainer:
             "coverage": [],
             "lambda_rej": [],
         }
-        
+
         # Early stopping state
-        self.best_loss = float('inf')
+        self.best_loss = float("inf")
         self.patience_counter = 0
-    
+
     def _compute_safe_lr(self, inputs: List[TRScalar], predictions: List[TRNode]) -> float:
         """Compute Phase-6 safe learning-rate clamp if enabled.
 
@@ -243,19 +249,19 @@ class TRTrainer:
         # Try to get q_min and bounds from model if available
         try:
             # Compute q_min over inputs
-            if hasattr(self.model, 'compute_q_min'):
+            if hasattr(self.model, "compute_q_min"):
                 q_min = self.model.compute_q_min(inputs)
             else:
                 return self.optimizer.learning_rate
             # Basis bound proxy
-            Bpsi = getattr(getattr(self.model, 'basis', None), 'bound', None)
+            Bpsi = getattr(getattr(self.model, "basis", None), "bound", None)
             if Bpsi is None:
                 return self.optimizer.learning_rate
             # y_max over REAL predictions
             y_vals = [p.value.value for p in predictions if p.tag == TRTag.REAL]
             y_max = max([abs(v) for v in y_vals], default=0.0)
             # Regularization alpha on phi if present
-            alpha = getattr(self.model, 'alpha_phi', 0.0) or 0.0
+            alpha = getattr(self.model, "alpha_phi", 0.0) or 0.0
             if q_min == 0.0:
                 return min(self.optimizer.learning_rate, 0.0)
             L_batch = (Bpsi * Bpsi) / (q_min * q_min) * (1.0 + y_max * y_max) + alpha
@@ -266,28 +272,26 @@ class TRTrainer:
             # On any issue, fall back to configured LR
             return self.optimizer.learning_rate
 
-    def train_step(self,
-                   inputs: List[TRScalar],
-                   targets: List[TRScalar]) -> Dict[str, float]:
+    def train_step(self, inputs: List[TRScalar], targets: List[TRScalar]) -> Dict[str, float]:
         """
         Perform single training step.
-        
+
         Args:
             inputs: Batch of input values
             targets: Batch of target values
-            
+
         Returns:
             Dictionary of metrics from this step
         """
         # Zero gradients
         self.optimizer.zero_grad()
-        
+
         # Forward pass
         predictions = []
         for x in inputs:
             y = self.model(x)
             predictions.append(y)
-        
+
         # Compute loss
         if self.loss_policy is not None:
             # Convert targets to nodes; accept floats/ndarrays/TRScalar/TRNode
@@ -295,28 +299,33 @@ class TRTrainer:
             loss = self.loss_policy.compute_batch_loss(predictions, target_nodes)
         else:
             # Simple MSE loss without adaptive policy
-            from ..core import tr_sum, tr_div
+            from ..core import tr_div, tr_sum
+
             losses = []
             for pred, target in zip(predictions, targets):
                 target_node = to_trnode_constant(target)
                 diff = pred - target_node
                 sq_loss = TRNode.constant(real(0.5)) * diff * diff
                 losses.append(sq_loss.value)
-            
+
             total_loss = tr_sum(losses)
             avg_loss = tr_div(total_loss, real(float(len(inputs))))
             loss = TRNode.constant(avg_loss)
-        
+
         # Backward pass
         loss.backward()
-        
+
         # Optional safe LR clamp
         if self.config.use_safe_lr:
             safe_lr = self._compute_safe_lr(inputs, predictions)
             # Optional: log q_min / y_max when verbose
             if self.config.verbose:
                 try:
-                    q_min = self.model.compute_q_min(inputs) if hasattr(self.model, 'compute_q_min') else None
+                    q_min = (
+                        self.model.compute_q_min(inputs)
+                        if hasattr(self.model, "compute_q_min")
+                        else None
+                    )
                     y_vals = [p.value.value for p in predictions if p.tag == TRTag.REAL]
                     y_max = max([abs(v) for v in y_vals], default=0.0)
                     print(f"[safe-lr] q_min={q_min} y_max={y_max:.4f} lr->{safe_lr:.6f}")
@@ -325,32 +334,35 @@ class TRTrainer:
             self.optimizer.learning_rate = safe_lr
         # Optimization step (pass model for projections)
         self.optimizer.step(self.model)
-        
+
         # Collect metrics
         metrics = {
-            "loss": loss.value.value if loss.value.tag == TRTag.REAL else float('nan'),
+            "loss": loss.value.value if loss.value.tag == TRTag.REAL else float("nan"),
             "batch_size": len(inputs),
         }
-        
+
         # Add coverage metrics if using adaptive loss
         if self.loss_policy is not None:
             stats = self.loss_policy.get_statistics()
-            metrics.update({
-                "coverage": stats["current_coverage"],
-                "lambda_rej": stats["lambda_rej"],
-                "coverage_gap": stats["coverage_gap"],
-            })
-        
+            metrics.update(
+                {
+                    "coverage": stats["current_coverage"],
+                    "lambda_rej": stats["lambda_rej"],
+                    "coverage_gap": stats["coverage_gap"],
+                }
+            )
+
         return metrics
-    
-    def train_epoch(self,
-                    data_loader: List[Tuple[List[TRScalar], List[TRScalar]]]) -> Dict[str, float]:
+
+    def train_epoch(
+        self, data_loader: List[Tuple[List[TRScalar], List[TRScalar]]]
+    ) -> Dict[str, float]:
         """
         Train for one epoch.
-        
+
         Args:
             data_loader: List of (inputs, targets) batches
-            
+
         Returns:
             Average metrics for the epoch
         """
@@ -359,43 +371,45 @@ class TRTrainer:
             "coverage": [],
             "lambda_rej": [],
         }
-        
+
         for batch_idx, (inputs, targets) in enumerate(data_loader):
             # Training step
             metrics = self.train_step(inputs, targets)
-            
+
             # Accumulate metrics
             epoch_metrics["loss"].append(metrics["loss"])
             if "coverage" in metrics:
                 epoch_metrics["coverage"].append(metrics["coverage"])
             if "lambda_rej" in metrics:
                 epoch_metrics["lambda_rej"].append(metrics["lambda_rej"])
-            
+
             # Logging
             if self.config.verbose and batch_idx % self.config.log_interval == 0:
                 # If not in train() loop, epoch may be 0; show step count for clarity
                 self._log_batch(batch_idx, len(data_loader), metrics)
-            
+
             self.global_step += 1
-        
+
         # Compute epoch averages
         avg_metrics = {}
         for key, values in epoch_metrics.items():
             if values:
                 avg_metrics[key] = sum(values) / len(values)
-        
+
         return avg_metrics
-    
-    def train(self,
-              train_data: List[Tuple[List[TRScalar], List[TRScalar]]],
-              val_data: Optional[List[Tuple[List[TRScalar], List[TRScalar]]]] = None) -> Dict[str, List[float]]:
+
+    def train(
+        self,
+        train_data: List[Tuple[List[TRScalar], List[TRScalar]]],
+        val_data: Optional[List[Tuple[List[TRScalar], List[TRScalar]]]] = None,
+    ) -> Dict[str, List[float]]:
         """
         Full training loop.
-        
+
         Args:
             train_data: Training data batches
             val_data: Optional validation data
-            
+
         Returns:
             Training history
         """
@@ -403,33 +417,33 @@ class TRTrainer:
             print(f"Starting training for {self.config.max_epochs} epochs")
             if self.config.use_adaptive_loss:
                 print(f"Using adaptive loss with target coverage: {self.config.target_coverage}")
-        
+
         start_time = time.time()
-        
+
         for epoch in range(self.config.max_epochs):
             self.epoch = epoch + 1
-            
+
             # Training epoch
             train_metrics = self.train_epoch(train_data)
-            
+
             # Record history
             self.training_history["loss"].append(train_metrics["loss"])
             if "coverage" in train_metrics:
                 self.training_history["coverage"].append(train_metrics["coverage"])
             if "lambda_rej" in train_metrics:
                 self.training_history["lambda_rej"].append(train_metrics["lambda_rej"])
-            
+
             # Validation
             if val_data is not None:
                 val_metrics = self.evaluate(val_data)
                 val_loss = val_metrics["loss"]
             else:
                 val_loss = train_metrics["loss"]
-            
+
             # Logging
             if self.config.verbose:
                 self._log_epoch(epoch, train_metrics, val_metrics if val_data else None)
-            
+
             # Early stopping
             if self.config.early_stopping:
                 if val_loss < self.best_loss - self.config.min_delta:
@@ -441,26 +455,27 @@ class TRTrainer:
                         if self.config.verbose:
                             print(f"Early stopping at epoch {epoch + 1}")
                         break
-        
+
         training_time = time.time() - start_time
         if self.config.verbose:
             print(f"Training completed in {training_time:.2f} seconds")
-        
+
         return self.training_history
-    
+
     @property
     def history(self) -> Dict[str, List[float]]:
         """Alias for training_history for backward compatibility."""
         return self.training_history
-    
-    def evaluate(self,
-                 data_loader: List[Tuple[List[TRScalar], List[TRScalar]]]) -> Dict[str, float]:
+
+    def evaluate(
+        self, data_loader: List[Tuple[List[TRScalar], List[TRScalar]]]
+    ) -> Dict[str, float]:
         """
         Evaluate model on data.
-        
+
         Args:
             data_loader: Evaluation data batches
-            
+
         Returns:
             Average metrics
         """
@@ -468,9 +483,9 @@ class TRTrainer:
             "loss": [],
             "coverage": [],
         }
-        
+
         coverage_tracker = CoverageTracker()
-        
+
         for inputs, targets in data_loader:
             # Forward pass only
             predictions = []
@@ -479,12 +494,13 @@ class TRTrainer:
                 y = self.model(x)
                 predictions.append(y)
                 tags.append(y.tag)
-            
+
             # Track coverage
             coverage_tracker.update(tags)
-            
+
             # Compute loss (no gradients needed)
-            from ..core import tr_sum, tr_div
+            from ..core import tr_div, tr_sum
+
             losses = []
             for pred, target in zip(predictions, targets):
                 if pred.tag == TRTag.REAL:
@@ -497,19 +513,19 @@ class TRTrainer:
                         losses.append(self.loss_policy.adaptive_lambda.get_penalty())
                     else:
                         losses.append(1.0)  # Default penalty
-            
+
             avg_loss = sum(losses) / len(losses) if losses else 0.0
             metrics["loss"].append(avg_loss)
             metrics["coverage"].append(coverage_tracker.batch_coverage)
-        
+
         # Compute averages
         avg_metrics = {}
         for key, values in metrics.items():
             if values:
                 avg_metrics[key] = sum(values) / len(values)
-        
+
         return avg_metrics
-    
+
     def _log_batch(self, batch_idx: int, total_batches: int, metrics: Dict[str, float]) -> None:
         """Log batch metrics."""
         if self.epoch <= 0:
@@ -522,21 +538,25 @@ class TRTrainer:
         if "lambda_rej" in metrics:
             msg += f" λ_rej: {metrics['lambda_rej']:.3f}"
         print(msg)
-    
-    def _log_epoch(self, epoch: int, train_metrics: Dict[str, float], 
-                   val_metrics: Optional[Dict[str, float]] = None) -> None:
+
+    def _log_epoch(
+        self,
+        epoch: int,
+        train_metrics: Dict[str, float],
+        val_metrics: Optional[Dict[str, float]] = None,
+    ) -> None:
         """Log epoch metrics."""
         msg = f"Epoch {epoch + 1}/{self.config.max_epochs}"
         msg += f" - Train Loss: {train_metrics['loss']:.4f}"
-        
+
         if "coverage" in train_metrics:
             msg += f" Coverage: {train_metrics['coverage']:.3f}"
         if "lambda_rej" in train_metrics:
             msg += f" λ_rej: {train_metrics['lambda_rej']:.3f}"
-        
+
         if val_metrics:
             msg += f" - Val Loss: {val_metrics['loss']:.4f}"
             if "coverage" in val_metrics:
                 msg += f" Coverage: {val_metrics['coverage']:.3f}"
-        
+
         print(msg)

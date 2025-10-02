@@ -7,6 +7,7 @@ safe encoding of non-finite floating values.
 
 from typing import Any, Dict, List
 
+
 def to_builtin(obj: Any) -> Any:
     """Recursively convert NumPy/array scalars to Python built-ins.
 
@@ -54,4 +55,3 @@ def to_builtin(obj: Any) -> Any:
         return [to_builtin(v) for v in obj]
 
     return obj
-

@@ -7,10 +7,10 @@ fixed models and inputs.
 
 from typing import List
 
-from zeroproof.policy import TRPolicy, TRPolicyConfig
-from zeroproof.layers import TRRational, MonomialBasis, tr_softmax
 from zeroproof.autodiff import TRNode
 from zeroproof.core import TRTag, real
+from zeroproof.layers import MonomialBasis, TRRational, tr_softmax
+from zeroproof.policy import TRPolicy, TRPolicyConfig
 
 
 def _build_rational(dp: int = 8, dq: int = 8) -> TRRational:
@@ -40,8 +40,10 @@ def test_pairwise_toggle_preserves_outputs_rational():
 
     # Policy with deterministic reductions ON
     pol_on = TRPolicy(
-        tau_Q_on=1e-12, tau_Q_off=2e-12,
-        tau_P_on=1e-15, tau_P_off=2e-15,
+        tau_Q_on=1e-12,
+        tau_Q_off=2e-12,
+        tau_P_on=1e-15,
+        tau_P_off=2e-15,
         deterministic_reduction=True,
     )
     TRPolicyConfig.set_policy(pol_on)
@@ -49,8 +51,10 @@ def test_pairwise_toggle_preserves_outputs_rational():
 
     # Policy with deterministic reductions OFF
     pol_off = TRPolicy(
-        tau_Q_on=1e-12, tau_Q_off=2e-12,
-        tau_P_on=1e-15, tau_P_off=2e-15,
+        tau_Q_on=1e-12,
+        tau_Q_off=2e-12,
+        tau_P_on=1e-15,
+        tau_P_off=2e-15,
         deterministic_reduction=False,
     )
     TRPolicyConfig.set_policy(pol_off)
@@ -91,4 +95,3 @@ def test_pairwise_toggle_preserves_outputs_softmax():
 
     # Cleanup
     TRPolicyConfig.set_policy(None)
-

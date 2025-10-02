@@ -1,9 +1,11 @@
+from zeroproof.autodiff import TRNode, tr_grad, tr_mul
 from zeroproof.core import real
-from zeroproof.autodiff import tr_grad, tr_mul, TRNode
+
 
 # Test 1: Simple function
 def f(x):
     return tr_mul(x, x)
+
 
 # Create gradient function
 grad_f = tr_grad(f)

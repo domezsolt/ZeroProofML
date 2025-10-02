@@ -6,9 +6,9 @@ These are intentionally lightweight so they can run in CI quickly.
 import numpy as np
 import pytest
 
-from zeroproof import real, TRTag, to_ieee
+from zeroproof import TRTag, real, to_ieee
+from zeroproof.autodiff import TRNode, gradient_tape, tr_add, tr_div, tr_mul
 from zeroproof.core import TRScalar
-from zeroproof.autodiff import TRNode, gradient_tape, tr_add, tr_mul, tr_div
 
 
 def _is_finite_tr(x: TRScalar) -> bool:
@@ -42,4 +42,3 @@ def test_no_nan_autodiff_gradient():
     grad = tape.gradient(y, [x])[0]
     assert grad.value.tag == TRTag.REAL
     assert np.isfinite(grad.value.value)
-

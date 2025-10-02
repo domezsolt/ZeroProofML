@@ -6,9 +6,9 @@ perturbations to inputs do not change tag classification (stay REAL).
 
 import math
 
+from zeroproof.core import TRTag, real
+from zeroproof.layers import MonomialBasis, TRRational
 from zeroproof.policy import TRPolicy, TRPolicyConfig
-from zeroproof.layers import TRRational, MonomialBasis
-from zeroproof.core import real, TRTag
 
 
 def test_tags_invariant_to_ulps_outside_guard_bands():
@@ -34,7 +34,7 @@ def test_tags_invariant_to_ulps_outside_guard_bands():
     # Compute a small perturbation ~ a few ULP around x0 as float64
     # ULP at 0.1 is roughly 2**-53 scaled; use a fixed epsilon
     ulp = 2**-52  # generous bound
-    deltas = [0.0, ulp, -ulp, 2*ulp, -2*ulp]
+    deltas = [0.0, ulp, -ulp, 2 * ulp, -2 * ulp]
 
     tags = []
     for d in deltas:
@@ -43,4 +43,3 @@ def test_tags_invariant_to_ulps_outside_guard_bands():
 
     # All tags should be REAL and identical
     assert all(t == TRTag.REAL for t in tags)
-
