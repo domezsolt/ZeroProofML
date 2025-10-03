@@ -6,9 +6,9 @@ for transreal arithmetic operations.
 """
 
 import functools
-import os
 import gc
 import logging
+import os
 import sys
 import threading
 import time
@@ -598,9 +598,9 @@ def _identify_bottlenecks(nodes: List[TRNode]) -> List[Dict[str, Any]]:
                     "description": f"Node used by {count} other nodes",
                     "severity": "medium" if count < 50 else "high",
                     "node_info": {
-                        "operation": node._grad_info.op_type.name
-                        if node._grad_info
-                        else "constant",
+                        "operation": (
+                            node._grad_info.op_type.name if node._grad_info else "constant"
+                        ),
                         "tag": node.value.tag.name,
                     },
                 }

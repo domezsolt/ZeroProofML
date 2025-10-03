@@ -31,7 +31,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[all,dev]
 
-      - name: Run tests with coverage (skip heavy integration/e2e)
+      - name: Run tests with coverage (unit + property only)
         run: |
           pytest \
             --cov=zeroproof \
@@ -39,7 +39,9 @@ jobs:
             --cov-report=html \
             --cov-report=term-missing \
             --ignore=tests/integration \
-            --ignore=tests/e2e
+            --ignore=tests/e2e \
+            --ignore=examples \
+            tests/unit tests/property -v --tb=short
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

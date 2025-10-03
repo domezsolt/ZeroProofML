@@ -8,8 +8,8 @@ across multiple cores or threads.
 """
 
 import functools
-import os
 import multiprocessing as mp
+import os
 import threading
 import weakref
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
