@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """Convenience coercion utilities for bridging Python/NumPy types to TR types.
 
 These helpers centralize common conversions to avoid scattered type checks

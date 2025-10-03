@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """
 Parallel processing utilities for transreal computations.
 
@@ -32,7 +34,7 @@ _THREAD_POOLS: dict[int, "TRThreadPool"] = {}
 
 def _get_thread_pool(num_workers: Optional[int]) -> "TRThreadPool":
     workers = num_workers or mp.cpu_count()
-    workers = max(2, workers)
+    workers = max(1, workers)
     pool = _THREAD_POOLS.get(workers)
     if pool is None:
         pool = TRThreadPool(workers)
@@ -62,9 +64,8 @@ class TRThreadPool:
             num_workers: Number of worker threads (None = CPU count)
         """
         requested = mp.cpu_count() if num_workers is None else num_workers
-        # Ensure a practical minimum level of concurrency for latency-bound tasks
-        # Escalate to at least 4 workers to achieve consistent speedups in small-task workloads
-        self.num_workers = max(4, requested)
+        # Honor requested workers; allow single worker for accurate scaling tests
+        self.num_workers = max(1, requested)
         self._executor = ThreadPoolExecutor(max_workers=self.num_workers)
         self._lock = threading.Lock()
 
@@ -95,11 +96,11 @@ class TRThreadPool:
                 return TRNode.constant(out)
             return out
 
-        # Heuristic chunksize: ensure at least a few items per chunk, scale by workers
+        # Heuristic chunksize: ensure at least one item per chunk, scale by workers
         if chunk_size is None:
-            # Slightly larger chunks in pool.map for better throughput
-            estimated = max(4, len(items_list) // (self.num_workers * 4) or 1)
-            chunk_size = estimated
+            # Aim for ~one chunk per worker to minimize scheduling overhead
+            per_worker = max(1, len(items_list) // self.num_workers)
+            chunk_size = per_worker
         return list(self._executor.map(_wrap, items_list, chunksize=chunk_size))
 
     def apply_async(self, func: Callable, args: tuple = (), kwargs: dict = None) -> Any:
@@ -267,7 +268,7 @@ def parallel_map(
         # Prefer small chunksize for latency-bound tasks (e.g., sleep-based work in tests)
         tuned_chunk = config.chunk_size
         if tuned_chunk is None:
-            tuned_chunk = max(4, len(items_list) // (pool.num_workers * 4) or 1)
+            tuned_chunk = max(1, len(items_list) // pool.num_workers)
         return pool.map(func, items_list, tuned_chunk)
     elif config.backend == "process":
         with TRProcessPool(config.num_workers) as pool:

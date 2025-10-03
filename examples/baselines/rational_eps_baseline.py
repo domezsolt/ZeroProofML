@@ -503,7 +503,7 @@ def grid_search_epsilon(
 
     # Save CSV
     csv_file = os.path.join(output_dir, "rational_eps_grid_search.csv")
-    with open(csv_file, "w", newline="") as f:
+    with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(
             ["Epsilon", "Val_MSE", "Training_Time", "NaN_Count", "Inf_Count", "Success"]

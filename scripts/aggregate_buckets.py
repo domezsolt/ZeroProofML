@@ -167,7 +167,7 @@ def main():
 
     # Write CSV
     headers = ["Method"] + bucket_headers + std_headers + count_headers + ["Source"]
-    with open(args.out, "w", newline="") as f:
+    with open(args.out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=headers)
         w.writeheader()
         for r in rows:

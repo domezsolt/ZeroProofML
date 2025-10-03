@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """Metrics for domain-specific evaluations (robotics, poles, etc.)."""
 
 from .core import compute_distance_stats, compute_q_stats, hybrid_stats

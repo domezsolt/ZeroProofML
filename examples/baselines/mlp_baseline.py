@@ -427,7 +427,7 @@ def run_mlp_baseline(
 
     # Save CSV summary
     csv_file = os.path.join(output_dir, "mlp_baseline_summary.csv")
-    with open(csv_file, "w", newline="") as f:
+    with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Model", "Parameters", "Train_MSE", "Test_MSE", "Training_Time"])
         writer.writerow(

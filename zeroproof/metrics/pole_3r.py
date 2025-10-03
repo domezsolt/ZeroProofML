@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """
 3R near-pole metrics for a planar 3R arm.
 

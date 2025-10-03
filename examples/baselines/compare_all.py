@@ -932,12 +932,12 @@ def run_complete_comparison(
     }
 
     results_file = os.path.join(output_dir, "comprehensive_comparison.json")
-    with open(results_file, "w") as f:
+    with open(results_file, "w", encoding="utf-8") as f:
         json.dump(to_builtin(comprehensive_results), f, indent=2)
 
     # CSV table
     csv_file = os.path.join(output_dir, "comparison_table.csv")
-    with open(csv_file, "w", newline="") as f:
+    with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=comparison_table[0].keys())
         writer.writeheader()
         writer.writerows(comparison_table)
@@ -1064,7 +1064,7 @@ def run_ablation_study(
     os.makedirs(output_dir, exist_ok=True)
 
     ablation_file = os.path.join(output_dir, "ablation_study.json")
-    with open(ablation_file, "w") as f:
+    with open(ablation_file, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "ablation_results": ablation_results,
@@ -1081,7 +1081,7 @@ def run_ablation_study(
 
     # CSV table
     csv_file = os.path.join(output_dir, "ablation_table.csv")
-    with open(csv_file, "w", newline="") as f:
+    with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Configuration", "Test_MSE", "Training_Time", "Status"])
 

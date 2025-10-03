@@ -312,7 +312,7 @@ class StructuredLogger:
             filename = os.path.join(self.run_dir, f"{self.session_id}_logs.json")
 
         # Save session
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             json.dump(self.session.to_dict(), f, indent=2)
 
         self.last_save_time = time.time()
@@ -343,7 +343,7 @@ class StructuredLogger:
         metric_keys = sorted(all_keys)
 
         # Write CSV
-        with open(filename, "w", newline="") as f:
+        with open(filename, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
 
             # Header
@@ -375,7 +375,7 @@ class StructuredLogger:
 
         summary = self.get_training_summary()
 
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2)
 
         return filename
@@ -494,7 +494,7 @@ class MetricsAggregator:
         if filename is None:
             filename = os.path.join(self.base_dir, "aggregated_metrics.json")
 
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             json.dump(self.aggregated_data, f, indent=2)
 
         return filename

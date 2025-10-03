@@ -521,7 +521,7 @@ def run_dls_reference(
 
     # Save CSV summary
     csv_file = os.path.join(output_dir, "dls_reference_summary.csv")
-    with open(csv_file, "w", newline="") as f:
+    with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(
             ["Method", "Success_Rate", "Avg_Error", "Avg_Iterations", "Avg_Time", "Max_Condition"]
@@ -608,7 +608,7 @@ def compare_damping_strategies(
 
     # Save CSV
     csv_file = os.path.join(output_dir, "dls_damping_comparison.csv")
-    with open(csv_file, "w", newline="") as f:
+    with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Damping", "Success_Rate", "Avg_Error", "Avg_Iterations", "Max_Condition"])
 

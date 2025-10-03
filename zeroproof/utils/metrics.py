@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """
 Anti-illusion metrics for verifying pole geometry learning.
 

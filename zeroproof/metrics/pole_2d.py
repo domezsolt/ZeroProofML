@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """
 2D near-pole metrics for the RR arm robotics example.
 

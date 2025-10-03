@@ -1,3 +1,5 @@
+# MIT License
+# See LICENSE file in the project root for full license text.
 """
 Core metrics for TR-Rational layers and hybrid controller.
 

@@ -5,6 +5,8 @@ This module provides various basis functions (monomials, Chebyshev, etc.)
 for constructing the polynomials P and Q in rational layers.
 """
 
+from __future__ import annotations
+
 import math
 from typing import List, Protocol, Union
 
