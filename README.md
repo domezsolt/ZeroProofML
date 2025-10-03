@@ -1,20 +1,14 @@
 # ZeroProof
 
-[![Test Python 3.9 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.9%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Test Python 3.10 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.10%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Test Python 3.11 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.11%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Test Python 3.12 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.12%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Test Python 3.13 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.13%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-
-[![Test Python 3.11 on windows-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.11%20on%20windows-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Test Python 3.12 on windows-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.12%20on%20windows-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Test Python 3.13 on windows-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.13%20on%20windows-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-
-[![Lint](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Lint)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Import Smoke Test](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Import%20Smoke%20Test)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Property Test Suite](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Property%20Test%20Suite)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Benchmarks (mini suite)](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Benchmarks%20(mini%20suite))](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Determinism & Safety](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Determinism%20%26%20Safety)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Tests (Ubuntu)](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/tests-ubuntu.yml?branch=main&label=Tests%20(Ubuntu))](https://github.com/domezsolt/zeroproofml/actions/workflows/tests-ubuntu.yml)
+[![Tests (Windows)](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/tests-windows.yml?branch=main&label=Tests%20(Windows))](https://github.com/domezsolt/zeroproofml/actions/workflows/tests-windows.yml)
+[![Lint](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/lint.yml?branch=main&label=Lint)](https://github.com/domezsolt/zeroproofml/actions/workflows/lint.yml)
+[![Coverage](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/coverage.yml?branch=main&label=Coverage)](https://github.com/domezsolt/zeroproofml/actions/workflows/coverage.yml)
+[![Import Smoke Test](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/import-smoke.yml?branch=main&label=Import%20Smoke%20Test)](https://github.com/domezsolt/zeroproofml/actions/workflows/import-smoke.yml)
+[![Property Test Suite](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/property.yml?branch=main&label=Property%20Test%20Suite)](https://github.com/domezsolt/zeroproofml/actions/workflows/property.yml)
+[![Benchmarks (mini suite)](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/benchmarks.yml?branch=main&label=Benchmarks%20(mini%20suite))](https://github.com/domezsolt/zeroproofml/actions/workflows/benchmarks.yml)
+[![Determinism & Safety](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/determinism.yml?branch=main&label=Determinism%20%26%20Safety)](https://github.com/domezsolt/zeroproofml/actions/workflows/determinism.yml)
+[![Framework Integration](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/test-frameworks.yml?branch=main&label=Framework%20Integration)](https://github.com/domezsolt/zeroproofml/actions/workflows/test-frameworks.yml)
 [![E2E No‑NaN](https://img.shields.io/badge/e2e%20no‑NaN-✔-brightgreen)](#)
 
 <div align="center">
