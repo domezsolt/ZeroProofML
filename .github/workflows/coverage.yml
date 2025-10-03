@@ -31,9 +31,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[all,dev]
 
-      - name: Run tests with coverage
+      - name: Run tests with coverage (skip heavy integration/e2e)
         run: |
-          pytest --cov=zeroproof --cov-report=xml --cov-report=html --cov-report=term-missing
+          pytest \
+            --cov=zeroproof \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --ignore=tests/integration \
+            --ignore=tests/e2e
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

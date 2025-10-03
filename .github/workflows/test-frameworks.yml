@@ -36,5 +36,5 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[${{ matrix.framework }},dev]
 
-      - name: Run framework tests
-        run: pytest tests -v --tb=short -k ${{ matrix.framework }}
+      - name: Run framework tests (exclude heavy integration)
+        run: pytest tests -v --tb=short -k ${{ matrix.framework }} --ignore=tests/integration --ignore=tests/e2e

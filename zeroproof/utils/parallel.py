@@ -165,7 +165,17 @@ class TRProcessPool:
             num_workers: Number of worker processes (None = CPU count)
         """
         self.num_workers = num_workers or mp.cpu_count()
-        self._executor = ProcessPoolExecutor(max_workers=self.num_workers)
+        # Prefer 'spawn' start method on POSIX to avoid fork-related deadlocks in CI
+        executor = None
+        try:
+            if os.name != "nt":
+                ctx = mp.get_context("spawn")
+                executor = ProcessPoolExecutor(max_workers=self.num_workers, mp_context=ctx)
+        except Exception:
+            executor = None
+        if executor is None:
+            executor = ProcessPoolExecutor(max_workers=self.num_workers)
+        self._executor = executor
 
     def __enter__(self):
         return self

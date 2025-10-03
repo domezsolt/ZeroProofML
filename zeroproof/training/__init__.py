@@ -53,6 +53,7 @@ try:
     )
 except Exception:
     _POLE_SUPERVISION_AVAILABLE = False
+
     # Provide lightweight stubs so imports succeed when torch is unavailable
     class HybridTeacher:  # type: ignore[no-redef]
         def __init__(self, *_, **__):
@@ -78,6 +79,7 @@ except Exception:
 
     def create_pole_teacher(*_, **__):  # type: ignore[no-redef]
         return HybridTeacher()
+
 
 _SAMPLING_AVAILABLE = True
 try:
