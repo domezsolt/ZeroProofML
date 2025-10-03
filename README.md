@@ -1,8 +1,20 @@
 # ZeroProof
 
-[![Build](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/codecov/c/github/domezsolt/zeroproofml?branch=main)](https://codecov.io/gh/domezsolt/zeroproofml)
-[![Property Suite](https://img.shields.io/badge/property%20tests-passing-brightgreen)](#)
+[![Test Python 3.9 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.9%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Test Python 3.10 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.10%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Test Python 3.11 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.11%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Test Python 3.12 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.12%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Test Python 3.13 on ubuntu-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.13%20on%20ubuntu-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+
+[![Test Python 3.11 on windows-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.11%20on%20windows-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Test Python 3.12 on windows-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.12%20on%20windows-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Test Python 3.13 on windows-latest](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Test%20Python%203.13%20on%20windows-latest)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+
+[![Lint](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Lint)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Import Smoke Test](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Import%20Smoke%20Test)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Property Test Suite](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Property%20Test%20Suite)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Benchmarks (mini suite)](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Benchmarks%20(mini%20suite))](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
+[![Determinism & Safety](https://img.shields.io/github/actions/workflow/status/domezsolt/zeroproofml/ci.yml?branch=main&label=Determinism%20%26%20Safety)](https://github.com/domezsolt/zeroproofml/actions/workflows/ci.yml)
 [![E2E No‑NaN](https://img.shields.io/badge/e2e%20no‑NaN-✔-brightgreen)](#)
 
 <div align="center">
@@ -19,6 +31,7 @@ without fragile thresholds.
 [Getting Started](docs/topics/00_getting_started.md) | [Docs Index](docs/index.md) | [Examples](examples/)
 
 </div>
+
 
 ## What is ZeroProof?
 
@@ -640,13 +653,6 @@ You can also run the integrated evaluator via module invocation:
 ```bash
 python -m zeroproof.eval --xmin -2 --xmax 2 --n 201 --true-pole 0.5 --out results/eval.json
 ```
-### Evaluator CLI
-
-You can also run the integrated evaluator via module invocation:
-
-```bash
-python -m zeroproof.eval --xmin -2 --xmax 2 --n 201 --true-pole 0.5 --out results/eval.json
-```
 
 ### RR‑IK Quick Runner
 
@@ -708,3 +714,14 @@ Update CI baseline from latest local run:
 ```bash
 python scripts/update_benchmark_baseline.py --src benchmark_results
 ```
+
+## Acknowledgements
+
+We gratefully acknowledge the open‑source projects and tools that make this work possible:
+
+- Core libraries: NumPy, PyTorch, JAX
+- Testing and property‑based fuzzing: pytest, Hypothesis
+- Developer tooling: Black, Ruff, isort, MyPy, pre‑commit
+- CI and reporting: GitHub Actions, Codecov, shields.io
+
+Thanks as well to all contributors and users of ZeroProof for ideas, bug reports, and feedback.

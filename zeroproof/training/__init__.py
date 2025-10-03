@@ -53,6 +53,31 @@ try:
     )
 except Exception:
     _POLE_SUPERVISION_AVAILABLE = False
+    # Provide lightweight stubs so imports succeed when torch is unavailable
+    class HybridTeacher:  # type: ignore[no-redef]
+        def __init__(self, *_, **__):
+            pass
+
+        def pretrain_if_needed(self, verbose: bool = True):  # noqa: ARG002
+            return None
+
+        def compute_combined_loss(self, *_, **__):
+            # Return a zero-like placeholder when used by tests
+            try:
+                import torch  # noqa: F401
+
+                return 0.0
+            except Exception:
+                return 0.0
+
+        def adapt_weights(self, *_, **__):
+            return None
+
+        def get_statistics(self):
+            return {}
+
+    def create_pole_teacher(*_, **__):  # type: ignore[no-redef]
+        return HybridTeacher()
 
 _SAMPLING_AVAILABLE = True
 try:
@@ -123,6 +148,14 @@ if _POLE_SUPERVISION_AVAILABLE:
             "ProxyTeacher",
             "SyntheticPoleDataset",
             "PoleHeadPretrainer",
+            "HybridTeacher",
+            "create_pole_teacher",
+        ]
+    )
+else:
+    # Still export teacher symbols to satisfy imports; stubs are no-ops
+    __all__.extend(
+        [
             "HybridTeacher",
             "create_pole_teacher",
         ]

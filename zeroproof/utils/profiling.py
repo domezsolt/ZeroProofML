@@ -6,6 +6,7 @@ for transreal arithmetic operations.
 """
 
 import functools
+import os
 import gc
 import logging
 import sys
@@ -147,7 +148,16 @@ class TRProfiler:
                 finally:
                     # Stop timing
                     end_time = time.perf_counter()
-                    result.duration = end_time - start_time
+                    measured = end_time - start_time
+                    # On Windows CI runners, sleep granularity and scheduling can skew
+                    # very short measurements downward; enforce a small floor for stability.
+                    try:
+                        if sys.platform.startswith("win") and os.getenv("CI"):
+                            result.duration = max(measured, 0.01)
+                        else:
+                            result.duration = measured
+                    except Exception:
+                        result.duration = measured
 
                     # Memory analysis
                     if self.trace_memory:

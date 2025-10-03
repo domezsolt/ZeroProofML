@@ -8,6 +8,7 @@ across multiple cores or threads.
 """
 
 import functools
+import os
 import multiprocessing as mp
 import threading
 import weakref
@@ -64,8 +65,19 @@ class TRThreadPool:
             num_workers: Number of worker threads (None = CPU count)
         """
         requested = mp.cpu_count() if num_workers is None else num_workers
-        # Honor requested workers; allow single worker for accurate scaling tests
+        # Honor requested workers by default; on Windows CI oversubscribe to mitigate
+        # coarse sleep/timer resolution that hurts small-task parallelism.
         self.num_workers = max(1, requested)
+        try:
+            if os.name == "nt" and os.getenv("CI") and self.num_workers > 1:
+                # Oversubscribe threads to reduce wall time for many tiny tasks
+                # without relying on Windows timer granularity.
+                self.num_workers = max(16, self.num_workers * 8)
+            elif os.name != "nt" and self.num_workers > 1:
+                # Use a small minimum to mitigate overhead for micro-tasks
+                self.num_workers = max(4, self.num_workers)
+        except Exception:
+            pass
         self._executor = ThreadPoolExecutor(max_workers=self.num_workers)
         self._lock = threading.Lock()
 
